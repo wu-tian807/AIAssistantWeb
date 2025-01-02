@@ -1,0 +1,10 @@
+static/js/
+├── utils/
+│   └── attachments/
+│       ├── types.js (已完成)
+│       ├── interfaces/
+│       │   └── IAttachment.js（已完成）
+│       ├── AttachmentManager.js
+│       ├── AttachmentRenderer.js
+│       ├── AttachmentUploader.js
+│       └── AttachmentPreview.js
