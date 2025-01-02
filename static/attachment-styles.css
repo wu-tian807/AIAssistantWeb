@@ -1,0 +1,302 @@
+/* 二进制附件样式 */
+.binary-attachment-wrapper {
+    display: inline-block;
+    margin: 5px;
+    padding: 8px 12px;
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    max-width: 300px;
+    position: relative;
+}
+
+.binary-icon-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.binary-icon {
+    font-size: 20px;
+    color: #6c757d;
+}
+
+.binary-filename {
+    font-size: 14px;
+    color: #495057;
+    word-break: break-all;
+}
+
+/* 删除按钮样式 */
+.binary-delete-button {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 20px;
+    height: 20px;
+    background-color: #ff4444;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s ease;
+}
+
+.binary-delete-button:hover {
+    background-color: #cc0000;
+    transform: scale(1.1);
+}
+
+/* 确保二进制附件在消息中正确显示 */
+.message-attachments .binary-attachment-wrapper {
+    margin-top: 10px;
+}
+
+.attachment-container {
+    margin: 10px 0;
+    padding: 10px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.image-preview-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 0;
+}
+
+.image-preview-item {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #e0e0e0;
+}
+
+.image-preview-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.image-preview-item .remove-button {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.image-preview-item .remove-button:hover {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.image-preview-item .image-name {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    padding: 2px 5px;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.upload-button {
+    background: none;
+    border: none;
+    padding: 5px;
+    cursor: pointer;
+    color: #666;
+    transition: color 0.2s;
+}
+
+.upload-button:hover {
+    color: #333;
+}
+
+.upload-button svg {
+    width: 24px;
+    height: 24px;
+}
+
+/* 图片模态框样式 */
+.image-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    animation: fadeIn 0.3s forwards;
+}
+
+.modal-image {
+    max-width: 90%;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: 8px;
+}
+
+.modal-close-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 10px;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.modal-closing {
+    animation: fadeOut 0.3s forwards;
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+} 
+
+/* 消息附件外层容器样式 */
+.message-outer-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    align-items: flex-end;
+}
+
+/* 消息附件容器样式 */
+.message-attachments-container {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 10px;
+    padding: 8px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    scrollbar-width: thin;
+    scrollbar-color: #ccc transparent;
+    max-width: 600px;
+    width: fit-content;
+    min-width: 216px;
+    margin: 0;
+    border: 1px solid #e9ecef;
+    align-self: flex-end;
+}
+
+.message-attachments-container::-webkit-scrollbar {
+    height: 6px;
+}
+
+.message-attachments-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.message-attachments-container::-webkit-scrollbar-thumb {
+    background-color: #ccc;
+    border-radius: 3px;
+}
+
+/* 附件预览项样式 */
+.message-attachments-container .preview-item {
+    flex: 0 0 200px;
+    height: 200px;
+    margin: 0;
+    border-radius: 8px;
+    overflow: hidden;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    position: relative;
+}
+
+.message-attachments-container .image-container {
+    width: 200px;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-color: #f0f0f0;
+}
+
+.message-attachments-container .preview-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.2s ease;
+}
+
+.message-attachments-container .preview-image:hover {
+    transform: scale(1.05);
+}
+
+.message-attachments-container .file-name {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 8px;
+    font-size: 12px;
+    color: white;
+    text-align: center;
+    background-color: rgba(0, 0, 0, 0.6);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 调整消息样式以匹配附件容器 */
+.message {
+    max-width: 600px;
+    width: fit-content;
+    min-width: 216px;
+    align-self: flex-end;
+}
+
+/* 用户消息的外层容器特殊处理 */
+.message-outer-container .user-message {
+    align-self: flex-end;
+}
+
+/* AI消息的外层容器特殊处理 */
+.message-outer-container .assistant-message {
+    align-self: flex-start;
+}

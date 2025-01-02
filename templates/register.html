@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注册 - AI 聊天助手</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .register-container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #007AFF;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #007AFF;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .error-message {
+            color: #ff3b30;
+            margin-top: 5px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .login-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .login-link a {
+            color: #007AFF;
+            text-decoration: none;
+        }
+
+        .login-link a:hover {
+            text-decoration: underline;
+        }
+
+        .code-input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .code-input-group input {
+            flex: 1;
+        }
+
+        #resendBtn {
+            width: auto;
+            padding: 12px 20px;
+            white-space: nowrap;
+        }
+
+        #resendBtn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-send-code {
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .btn-send-code:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="register-container">
+        <h1>注册</h1>
+        <form id="registerForm">
+            <div class="form-group">
+                <input type="email" id="email" placeholder="请输入邮箱" required>
+                <div class="error-message" id="emailError"></div>
+            </div>
+            <div class="form-group" id="codeGroup" style="display: none;">
+                <div class="code-input-group">
+                    <input type="text" id="code" placeholder="请输入验证码" maxlength="6" pattern="\d{6}">
+                    <button type="button" id="resendBtn" style="display: none;">重新发送</button>
+                </div>
+                <div class="error-message" id="codeError"></div>
+            </div>
+            <div class="form-group" id="passwordGroup" style="display: none;">
+                <input type="password" id="password" placeholder="请设置密码（不少于6位）" minlength="6">
+                <div class="error-message" id="passwordError"></div>
+            </div>
+            <button type="submit" id="submitBtn">获取验证码</button>
+        </form>
+        <div class="login-link">
+            已有账号？<a href="/login">立即登录</a>
+        </div>
+    </div>
+
+    <script>
+        const registerForm = document.getElementById('registerForm');
+        const emailInput = document.getElementById('email');
+        const codeGroup = document.getElementById('codeGroup');
+        const codeInput = document.getElementById('code');
+        const submitBtn = document.getElementById('submitBtn');
+        const emailError = document.getElementById('emailError');
+        const codeError = document.getElementById('codeError');
+        const passwordGroup = document.getElementById('passwordGroup');
+        const passwordInput = document.getElementById('password');
+        const passwordError = document.getElementById('passwordError');
+        const resendBtn = document.getElementById('resendBtn');
+
+        let isCodeSent = false;
+        let isVerified = false;
+        let countdownTimer = null;
+
+        function startCountdown(button, duration) {
+            if (countdownTimer) {
+                clearInterval(countdownTimer);
+            }
+            
+            button.disabled = true;
+            let remainingTime = duration;
+            
+            const updateButton = () => {
+                button.textContent = `重新发送(${remainingTime}s)`;
+                if (remainingTime <= 0) {
+                    clearInterval(countdownTimer);
+                    button.disabled = false;
+                    button.textContent = '重新发送';
+                }
+                remainingTime--;
+            };
+            
+            updateButton();
+            countdownTimer = setInterval(updateButton, 1000);
+        }
+
+        async function sendVerificationCode() {
+            try {
+                resendBtn.disabled = true;
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `email=${emailInput.value}`
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    startCountdown(resendBtn, 60);
+                } else {
+                    resendBtn.disabled = false;
+                    emailError.textContent = data.error;
+                    emailError.style.display = 'block';
+                }
+            } catch (error) {
+                resendBtn.disabled = false;
+                emailError.textContent = '发送验证码失败，请重试';
+                emailError.style.display = 'block';
+            }
+        }
+
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // 清除所有错误提示
+            emailError.style.display = 'none';
+            codeError.style.display = 'none';
+            passwordError.style.display = 'none';
+            
+            if (!isCodeSent) {
+                // 首次发送验证码
+                if (!emailInput.value) {
+                    emailError.textContent = '请输入邮箱';
+                    emailError.style.display = 'block';
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: `email=${emailInput.value}`
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        isCodeSent = true;
+                        codeGroup.style.display = 'block';
+                        resendBtn.style.display = 'block';
+                        submitBtn.textContent = '验证';
+                        emailInput.readOnly = true;
+                        startCountdown(resendBtn, 60);
+                    } else {
+                        emailError.textContent = data.error;
+                        emailError.style.display = 'block';
+                    }
+                } catch (error) {
+                    emailError.textContent = '发送验证码失败，请重试';
+                    emailError.style.display = 'block';
+                }
+            } else if (!isVerified) {
+                // 验证验证码
+                if (!codeInput.value) {
+                    codeError.textContent = '请输入验证码';
+                    codeError.style.display = 'block';
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/verify', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: `email=${emailInput.value}&code=${codeInput.value}`
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        isVerified = true;
+                        passwordGroup.style.display = 'block';
+                        submitBtn.textContent = '完成注册';
+                        codeInput.readOnly = true;
+                        // 添加提示信息
+                        const successMessage = document.createElement('div');
+                        successMessage.style.color = '#4CAF50';
+                        successMessage.style.marginTop = '5px';
+                        successMessage.style.fontSize = '14px';
+                        successMessage.textContent = '验证成功，请设置密码';
+                        codeGroup.appendChild(successMessage);
+                    } else {
+                        codeError.textContent = data.error;
+                        codeError.style.display = 'block';
+                    }
+                } catch (error) {
+                    codeError.textContent = '验证失败，请重试';
+                    codeError.style.display = 'block';
+                }
+            } else {
+                // 设置密码并完成注册
+                if (!passwordInput.value) {
+                    passwordError.textContent = '请输入密码';
+                    passwordError.style.display = 'block';
+                    return;
+                }
+                
+                if (passwordInput.value.length < 6) {
+                    passwordError.textContent = '密码长度不能小于6位';
+                    passwordError.style.display = 'block';
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/set_password', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: `email=${emailInput.value}&code=${codeInput.value}&password=${passwordInput.value}`
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        if (data.redirect) {
+                            window.location.href = data.redirect;
+                        } else {
+                            window.location.href = '/';
+                        }
+                    } else {
+                        passwordError.textContent = data.error;
+                        passwordError.style.display = 'block';
+                    }
+                } catch (error) {
+                    passwordError.textContent = '注册失败，请重试';
+                    passwordError.style.display = 'block';
+                }
+            }
+        });
+
+        resendBtn.addEventListener('click', sendVerificationCode);
+    </script>
+</body>
+</html> 
