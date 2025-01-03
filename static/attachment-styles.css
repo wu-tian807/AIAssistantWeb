@@ -284,12 +284,6 @@
 }
 
 /* 调整消息样式以匹配附件容器 */
-.message {
-    max-width: 600px;
-    width: fit-content;
-    min-width: 216px;
-    align-self: flex-end;
-}
 
 /* 用户消息的外层容器特殊处理 */
 .message-outer-container .user-message {

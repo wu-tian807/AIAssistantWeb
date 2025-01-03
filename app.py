@@ -8,6 +8,7 @@ from werkzeug.utils import secure_filename
 
 from config import AVAILABLE_MODELS
 from config import RATE_LIMIT_WINDOW
+from config import ATTACHMENT_TYPES
 
 from initialization import app, db, mail, xai_client, genai
 
@@ -22,6 +23,8 @@ from utils.image_handler import encode_image
 
 from utils.files.files_extension_helper import get_image_extension
 from utils.files.file_config import MIME_TYPE_MAPPING, AttachmentType
+from utils.chat.message_processor import process_image_attachment, process_binary_attachment
+
 # 修改注册路由
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -234,7 +237,7 @@ def chat():
         if not conversation:
             return jsonify({'error': '对话不存在或无权访问'}), 404
 
-    def process_message_with_attachments(message, model_type):
+    def process_message_with_attachments(message, model_type,model_support_list):
         # 从配置中获取支持的图片类型
         from utils.files.file_config import MIME_TYPE_MAPPING
         from config import ATTACHMENT_TYPES
@@ -256,7 +259,6 @@ def chat():
                 processed_message['parts'].append({
                     "text": message['content']
                 })
-        
         # 处理消息中的附件
         if 'attachments' in message and message['attachments']:
             attachments = message['attachments']
@@ -269,98 +271,38 @@ def chat():
                 if mime_type:
                     supported_type = MIME_TYPE_MAPPING.get(mime_type)
                     if not supported_type:
-                        continue  # 跳过不支持的MIME类型
+                        supported_type = 'binary'
                         
                     # 检查文件扩展名是否支持
                     file_name = attachment.get('fileName', '')
-                    file_ext = os.path.splitext(file_name)[1].lower()
-                    
+                    file_ext = os.path.splitext(file_name)[1].lower().strip()
+                    if file_ext not in model_support_list:
+                        print(f"文件扩展名 {file_ext} 不支持")
+                        supported_type = 'binary'
+                    else:
+                        print(f"文件扩展名 {file_ext} 支持")
                     # 对于图片类型的特殊处理
                     if supported_type == 'image':
                         if (file_ext not in ATTACHMENT_TYPES['images']['extensions'] or 
                             mime_type not in ATTACHMENT_TYPES['images']['mime_types']):
                             continue
                             
-                        if attachment.get('base64'):
-                            has_attachments = True
-                            if model_type == 'openai':
-                                # 添加图片内容
-                                attachment_text = f"[附件[Image]: {attachment.get('fileName', '未命名文件')}]"
-                                processed_message['content'].append({
-                                    "type": "text",
-                                    "text": attachment_text
-                                })
-                                processed_message['content'].append({
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:{mime_type};base64,{attachment['base64']}"
-                                    }
-                                })
-                            elif model_type == 'google':
-                                # 获取图片大小
-                                image_size = len(attachment['base64']) * 3 / 4  # Base64解码后的大致大小
-                                
-                                if image_size <= 20 * 1024 * 1024:  # 20MB以下
-                                    # 尝试使用本地文件路径
-                                    local_path = attachment.get('file_path')
-                                    attachment_text = f"[附件[{supported_type}]: {attachment.get('fileName', '未命名文件')}]"
-                                    if local_path and os.path.exists(local_path):
-                                        try:
-                                            image = PIL.Image.open(local_path)
-                                            processed_message['parts'].append({
-                                                "text": attachment_text
-                                            })
-                                            processed_message['parts'].append(image)
-                                        except Exception as e:
-                                            print(f"无法打开本地图片文件: {str(e)}")
-                                            # 如果本地文件打开失败，回退到使用base64
-                                            processed_message['parts'].append({
-                                                "text": attachment_text
-                                            })
-                                            processed_message['parts'].append({
-                                                "inline_data": {
-                                                    "mime_type": mime_type,
-                                                    "data": attachment['base64']
-                                                }
-                                            })
-                                    else:
-                                        # 如果没有本地文件路径或文件不存在，使用base64
-                                        processed_message['parts'].append({
-                                            "text": attachment_text
-                                        })
-                                        processed_message['parts'].append({
-                                            "inline_data": {
-                                                "mime_type": mime_type,
-                                                "data": attachment['base64']
-                                            }
-                                        })
-                                else:  # 大于20MB使用File API
-                                    # 将base64转换为文件数据
-                                    file_data = base64.b64decode(attachment['base64'])
-                                    # 上传到File API并获取URI
-                                    file_uri = genai.upload_file(file_data)
-                                    attachment_text = f"[附件[{supported_type}]: {attachment.get('fileName', '未命名文件')}]"
-                                    processed_message['parts'].append({
-                                        "text": attachment_text
-                                    })
-                                    processed_message['parts'].append({
-                                        "file_data": {
-                                            "mime_type": mime_type,
-                                            "file_uri": file_uri
-                                        }
-                                    })
-                    # 其他类型的附件处理（未来扩展）
+                        process_image_attachment(
+                            attachment,
+                            model_type,
+                            processed_message,
+                            supported_type,
+                            mime_type,
+                            genai
+                        )
+                    # 其他类型的附件处理
                     else:
-                        attachment_text = f"[附件: {attachment.get('fileName', '未命名文件')}]"
-                        if model_type == 'openai':
-                            processed_message['content'].append({
-                                "type": "text",
-                                "text": attachment_text
-                            })
-                        elif model_type == 'google':
-                            processed_message['parts'].append({
-                                "text": attachment_text
-                            })
+                        process_binary_attachment(
+                            attachment,
+                            model_type,
+                            processed_message,
+                            supported_type
+                        )
         
         # 如果是OpenAI模型且没有任何内容，添加一个空文本
         if model_type == 'openai' and not processed_message['content']:
@@ -379,6 +321,15 @@ def chat():
 
     def generate():
         try:
+            # 确定模型支持的附件类型
+            model_support_list = []
+            for provider, config in AVAILABLE_MODELS.items():
+                for model in config['models']:
+                    if model['id'] == model_id:
+                        model_support_attachments_list = model['available_attachments']
+                        for attachment_type in model_support_attachments_list:
+                            model_support_list.extend(ATTACHMENT_TYPES[attachment_type]['extensions'])
+                        break
             # 确定模型类型
             model_type = None
             for provider, config in AVAILABLE_MODELS.items():
@@ -391,7 +342,7 @@ def chat():
 
             # 处理消息列表
             processed_messages = [
-                process_message_with_attachments(msg, model_type) for msg in messages
+                process_message_with_attachments(msg, model_type,model_support_list) for msg in messages
             ]
 
             if model_type == 'openai':

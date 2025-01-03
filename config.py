@@ -56,13 +56,13 @@ AVAILABLE_MODELS = {
     },
     'google': {
         'models': [
-            {'id': 'gemini-2.0-flash-exp', 'name': 'Gemini 2.0 Flash Exp', 'description': '新一代功能、卓越的速度、原生工具使用和多模态生成','available_attachments':['documents','text','gemini_original_video']},
-            {'id': 'gemini-1.5-flash', 'name': 'Gemini 1.5 Flash', 'description': '快速、多样化的性能','available_attachments':['documents','text','gemini_original_video']},
-            {'id': 'gemini-1.5-flash-8b', 'name': 'Gemini 1.5 Flash-8B', 'description': '量大且智能程度较低的任务','available_attachments':['documents','text','gemini_original_video']},
-            {'id': 'gemini-1.5-pro', 'name': 'Gemini 1.5 Pro', 'description': '需要更多智能的复杂推理任务','available_attachments':['documents','text','gemini_original_video']},
-            {'id': 'gemini-exp-1206', 'name': 'Gemini Exp 1206', 'description': '改进了编码、推理和视觉能力','available_attachments':['documents','text','gemini_original_video']},
-            {'id': 'gemini-exp-1121', 'name': 'Gemini Exp 1121', 'description': '质量改进','available_attachments':['documents','text','gemini_original_video']},
-            {'id': 'learnlm-1.5-pro-experimental', 'name': 'LearnLM 1.5 Pro', 'description': '支持音频、图片、视频和文本','available_attachments':['documents','text']}
+            {'id': 'gemini-2.0-flash-exp', 'name': 'Gemini 2.0 Flash Exp', 'description': '新一代功能、卓越的速度、原生工具使用和多模态生成','available_attachments':['documents','text','gemini_original_video','images']},
+            {'id': 'gemini-1.5-flash', 'name': 'Gemini 1.5 Flash', 'description': '快速、多样化的性能','available_attachments':['documents','text','gemini_original_video','images']},
+            {'id': 'gemini-1.5-flash-8b', 'name': 'Gemini 1.5 Flash-8B', 'description': '量大且智能程度较低的任务','available_attachments':['documents','text','gemini_original_video','images']},
+            {'id': 'gemini-1.5-pro', 'name': 'Gemini 1.5 Pro', 'description': '需要更多智能的复杂推理任务','available_attachments':['documents','text','gemini_original_video','images']},
+            {'id': 'gemini-exp-1206', 'name': 'Gemini Exp 1206', 'description': '改进了编码、推理和视觉能力','available_attachments':['documents','text','gemini_original_video','images']},
+            {'id': 'gemini-exp-1121', 'name': 'Gemini Exp 1121', 'description': '质量改进','available_attachments':['documents','text','gemini_original_video','images']},
+            {'id': 'learnlm-1.5-pro-experimental', 'name': 'LearnLM 1.5 Pro', 'description': '支持音频、图片、视频和文本','available_attachments':['documents','text','gemini_original_video','images']}
         ],
         'api_type': 'google'
     }

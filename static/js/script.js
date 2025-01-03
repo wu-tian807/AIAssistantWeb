@@ -95,159 +95,159 @@ function shouldAutoScroll(container) {
     return isNearBottom;
 }
 
-// 定义支持的自定义附件类型
-const SUPPORTED_ATTACHMENT_TYPES = ['image', 'documents', 'text', 'audio', 'video', 'binary'];
-// 附件处理函数
-function createAttachmentElement(attachment) {
-    // 类型校验
-    if (!attachment || !attachment.type || !SUPPORTED_ATTACHMENT_TYPES.includes(attachment.type)) {
-        console.warn(`Invalid or unsupported attachment type: ${attachment?.type}`);
-        return null;
-    }
+// // 定义支持的自定义附件类型
+// const SUPPORTED_ATTACHMENT_TYPES = ['image', 'documents', 'text', 'audio', 'video', 'binary'];
+// // 附件处理函数
+// function createAttachmentElement(attachment) {
+//     // 类型校验
+//     if (!attachment || !attachment.type || !SUPPORTED_ATTACHMENT_TYPES.includes(attachment.type)) {
+//         console.warn(`Invalid or unsupported attachment type: ${attachment?.type}`);
+//         return null;
+//     }
     
-    // 如果有 mime_type，使用它来决定类型
-    if (attachment.mime_type) {
-        const customType = FILE_TYPE_MAPPING[attachment.mime_type];
-        switch (customType) {
-            case 'image':
-                return createImageAttachment(attachment);
-            case 'video':
-                return createVideoAttachment(attachment);
-            case 'file':
-                return createFileAttachment(attachment);
-            default:
-                return null;
-        }
-    }
+//     // 如果有 mime_type，使用它来决定类型
+//     if (attachment.mime_type) {
+//         const customType = FILE_TYPE_MAPPING[attachment.mime_type];
+//         switch (customType) {
+//             case 'image':
+//                 return createImageAttachment(attachment);
+//             case 'video':
+//                 return createVideoAttachment(attachment);
+//             case 'file':
+//                 return createFileAttachment(attachment);
+//             default:
+//                 return null;
+//         }
+//     }
     
-    // 如果没有 mime_type，使用 type 字段
-    switch (attachment.type) {
-        case 'image':
-            return createImageAttachment(attachment);
-        case 'video':
-            return createVideoAttachment(attachment);
-        case 'file':
-            return createFileAttachment(attachment);
-        default:
-            return null;
-    }
-}
-// 图片附件处理
-function createImageAttachment(attachment) {
-    const imgWrapper = document.createElement('div');
-    imgWrapper.className = 'message-image-wrapper';
+//     // 如果没有 mime_type，使用 type 字段
+//     switch (attachment.type) {
+//         case 'image':
+//             return createImageAttachment(attachment);
+//         case 'video':
+//             return createVideoAttachment(attachment);
+//         case 'file':
+//             return createFileAttachment(attachment);
+//         default:
+//             return null;
+//     }
+// }
+// // 图片附件处理
+// function createImageAttachment(attachment) {
+//     const imgWrapper = document.createElement('div');
+//     imgWrapper.className = 'message-image-wrapper';
     
-    const img = document.createElement('img');
-    img.src = `data:image/jpeg;base64,${attachment.base64}`;
-    img.alt = attachment.fileName;
-    img.className = 'message-image';
+//     const img = document.createElement('img');
+//     img.src = `data:image/jpeg;base64,${attachment.base64}`;
+//     img.alt = attachment.fileName;
+//     img.className = 'message-image';
     
-    // 添加点击放大功能
-    img.onclick = () => createImageModal(img.src);
+//     // 添加点击放大功能
+//     img.onclick = () => createImageModal(img.src);
     
-    imgWrapper.appendChild(img);
-    return imgWrapper;
-}
+//     imgWrapper.appendChild(img);
+//     return imgWrapper;
+// }
 
-// 创建图片模态框
-function createImageModal(src) {
-    const modal = document.createElement('div');
-    modal.className = 'image-modal';
+// // 创建图片模态框
+// function createImageModal(src) {
+//     const modal = document.createElement('div');
+//     modal.className = 'image-modal';
     
-    // 创建关闭按钮
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'modal-close-btn';
-    closeBtn.innerHTML = '×';
+//     // 创建关闭按钮
+//     const closeBtn = document.createElement('button');
+//     closeBtn.className = 'modal-close-btn';
+//     closeBtn.innerHTML = '×';
     
-    const modalImg = document.createElement('img');
-    modalImg.src = src;
-    modalImg.className = 'modal-image';
+//     const modalImg = document.createElement('img');
+//     modalImg.src = src;
+//     modalImg.className = 'modal-image';
     
-    // 添加关闭按钮和图片到模态框
-    modal.appendChild(closeBtn);
-    modal.appendChild(modalImg);
-    document.body.appendChild(modal);
+//     // 添加关闭按钮和图片到模态框
+//     modal.appendChild(closeBtn);
+//     modal.appendChild(modalImg);
+//     document.body.appendChild(modal);
     
-    // 处理关闭事件
-    const closeModal = () => {
-        modal.classList.add('modal-closing');
-        setTimeout(() => modal.remove(), 300); // 等待动画完成后移除
-    };
+//     // 处理关闭事件
+//     const closeModal = () => {
+//         modal.classList.add('modal-closing');
+//         setTimeout(() => modal.remove(), 300); // 等待动画完成后移除
+//     };
     
-    // 点击关闭按钮关闭
-    closeBtn.onclick = (e) => {
-        e.stopPropagation();
-        closeModal();
-    };
+//     // 点击关闭按钮关闭
+//     closeBtn.onclick = (e) => {
+//         e.stopPropagation();
+//         closeModal();
+//     };
     
-    // 点击模态框背景关闭
-    modal.onclick = (e) => {
-        if (e.target === modal) {
-            closeModal();
-        }
-    };
+//     // 点击模态框背景关闭
+//     modal.onclick = (e) => {
+//         if (e.target === modal) {
+//             closeModal();
+//         }
+//     };
     
-    // 按 ESC 键关闭
-    const handleKeyDown = (e) => {
-        if (e.key === 'Escape') {
-            closeModal();
-            document.removeEventListener('keydown', handleKeyDown);
-        }
-    };
-    document.addEventListener('keydown', handleKeyDown);
+//     // 按 ESC 键关闭
+//     const handleKeyDown = (e) => {
+//         if (e.key === 'Escape') {
+//             closeModal();
+//             document.removeEventListener('keydown', handleKeyDown);
+//         }
+//     };
+//     document.addEventListener('keydown', handleKeyDown);
     
-    // 防止滚动穿透
-    document.body.style.overflow = 'hidden';
-    modal.addEventListener('remove', () => {
-        document.body.style.overflow = '';
-    });
-}
+//     // 防止滚动穿透
+//     document.body.style.overflow = 'hidden';
+//     modal.addEventListener('remove', () => {
+//         document.body.style.overflow = '';
+//     });
+// }
 
-// 预留的视频附件处理函数
-function createVideoAttachment(attachment) {
-    // TODO: 实现视频附件处理
-    return null;
-}
+// // 预留的视频附件处理函数
+// function createVideoAttachment(attachment) {
+//     // TODO: 实现视频附件处理
+//     return null;
+// }
 
-// 预留的文件附件处理函数
-function createFileAttachment(attachment) {
-    // TODO: 实现文件附件处理
-    return null;
-}
+// // 预留的文件附件处理函数
+// function createFileAttachment(attachment) {
+//     // TODO: 实现文件附件处理
+//     return null;
+// }
 
-// 创建附件容器
-function createAttachmentsContainer(attachments) {
-    if (!attachments || attachments.length === 0) return null;
+// // 创建附件容器
+// function createAttachmentsContainer(attachments) {
+//     if (!attachments || attachments.length === 0) return null;
     
-    const container = document.createElement('div');
-    container.className = 'message-attachments';
+//     const container = document.createElement('div');
+//     container.className = 'message-attachments';
     
-    // 根据附件类型分组
-    const attachmentsByType = attachments.reduce((acc, attachment) => {
-        if (!acc[attachment.type]) {
-            acc[attachment.type] = [];
-        }
-        acc[attachment.type].push(attachment);
-        return acc;
-    }, {});
+//     // 根据附件类型分组
+//     const attachmentsByType = attachments.reduce((acc, attachment) => {
+//         if (!acc[attachment.type]) {
+//             acc[attachment.type] = [];
+//         }
+//         acc[attachment.type].push(attachment);
+//         return acc;
+//     }, {});
     
-    // 处理每种类型的附件
-    Object.entries(attachmentsByType).forEach(([type, items]) => {
-        const typeContainer = document.createElement('div');
-        typeContainer.className = `message-${type}s`;
+//     // 处理每种类型的附件
+//     Object.entries(attachmentsByType).forEach(([type, items]) => {
+//         const typeContainer = document.createElement('div');
+//         typeContainer.className = `message-${type}s`;
         
-        items.forEach(item => {
-            const element = createAttachmentElement(item);
-            if (element) {
-                typeContainer.appendChild(element);
-            }
-        });
+//         items.forEach(item => {
+//             const element = createAttachmentElement(item);
+//             if (element) {
+//                 typeContainer.appendChild(element);
+//             }
+//         });
         
-        container.appendChild(typeContainer);
-    });
+//         container.appendChild(typeContainer);
+//     });
     
-    return container;
-}
+//     return container;
+// }
 
 // 修改后的 appendMessage 函数
 function appendMessage(content, isUser = false, messageIndex = null, attachments = []) {
@@ -1358,18 +1358,28 @@ async function editUserMessage(messageIndex, originalContent) {
     // 创建附件编辑容器
     const attachmentsContainer = document.createElement('div');
     attachmentsContainer.className = 'edit-attachments-container';
+    // 根据是否有原有附件决定显示状态
+    if (originalMessage.attachments && originalMessage.attachments.length > 0) {
+        attachmentsContainer.style.display = 'flex';
+    } else {
+        attachmentsContainer.style.display = 'none';
+    }
     
-    // 初始化通用上传器
+    // 修改 uploader 的配置，添加回调函数
     const uploader = new Uploader({
         container: attachmentsContainer,
         onDelete: (attachment) => {
-            console.log('删除附件:', attachment); // 添加调试日志
+            console.log('删除附件:', attachment);
             uploader.removeAttachment(attachment);
-            // 强制更新预览区域
-            const previewElement = attachment.previewElement;
-            if (previewElement && previewElement.parentNode) {
-                previewElement.parentNode.removeChild(previewElement);
+            // 检查是否还有附件，如果没有则隐藏容器
+            if (uploader.getAttachments().length === 0) {
+                attachmentsContainer.style.display = 'none';
             }
+        },
+        onUploadSuccess: (attachment) => {
+            console.log('文件上传成功:', attachment);
+            // 显示附件容器
+            attachmentsContainer.style.display = 'flex';
         }
     });
 
@@ -1537,13 +1547,14 @@ async function editUserMessage(messageIndex, originalContent) {
     };
     
     // 组装编辑容器
-    buttonContainer.appendChild(addFileButton);
-    buttonContainer.appendChild(saveButton);
-    buttonContainer.appendChild(cancelButton);
+    editContainer.appendChild(attachmentsContainer);  // 附件预览区放在最上面
+    editContainer.appendChild(textarea);             // 文本编辑区放在中间
+    editContainer.appendChild(buttonContainer);      // 按钮放在最下面
     
-    editContainer.appendChild(textarea);
-    editContainer.appendChild(attachmentsContainer);
-    editContainer.appendChild(buttonContainer);
+    // 按钮容器中的按钮顺序调整
+    buttonContainer.appendChild(addFileButton);      // 添加附件按钮
+    buttonContainer.appendChild(saveButton);         // 保存按钮
+    buttonContainer.appendChild(cancelButton);       // 取消按钮
     
     // 在消息内容之后插入编辑容器
     messageWrapper.insertBefore(editContainer, originalContentDiv.nextSibling);
