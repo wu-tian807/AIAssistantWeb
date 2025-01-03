@@ -1,36 +1,55 @@
 import { ImageUploader } from './ImageUploader.js';
-import { AttachmentType, AttachmentConfig } from '../types.js';
+import { AttachmentType, AttachmentConfig, MimeTypeMapping, AttachmentUtils } from '../types.js';
 import { FileSelector } from '../files/FileSelector.js';
 import { createImageModal } from '../modal/imageModal.js';
+import { showToast, confirmDialog } from '../../toast.js';
 
 /**
  * 文件类型检测器
  */
 class FileTypeDetector {
     static isImage(file) {
-        return file.type.startsWith('image/');
+        return AttachmentUtils.getTypeByMimeType(file.type) === AttachmentType.IMAGE;
     }
 
     static isVideo(file) {
-        return file.type.startsWith('video/');
+        return AttachmentUtils.getTypeByMimeType(file.type) === AttachmentType.VIDEO;
     }
 
     static isDocument(file) {
-        const documentTypes = [
-            'application/pdf',
-            'application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/vnd.ms-excel',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        ];
-        return documentTypes.includes(file.type);
+        return AttachmentUtils.getTypeByMimeType(file.type) === AttachmentType.DOCUMENT;
+    }
+
+    static isDatabase(file) {
+        return AttachmentUtils.getTypeByMimeType(file.type) === AttachmentType.DATABASE;
+    }
+
+    static isSpreadsheet(file) {
+        return AttachmentUtils.getTypeByMimeType(file.type) === AttachmentType.SPREADSHEET;
+    }
+
+    static isAudio(file) {
+        return AttachmentUtils.getTypeByMimeType(file.type) === AttachmentType.AUDIO;
+    }
+
+    static isText(file) {
+        return AttachmentUtils.getTypeByMimeType(file.type) === AttachmentType.TEXT;
+    }
+
+    static isBinary(file) {
+        return AttachmentUtils.getTypeByMimeType(file.type) === AttachmentType.BINARY;
     }
 
     static detectType(file) {
-        if (this.isImage(file)) return AttachmentType.IMAGE;
-        if (this.isVideo(file)) return AttachmentType.VIDEO;
-        if (this.isDocument(file)) return AttachmentType.DOCUMENT;
-        return AttachmentType.BINARY;
+        // 首先通过 MIME 类型判断
+        const typeByMime = AttachmentUtils.getTypeByMimeType(file.type);
+        if (typeByMime !== AttachmentType.BINARY) {
+            return typeByMime;
+        }
+
+        // 如果 MIME 类型无法判断，尝试通过文件扩展名判断
+        const extension = file.name.split('.').pop();
+        return AttachmentUtils.getTypeByExtension(extension);
     }
 }
 
@@ -143,6 +162,7 @@ export class Uploader {
         const uploader = this.uploaders.get(fileType);
 
         if (!uploader) {
+            showToast(`不支持的文件类型: ${fileType}`, 'error');
             throw new Error(`不支持的文件类型: ${fileType}`);
         }
 

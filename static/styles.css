@@ -352,35 +352,84 @@ html, body {
 }
 
 .chat-messages {
+    max-width: none;
     flex: 1;
     overflow-y: auto; /* 只允许消息区域滚动 */
     padding: 20px;
 }
 
 .message {
-    max-width: 85%;
     margin: 15px 0;
     padding: 15px 20px;
     border-radius: 10px;
     line-height: 1.5;
+    word-break: break-word;  /* 添加这行 */
+    white-space: pre-wrap;
 }
 
+
 .user-message {
-    background-color: #007AFF;
     color: white;
     margin-left: auto;
     border-radius: 15px 15px 0 15px;
+    max-width: 65%;  /* 减小用户消息的最大宽度 */
+    width: fit-content; /* 让消息框随内容自适应 */
+}
+
+.user-message .message-wrapper {
+    background-color: #007AFF;
+    position: relative;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    margin-left: auto;
+    border-radius: 15px 15px 5px 15px;  /* 调整右下角弧度更小 */
+    max-width: 65%;
     width: fit-content;
-    max-width: 95%;
-    word-wrap: break-word;
+    padding: 12px 16px;    /* 添加适当的内边距 */
+    margin-bottom: 8px;    /* 添加底部间距 */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);  /* 添加轻微阴影提升层次感 */
+}
+
+/* 如果需要调整文字样式，可以添加以下规则 */
+.user-message .message-content {
+    color: white;
+    font-size: 15px;       /* 设置合适的字体大小 */
+    line-height: 1.4;      /* 调整行高 */
 }
 
 .assistant-message {
     background-color: #f1f1f1;
     margin-right: auto;
-    border-radius: 15px 15px 15px 0;
-    max-width: 65%;
-    padding-right: 40px;
+    max-width: 85%;
+    width: fit-content;      /* 添加这行 */
+    padding: 12px 16px;      /* 减小内边距 */
+}
+
+.message-wrapper {
+    position: relative;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.user-message .message-wrapper {
+    background-color: #007AFF;
+    border-radius: 15px 15px 5px 15px;
+    padding: 12px 16px;
+    margin-left: auto;
+    max-width: 85%;  /* 增加最大宽度,让消息可以更灵活地向左扩展 */
+    min-width: fit-content; /* 确保最小宽度适应内容 */
+    width: auto; /* 让宽度自动调整 */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* 编辑状态下的消息样式 */
+.user-message .message-wrapper.editing {
+    background-color: transparent;
+    box-shadow: none;
+    padding: 0;
 }
 
 .chat-input-container {
@@ -429,14 +478,6 @@ html, body {
 }
 
 /* Markdown 样式优化 */
-.assistant-message pre {
-    background-color: #f8f9fa;
-    padding: 15px;
-    border-radius: 5px;
-    overflow-x: auto;
-    margin: 10px 0;
-}
-
 .assistant-message code {
     font-family: 'Courier New', Courier, monospace;
 }
@@ -463,7 +504,14 @@ html, body {
     background: #555;
 }
 
-/* 添加代码块相关样式 */
+.message-content {
+    overflow-x: visible;
+    width: 100%;        /* 填满父容器 */
+    white-space: pre-wrap;   /* 保持换行但允许自动换行 */
+    word-wrap: break-word;   /* 允许长单词断行 */
+    word-break: break-word;  /* 更好的词断行控制 */
+}
+
 .code-block-wrapper {
     margin: 8px 0;
     border-radius: 4px;
@@ -471,26 +519,39 @@ html, body {
     border: 1px solid #e1e4e8;
     background-color: #f6f8fa;
     line-height: 1.4;
+    width: 100%;  /* 设置宽度为100% */
+    max-width: 850px;  /* 设置最大宽度 */
+    user-select: none;
 }
 
-.code-block-header {
+.code-block-wrapper .code-block-header {
     padding: 4px 8px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-top: -50px;
+    user-select: none;
 }
 
 .code-block-wrapper pre {
-    margin: 0;
-    padding: 8px;
     margin-top: -50px;
+    padding: 16px;
+    background: #282c34;
+    width: 100%;
+    overflow-x: auto;  /* 添加横向滚动 */
+    border-radius: 5px;
+    margin-bottom: -42px;
+    user-select: none;
 }
 
 .code-block-wrapper pre code {
+    display: inline-block;  /* 修改为inline-block */
+    min-width: 100%;
+    white-space: pre;
     padding: 0;
-    line-height: 1.4;
-    font-size: 13px;
+    line-height: 1.5;
+    font-size: 14px;
+    user-select: text;
 }
 
 .copy-button {
@@ -498,17 +559,19 @@ html, body {
     font-size: 11px;
     line-height: 1.2;
     margin-left: 8px;
+    user-select: none;
 }
 
 .language-label {
-    color: #57606a;
+    color: #6a6257;
     font-size: 12px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    user-select: none;
 }
 
 .copy-button {
     background-color: transparent;
-    border: 1px solid #d1d5da;
+    border: 1px solid #dad8d1;
     border-radius: 4px;
     padding: 4px 10px;
     font-size: 12px;
@@ -527,20 +590,65 @@ html, body {
     border-color: #2ea44f;
 }
 
+
 .hljs {
     padding: 16px;
-    background: #ffffff !important;
+    background: #282c34 !important;
+    color: #abb2bf;
     font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
     font-size: 14px;
     line-height: 1.45;
     overflow-x: auto;
+    border-radius: 6px;
+}
+
+/* 添加语法高亮的具体颜色 */
+.hljs-keyword {
+    color: #c678dd;
+}
+
+.hljs-string {
+    color: #98c379;
+}
+
+.hljs-number {
+    color: #d19a66;
+}
+
+.hljs-function {
+    color: #61afef;
+}
+
+.hljs-comment {
+    color: #5c6370;
+    font-style: italic;
+}
+
+/* 代码块头部样式优化 */
+.code-block-wrapper .code-block-header {
+    background: #d8d8d8;
+    color: #947505;
+    padding: 8px 16px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    border-bottom: 1px solid #181a1f;
+}
+
+.code-block-wrapper .copy-button {
+    background: #ffffff;
+    color: #000000;
+    border: 1px solid #181a1f;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.code-block-wrapper .copy-button:hover {
+    background: #c9c9c9;
 }
 
 /* 添加消息操作按钮样式 */
-.message-wrapper {
-    position: relative;
-    width: 100%;
-}
 
 .message-actions {
     position: absolute;
@@ -572,47 +680,60 @@ html, body {
 }
 
 /* 添加编辑相关的样式 */
-.edit-message-container {
-    margin: 10px 0;
-    padding: 10px;
-    background-color: #f8f9fa;
-    border-radius: 8px;
-}
+/* 编辑容器样式优化 */
 
+/* 附件预览区域样式 */
+.edit-attachments-container {
+    margin-bottom: 12px;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 8px;
+    background-color: #fff;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    overflow-x: auto;
+}
+/* 编辑文本框样式 */
 .edit-textarea {
     width: 100%;
-    min-height: 60px;
-    padding: 8px;
-    margin-bottom: 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
+    min-height: 120px;
+    padding: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 15px;
+    line-height: 1.5;
     resize: vertical;
-    font-family: inherit;
-    font-size: inherit;
+    background-color: #fff;
+    transition: border-color 0.2s;
 }
 
+.edit-textarea:focus {
+    outline: none;
+    border-color: #007AFF;
+}
+/* 编辑按钮样式 */
+.edit-buttons button {
+    padding: 4px 8px;  /* 减小内边距 */
+    font-size: 12px;   /* 减小字体 */
+    border-radius: 4px; /* 减小圆角 */
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;      /* 移除边框 */
+}
+
+/* 添加附件按钮 */
+.edit-buttons button:first-child {
+    background-color: #f5f5f5;  /* 更浅的背景色 */
+    color: #666;
+}
+
+/* 按钮容器样式 */
 .edit-buttons {
     display: flex;
-    gap: 10px;
+    gap: 6px;         /* 减小间距 */
+    margin-top: 8px;  /* 减小上边距 */
     justify-content: flex-end;
-}
-
-.edit-buttons button {
-    padding: 6px 12px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-}
-
-.edit-buttons button:first-child {
-    background-color: #007bff;
-    color: white;
-}
-
-.edit-buttons button:last-child {
-    background-color: #6c757d;
-    color: white;
 }
 
 .edit-btn {
