@@ -1,4 +1,5 @@
 import { ImageUploader } from './ImageUploader.js';
+import { VideoUploader } from './VideoUploader.js';
 import { AttachmentType, AttachmentConfig, MimeTypeMapping, AttachmentUtils } from '../types.js';
 import { FileSelector } from '../files/FileSelector.js';
 import { createImageModal } from '../modal/imageModal.js';
@@ -89,8 +90,18 @@ export class Uploader {
                 }
             }
         }));
+        
+        // 添加视频上传器
+        this.uploaders.set(AttachmentType.VIDEO, new VideoUploader({
+            ...this.options,
+            onDelete: (attachment) => {
+                if (this.options.onDelete) {
+                    this.options.onDelete(attachment);
+                }
+            }
+        }));
+        
         // TODO: 后续可以添加其他类型的上传器
-        // this.uploaders.set(AttachmentType.VIDEO, new VideoUploader(this.options));
         // this.uploaders.set(AttachmentType.DOCUMENT, new DocumentUploader(this.options));
     }
 
@@ -167,20 +178,20 @@ export class Uploader {
         }
 
         try {
-            const imageAttachment = await uploader.handleFileSelect(file);
+            const attachment = await uploader.handleFileSelect(file);
             console.log('文件上传成功，创建预览元素');
             
             // 添加到上传器的附件集合中
-            uploader.attachments.add(imageAttachment);
+            uploader.attachments.add(attachment);
             
             // 调用上传成功的回调
             if (this.options.onUploadSuccess) {
-                this.options.onUploadSuccess(imageAttachment);
+                this.options.onUploadSuccess(attachment);
             }
             
             // 如果有容器选项，创建并添加预览元素
             if (this.options.container) {
-                const previewElement = imageAttachment.createUploadPreviewElement(
+                const previewElement = attachment.createUploadPreviewElement(
                     // 删除回调
                     () => {
                         // 从容器中移除预览元素
@@ -188,26 +199,28 @@ export class Uploader {
                             previewElement.parentNode.removeChild(previewElement);
                         }
                         // 从附件集合中移除
-                        uploader.attachments.delete(imageAttachment);
+                        uploader.attachments.delete(attachment);
                         // 调用外部的 onDelete 回调
                         if (this.options.onDelete) {
-                            this.options.onDelete(imageAttachment);
+                            this.options.onDelete(attachment);
                         }
                     }
                 );
                 
                 if (previewElement) {
-                    // 为预览图片添加点击放大功能
-                    const previewImage = previewElement.querySelector('img');
-                    if (previewImage) {
-                        previewImage.style.cursor = 'pointer';
-                        previewImage.onclick = (e) => {
-                            e.stopPropagation();
-                            const imageUrl = imageAttachment.getBase64Data() ? 
-                                `data:${imageAttachment.getMimeType()};base64,${imageAttachment.getBase64Data()}` :
-                                imageAttachment.getFilePath();
-                            createImageModal(imageUrl);
-                        };
+                    // 为预览添加点击事件
+                    if (fileType === AttachmentType.IMAGE) {
+                        const previewImage = previewElement.querySelector('img');
+                        if (previewImage) {
+                            previewImage.style.cursor = 'pointer';
+                            previewImage.onclick = (e) => {
+                                e.stopPropagation();
+                                const imageUrl = attachment.getBase64Data() ? 
+                                    `data:${attachment.getMimeType()};base64,${attachment.getBase64Data()}` :
+                                    attachment.getFilePath();
+                                createImageModal(imageUrl);
+                            };
+                        }
                     }
                     
                     console.log('添加预览元素到容器');
@@ -215,7 +228,7 @@ export class Uploader {
                 }
             }
 
-            return imageAttachment;
+            return attachment;
         } catch (error) {
             console.error('文件上传处理失败:', error);
             throw error;
@@ -265,6 +278,41 @@ export class Uploader {
         for (const uploader of this.uploaders.values()) {
             uploader.clearAttachments?.();
         }
+    }
+
+    /**
+     * 收集所有附件的数据用于发送
+     * @returns {Array} 附件数据数组
+     */
+    collectAttachments() {
+        const attachments = this.getAttachments();
+        return attachments.map(attachment => {
+            const baseData = {
+                type: attachment.type,
+                fileName: attachment.getFileName(),
+                mime_type: attachment.getMimeType(),
+                file_path: attachment.getFilePath()
+            };
+
+            // 根据不同类型的附件获取特定的数据
+            switch (attachment.type) {
+                case AttachmentType.IMAGE:
+                    return {
+                        ...baseData,
+                        base64: attachment.getBase64Data()
+                    };
+                case AttachmentType.VIDEO:
+                    return {
+                        ...baseData,
+                        base64: attachment.getBase64Data(),
+                        duration: attachment.duration,
+                        thumbnail: attachment.thumbnail
+                    };
+                default:
+                    console.warn(`未知的附件类型: ${attachment.type}`);
+                    return baseData;
+            }
+        });
     }
 }
 

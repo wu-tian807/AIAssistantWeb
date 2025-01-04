@@ -21,3 +21,12 @@ export function confirmDialog(message) {
         resolve(result);
     });
 } 
+
+// 在文件开头添加这个函数
+export function showError(message) {
+    const toast = document.createElement('div');
+    toast.className = 'toast error';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}

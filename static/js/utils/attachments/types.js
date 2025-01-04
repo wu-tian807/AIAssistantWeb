@@ -93,7 +93,7 @@ export const AttachmentConfig = {
         description: '图片'
     },
     [AttachmentType.VIDEO]: {
-        maxSize: 200 * 1024 * 1024, // 200MB
+        maxSize: 2000 * 1024 * 1024, // 2000MB
         allowedExtensions: ['mp4', 'webm', 'avi', 'mov', 'wmv'],
         icon: '🎥',
         description: '视频'
