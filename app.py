@@ -8,7 +8,7 @@ from werkzeug.utils import secure_filename
 
 from config import AVAILABLE_MODELS
 from config import RATE_LIMIT_WINDOW
-from config import ATTACHMENT_TYPES
+from utils.files.file_config import ATTACHMENT_TYPES, AttachmentType
 
 from initialization import app, db, mail, xai_client, genai
 
@@ -23,7 +23,7 @@ from utils.image_handler import encode_image
 
 from utils.files.files_extension_helper import get_image_extension
 from utils.files.file_config import MIME_TYPE_MAPPING, AttachmentType
-from utils.chat.message_processor import process_image_attachment, process_binary_attachment
+from utils.chat.message_processor import process_image_attachment, process_binary_attachment,process_video_attachment
 
 # 修改注册路由
 @app.route('/register', methods=['GET', 'POST'])
@@ -229,18 +229,39 @@ def chat():
     data = request.json
     messages = data.get('messages', [])
     conversation_id = data.get('conversation_id')
-    model_id = data.get('model_id', 'grok-2-vision-1212')  # 默认模型
+    model_id = data.get('model_id', 'gemini-1.5-pro')  # 修改默认模型为gemini-1.5-pro
+    
+    print(f"\n=== 聊天请求信息 ===")
+    print(f"模型ID: {model_id}")
+    print(f"会话ID: {conversation_id}")
+    print(f"消息数量: {len(messages)}")
     
     # 验证对话归属权
     if conversation_id:
         conversation = Conversation.query.filter_by(id=conversation_id, user_id=session['user_id']).first()
         if not conversation:
             return jsonify({'error': '对话不存在或无权访问'}), 404
+            
+    # 获取模型类型和支持的附件类型
+    model_type = None
+    model_support_list = []
+    for provider, config in AVAILABLE_MODELS.items():
+        for model in config['models']:
+            if model['id'] == model_id:
+                model_type = config['api_type']
+                model_support_list = model['available_attachments']
+                print(f"模型类型: {model_type}")
+                print(f"支持的附件类型: {[str(t) for t in model_support_list]}")
+                break
+        if model_type:
+            break
+            
+    if not model_type:
+        return jsonify({'error': '不支持的模型'}), 400
 
-    def process_message_with_attachments(message, model_type,model_support_list):
+    def process_message_with_attachments(message, model_type, model_support_list):
         # 从配置中获取支持的图片类型
-        from utils.files.file_config import MIME_TYPE_MAPPING
-        from config import ATTACHMENT_TYPES
+        from utils.files.file_config import MIME_TYPE_MAPPING, ATTACHMENT_TYPES, AttachmentType
         
         processed_message = message.copy()
         has_attachments = False
@@ -255,10 +276,15 @@ def chat():
                 })
         elif model_type == 'google':
             processed_message['parts'] = []
-            if message.get('content'):
-                processed_message['parts'].append({
-                    "text": message['content']
-                })
+            # 确保始终添加文本内容，即使是空字符串
+            text_content = message.get('content', '')
+            if not text_content and 'attachments' in message:
+                # 如果没有文本但有附件，添加默认文本
+                text_content = "请分析以下附件内容："
+            processed_message['parts'].append({
+                "text": text_content
+            })
+            
         # 处理消息中的附件
         if 'attachments' in message and message['attachments']:
             attachments = message['attachments']
@@ -266,25 +292,39 @@ def chat():
                 # 获取附件类型和MIME类型
                 attachment_type = attachment.get('type')
                 mime_type = attachment.get('mime_type')
+                file_path = attachment.get('file_path', '')
+                file_ext = os.path.splitext(file_path)[1].lower() if file_path else ''
+                
+                print(f"\n=== 附件信息 ===")
+                print(f"附件类型: {attachment_type}")
+                print(f"MIME类型: {mime_type}")
+                print(f"文件路径: {file_path}")
+                print(f"文件扩展名: {file_ext}")
                 
                 # 验证MIME类型是否在支持列表中
                 if mime_type:
                     supported_type = MIME_TYPE_MAPPING.get(mime_type)
+                    print(f"MIME类型映射结果: {supported_type}")
                     if not supported_type:
-                        supported_type = 'binary'
+                        supported_type = AttachmentType.BINARY
+                        print(f"未找到MIME类型映射，使用默认类型: {supported_type}")
                         
-                    # 检查文件扩展名是否支持
-                    file_name = attachment.get('fileName', '')
-                    file_ext = os.path.splitext(file_name)[1].lower().strip()
-                    if file_ext not in model_support_list:
-                        print(f"文件扩展名 {file_ext} 不支持")
-                        supported_type = 'binary'
-                    else:
-                        print(f"文件扩展名 {file_ext} 支持")
+                    # 检查模型是否支持该类型的附件
+                    # 特殊处理视频类型：如果模型支持GEMINI_VIDEO，也视为支持VIDEO
+                    if (supported_type == AttachmentType.VIDEO and 
+                        AttachmentType.GEMINI_VIDEO in model_support_list):
+                        print("检测到视频类型，模型支持GEMINI_VIDEO，允许处理")
+                    elif supported_type not in model_support_list:
+                        print(f"模型不支持的附件类型: {supported_type}")
+                        print(f"模型支持的类型: {model_support_list}")
+                        supported_type = AttachmentType.BINARY
+                        
                     # 对于图片类型的特殊处理
-                    if supported_type == 'image':
-                        if (file_ext not in ATTACHMENT_TYPES['images']['extensions'] or 
-                            mime_type not in ATTACHMENT_TYPES['images']['mime_types']):
+                    if supported_type == AttachmentType.IMAGE:
+                        if (file_ext not in ATTACHMENT_TYPES[AttachmentType.IMAGE]['extensions'] or 
+                            mime_type not in ATTACHMENT_TYPES[AttachmentType.IMAGE]['mime_types']):
+                            print(f"图片格式不受支持: {file_ext}, {mime_type}")
+                            supported_type = AttachmentType.BINARY
                             continue
                             
                         process_image_attachment(
@@ -295,6 +335,37 @@ def chat():
                             mime_type,
                             genai
                         )
+                    #视频附件处理:
+                    elif supported_type == AttachmentType.VIDEO:
+                        print(f"处理视频附件: model_type={model_type}, file_ext={file_ext}, mime_type={mime_type}")
+                        # 如果是Google模型，使用GEMINI_VIDEO配置
+                        if model_type == 'google':
+                            print(f"检查Gemini视频支持: extensions={ATTACHMENT_TYPES[AttachmentType.GEMINI_VIDEO]['extensions']}, mime_types={ATTACHMENT_TYPES[AttachmentType.GEMINI_VIDEO]['mime_types']}")
+                            if (file_ext in ATTACHMENT_TYPES[AttachmentType.GEMINI_VIDEO]['extensions'] and 
+                                mime_type in ATTACHMENT_TYPES[AttachmentType.GEMINI_VIDEO]['mime_types']):
+                                print("视频格式符合Gemini要求，开始处理...")
+                                process_video_attachment(
+                                    attachment,
+                                    model_type,
+                                    processed_message,
+                                    AttachmentType.GEMINI_VIDEO,
+                                    mime_type,
+                                    genai
+                                )
+                            else:
+                                print(f"视频格式不受Gemini支持: {file_ext}, {mime_type}")
+                                processed_message['parts'].append({
+                                    "text": f"\n注意：该视频格式不受Gemini支持。\n支持的格式：{', '.join(ATTACHMENT_TYPES[AttachmentType.GEMINI_VIDEO]['extensions'])}"
+                                })
+                        else:
+                            process_video_attachment(
+                                attachment,
+                                model_type,
+                                processed_message,
+                                supported_type,
+                                mime_type,
+                                genai
+                            )
                     # 其他类型的附件处理
                     else:
                         process_binary_attachment(
@@ -321,30 +392,11 @@ def chat():
 
     def generate():
         try:
-            # 确定模型支持的附件类型
-            model_support_list = []
-            for provider, config in AVAILABLE_MODELS.items():
-                for model in config['models']:
-                    if model['id'] == model_id:
-                        model_support_attachments_list = model['available_attachments']
-                        for attachment_type in model_support_attachments_list:
-                            model_support_list.extend(ATTACHMENT_TYPES[attachment_type]['extensions'])
-                        break
-            # 确定模型类型
-            model_type = None
-            for provider, config in AVAILABLE_MODELS.items():
-                for model in config['models']:
-                    if model['id'] == model_id:
-                        model_type = config['api_type']
-                        break
-                if model_type:
-                    break
-
             # 处理消息列表
             processed_messages = [
-                process_message_with_attachments(msg, model_type,model_support_list) for msg in messages
+                process_message_with_attachments(msg, model_type, model_support_list) for msg in messages
             ]
-
+            
             if model_type == 'openai':
                 # OpenAI 模型调用
                 stream = xai_client.chat.completions.create(
@@ -554,7 +606,32 @@ def switch_conversation(conversation_id):
 @app.route('/api/models', methods=['GET'])
 @login_required
 def get_models():
-    return jsonify(AVAILABLE_MODELS)
+    try:
+        # 创建可序列化的模型配置副本
+        serializable_models = {}
+        for provider, config in AVAILABLE_MODELS.items():
+            provider_config = {
+                'api_type': config['api_type'],
+                'models': []
+            }
+            
+            for model in config['models']:
+                # 将 AttachmentType 转换为字符串列表
+                available_attachments = [str(att.value) for att in model['available_attachments']]
+                serializable_model = {
+                    'id': model['id'],
+                    'name': model['name'],
+                    'description': model['description'],
+                    'available_attachments': available_attachments
+                }
+                provider_config['models'].append(serializable_model)
+                
+            serializable_models[provider] = provider_config
+            
+        return jsonify(serializable_models)
+    except Exception as e:
+        app.logger.error(f"获取模型列表时出错: {str(e)}")
+        return jsonify({'error': f'获取模型列表失败: {str(e)}'}), 500
 
 # 创建数据库表
 with app.app_context():
@@ -575,9 +652,6 @@ def generate_title():
         data = request.get_json()
         first_message = data.get('message')
         model_id = data.get('model_id', 'gemini-1.5-flash-8b')
-
-        if not first_message:
-            return jsonify({'error': '消息不能为空'}), 400
 
         def generate():
             prompt = f"请根据用户的第一句话生成一个简短的、有趣的对话标题（不超过20个字）。用户的话是：{first_message}"
@@ -679,6 +753,144 @@ def get_image():
         
     except Exception as e:
         print(f"获取图片失败: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/upload_video', methods=['POST'])
+@login_required
+def upload_video():
+    try:
+        print("开始处理视频上传请求")
+        
+        if 'video' not in request.files:
+            print("请求中没有视频文件")
+            return jsonify({'error': 'No video provided'}), 400
+        
+        video = request.files['video']
+        print(f"接收到的文件信息: 文件名={video.filename}, MIME类型={video.content_type}")
+        
+        if video.filename == '':
+            print("没有选择文件")
+            return jsonify({'error': 'No selected file'}), 400
+
+        # 检查文件扩展名
+        file_ext = os.path.splitext(video.filename)[1].lower()
+        print(f"文件扩展名: {file_ext}")
+        if file_ext not in ATTACHMENT_TYPES[AttachmentType.VIDEO]['extensions']:
+            print(f"不支持的文件扩展名: {file_ext}")
+            print(f"支持的扩展名列表: {ATTACHMENT_TYPES[AttachmentType.VIDEO]['extensions']}")
+            return jsonify({'error': f'不支持的视频格式: {file_ext}'}), 400
+            
+        # 检查MIME类型
+        if video.content_type not in ATTACHMENT_TYPES[AttachmentType.VIDEO]['mime_types']:
+            print(f"不支持的MIME类型: {video.content_type}")
+            print(f"支持的MIME类型列表: {ATTACHMENT_TYPES[AttachmentType.VIDEO]['mime_types']}")
+            return jsonify({'error': f'不支持的视频格式: {video.content_type}'}), 400
+
+        user_id = session.get('user_id')
+        if not user_id:
+            print("用户未登录")
+            return jsonify({'error': 'User not logged in'}), 401
+            
+        user = User.query.get(user_id)
+        if not user:
+            print("找不到用户")
+            return jsonify({'error': 'User not found'}), 404
+        
+        # 处理文件名
+        original_filename = secure_filename(video.filename)
+        if not original_filename:
+            print(f"文件名不安全: {video.filename}")
+            return jsonify({'error': 'Invalid filename'}), 400
+            
+        # 检查文件大小
+        video.seek(0, 2)  # 移动到文件末尾
+        file_size = video.tell()  # 获取文件大小
+        video.seek(0)  # 移动回文件开头
+        
+        print(f"文件大小: {file_size} 字节")
+        max_size = ATTACHMENT_TYPES[AttachmentType.VIDEO]['max_size']
+        print(f"最大允许大小: {max_size} 字节")
+        
+        if file_size > max_size:
+            print(f"文件太大: {file_size} 字节, 超过限制: {max_size} 字节")
+            return jsonify({'error': f'文件大小超过限制 ({max_size/(1024*1024)}MB)'}), 400
+            
+        # 生成新文件名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        ext = os.path.splitext(original_filename)[1]
+        new_filename = f"{timestamp}{ext}"
+        
+        # 保存视频到用户目录
+        user_email = user.email.replace('@','_').replace('.','_')
+        user_folder = os.path.join(app.config['UPLOAD_FOLDER'], user_email)
+        os.makedirs(user_folder, exist_ok=True)
+
+        # 确保路径是字符串类型
+        video_path = str(os.path.join(user_folder, new_filename))
+        print(f"正在保存视频到: {video_path}")
+        
+        # 保存文件
+        try:
+            video.save(video_path)
+            print(f"视频文件保存成功")
+        except Exception as e:
+            print(f"保存文件时出错: {str(e)}")
+            raise
+        
+        print(f"视频上传成功: {video_path}")
+        return jsonify({
+            'message': 'Video uploaded successfully',
+            'file_path': video_path,
+            'mime_type': video.content_type
+        }), 200
+
+    except Exception as e:
+        print(f"视频上传失败: {str(e)}")
+        import traceback
+        print(f"错误详情: {traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/get_video')
+@login_required
+def get_video():
+    try:
+        video_path = request.args.get('path')
+        if not video_path:
+            return jsonify({'error': '未提供视频路径'}), 400
+            
+        user = User.query.get(session['user_id'])
+        if not user:
+            return jsonify({'error': '用户未登录'}), 401
+            
+        user_email = user.email.replace('@', '_').replace('.', '_')
+        user_folder = os.path.join(app.config['UPLOAD_FOLDER'], user_email)
+        
+        requested_path = os.path.abspath(video_path)
+        if not requested_path.startswith(os.path.abspath(user_folder)):
+            return jsonify({'error': '无权访问该文件'}), 403
+            
+        if not os.path.exists(requested_path):
+            return jsonify({'error': '文件不存在'}), 404
+            
+        import mimetypes
+        mime_type = mimetypes.guess_type(requested_path)[0]
+        
+        if not mime_type:
+            file_ext = os.path.splitext(requested_path)[1].lower()
+            ext_to_mime = {
+                '.mp4': 'video/mp4',
+                '.webm': 'video/webm',
+                '.ogg': 'video/ogg'
+            }
+            mime_type = ext_to_mime.get(file_ext, 'application/octet-stream')
+        
+        if mime_type.startswith('video/'):
+            return send_file(requested_path, mimetype=mime_type)
+        else:
+            return jsonify({'error': '不支持的文件类型'}), 415
+        
+    except Exception as e:
+        print(f"获取视频失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # 启动应用

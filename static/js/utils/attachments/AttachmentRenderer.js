@@ -1,14 +1,36 @@
 import { AttachmentType } from './types.js';
-import { createImageModal } from './modal/imageModal.js';
+import { ImageRenderer } from './renderer/ImageRenderer.js';
+import { VideoRenderer } from './renderer/VideoRenderer.js';
 
 export class AttachmentRenderer {
     constructor() {
         // 注册不同类型附件的渲染器
         this.renderers = {
-            [AttachmentType.IMAGE]: this.renderImagePreview.bind(this),
+            [AttachmentType.IMAGE]: new ImageRenderer(),
+            [AttachmentType.VIDEO]: new VideoRenderer(),
             [AttachmentType.DOCUMENT]: this.renderDocumentPreview.bind(this),
             [AttachmentType.BINARY]: this.renderBinaryPreview.bind(this)
         };
+        this.container = null;
+    }
+
+    /**
+     * 设置预览容器
+     * @param {HTMLElement} container 预览容器元素
+     */
+    setContainer(container) {
+        this.container = container;
+    }
+
+    /**
+     * 清理所有附件预览
+     */
+    clearAll() {
+        if (this.container) {
+            while (this.container.firstChild) {
+                this.container.removeChild(this.container.firstChild);
+            }
+        }
     }
 
     /**
@@ -22,51 +44,16 @@ export class AttachmentRenderer {
             console.warn(`未找到类型 ${attachment.type} 的渲染器`);
             return null;
         }
-        return renderer(attachment);
-    }
-
-    /**
-     * 渲染图片预览
-     * @param {Object} attachment 图片附件对象
-     * @returns {HTMLElement} 图片预览元素
-     */
-    renderImagePreview(attachment) {
-        const previewItem = document.createElement('div');
-        previewItem.className = 'preview-item image-preview-item';
         
-        // 创建图片容器
-        const imageContainer = document.createElement('div');
-        imageContainer.className = 'image-container';
+        // 确保传递 disableDelete 属性
+        const rendererAttachment = {
+            ...attachment,
+            disableDelete: attachment.disableDelete || false
+        };
         
-        // 创建图片元素
-        const img = document.createElement('img');
-        img.src = attachment.url || `data:image/jpeg;base64,${attachment.base64}`;
-        img.alt = attachment.filename;
-        img.className = 'preview-image';
-        
-        // 添加图片点击预览功能
-        img.onclick = () => createImageModal(img.src);
-        
-        // 创建文件名显示
-        const fileName = document.createElement('div');
-        fileName.className = 'file-name';
-        fileName.textContent = attachment.filename;
-        
-        // 只在未禁用删除按钮时创建删除按钮
-        if (!attachment.disableDelete) {
-            const deleteButton = document.createElement('button');
-            deleteButton.className = 'delete-button';
-            deleteButton.innerHTML = '×';
-            deleteButton.onclick = () => previewItem.remove();
-            previewItem.appendChild(deleteButton);
-        }
-        
-        // 组装预览项
-        imageContainer.appendChild(img);
-        previewItem.appendChild(imageContainer);
-        previewItem.appendChild(fileName);
-        
-        return previewItem;
+        return renderer.render ? 
+            renderer.render(rendererAttachment) : 
+            renderer(rendererAttachment);
     }
 
     /**

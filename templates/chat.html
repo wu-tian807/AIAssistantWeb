@@ -25,6 +25,7 @@
     <!-- 添加样式 -->
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='attachment-styles.css') }}">
+    <link rel="stylesheet" href="/static/css/video-attachments.css">
     <!-- 添加常用语言包 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/javascript.min.js"></script>
@@ -51,7 +52,7 @@
                         <!-- 模型选择器 -->
                         <div class="model-selector">
                             <select id="model-select">
-                                <option value="" disabled>选择模型...</option>
+                                <option value="" disabled selected>选择模型...</option>
                             </select>
                         </div>
                         <!-- 系统提示词 -->

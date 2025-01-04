@@ -2,10 +2,8 @@
 import { initMarkdownit ,applyCodeHighlight} from "./utils/markdownit.js";
 import { Uploader } from "./utils/attachments/uploader/Uploader.js";
 import { AttachmentRenderer } from './utils/attachments/AttachmentRenderer.js';
-import { FileSelector } from './utils/attachments/files/FileSelector.js';
 import { imageUploader } from './utils/attachments/uploader/ImageUploader.js';
-import { ImageAttachment } from './utils/attachments/attachment/ImageAttachment.js';
-import { showToast, confirmDialog } from './utils/toast.js';
+import { showToast, confirmDialog,showError } from './utils/toast.js';
 
 const md = initMarkdownit();
 // 存储聊天消息历史
@@ -253,6 +251,15 @@ function shouldAutoScroll(container) {
 function appendMessage(content, isUser = false, messageIndex = null, attachments = []) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
+    
+    // 如果没有提供消息索引，则使用当前消息数组的长度
+    if (messageIndex === null) {
+        const currentConversation = conversations.find(c => c.id === currentConversationId);
+        if (currentConversation) {
+            messageIndex = currentConversation.messages.length - 1;
+        }
+    }
+    
     messageDiv.setAttribute('data-message-index', messageIndex);
     
     const messageWrapper = document.createElement('div');
@@ -275,7 +282,12 @@ function appendMessage(content, isUser = false, messageIndex = null, attachments
         const editBtn = document.createElement('button');
         editBtn.className = 'edit-btn';
         editBtn.innerHTML = '✏️ 编辑';
-        editBtn.onclick = () => editUserMessage(messageIndex, content);
+        editBtn.onclick = () => {
+            const currentConversation = conversations.find(c => c.id === currentConversationId);
+            if (currentConversation && currentConversation.messages[messageIndex]) {
+                editUserMessage(messageIndex, currentConversation.messages[messageIndex].content);
+            }
+        };
         messageActions.appendChild(editBtn);
         
         // 处理附件 - 移到消息框外部
@@ -287,13 +299,31 @@ function appendMessage(content, isUser = false, messageIndex = null, attachments
             
             attachments.forEach(attachment => {
                 console.log('处理单个附件:', attachment);  // 调试日志
+                if (!attachment || (!attachment.base64 && !attachment.file_path)) {
+                    console.error('无效的附件数据:', attachment);
+                    return;
+                }
+                
+                let url;
+                if (attachment.base64) {
+                    url = attachment.base64.startsWith('data:') ? 
+                        attachment.base64 : 
+                        `data:${attachment.mime_type};base64,${attachment.base64}`;
+                } else if (attachment.file_path) {
+                    url = `/get_image?path=${encodeURIComponent(attachment.file_path)}`;
+                }
+
                 const renderedAttachment = attachmentRenderer.render({
-                    type: 'image',  // 确保类型是字符串 'image'
+                    type: attachment.type || 'image',  // 默认为图片类型
                     base64: attachment.base64,
-                    filename: attachment.fileName,
-                    url: `data:${attachment.mime_type};base64,${attachment.base64}`,
-                    disableDelete: true  // 添加这个选项来禁用删除按钮
+                    filename: attachment.fileName || 'file',
+                    url: url,
+                    disableDelete: true,
+                    // 视频特有属性
+                    duration: attachment.duration,
+                    thumbnail: attachment.thumbnail
                 });
+                
                 console.log('渲染结果:', renderedAttachment);  // 调试日志
                 if (renderedAttachment) {
                     attachmentsContainer.appendChild(renderedAttachment);
@@ -408,6 +438,9 @@ async function createNewConversation() {
     if (currentReader) {
         await stopGeneration();
     }
+
+    // 创建新对话前清理附件预览
+    clearAttachmentPreview();
 
     // 检查当前对话是否为空对话
     if (currentConversationId) {
@@ -574,6 +607,9 @@ async function switchConversation(conversationId) {
         await stopGeneration();
     }
     
+    // 切换对话前清理附件预览
+    clearAttachmentPreview();
+    
     currentConversationId = conversationId;
     const conversation = conversations.find(c => c.id === conversationId);
     if (conversation) {
@@ -584,13 +620,19 @@ async function switchConversation(conversationId) {
         
         clearChatMessages();
         messages = [
-            {"role": "system", "content": conversation.systemPrompt || default_system_prompt} // 只在发送消息时使用默认提示词
+            {"role": "system", "content": conversation.systemPrompt || default_system_prompt}
         ];
         conversation.messages.forEach((msg, index) => {
             messages.push(msg);
             appendMessage(msg.content, msg.role === 'user', index, msg.attachments);
         });
         renderConversationsList();
+        
+        // 添加滚动到底部的逻辑
+        const chatMessages = document.getElementById('chat-messages');
+        setTimeout(() => {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }, 100);
         
         try {
             await fetch(`/api/conversations/${conversationId}/switch`, {
@@ -615,48 +657,49 @@ function clearChatMessages() {
 
 // 初始化附件渲染器
 const attachmentRenderer = new AttachmentRenderer();
+attachmentRenderer.setContainer(document.getElementById('attachment-preview'));
 
 // 初始化文件选择器
-const fileSelector = new FileSelector({
-    multiple: true,
-    accept: '*/*',  // 预留接口，支持所有文件
-    onFileSelected: async (file) => {
-        try {
-            console.log('开始处理选中的文件:', file);  // 调试日志
-            const imageAttachment = await ImageAttachment.fromFile(file);
-            console.log('创建的 ImageAttachment:', imageAttachment);  // 调试日志
+// const fileSelector = new FileSelector({
+//     multiple: true,
+//     accept: '*/*',  // 预留接口，支持所有文件
+//     onFileSelected: async (file) => {
+//         try {
+//             console.log('开始处理选中的文件:', file);  // 调试日志
+//             const imageAttachment = await ImageAttachment.fromFile(file);
+//             console.log('创建的 ImageAttachment:', imageAttachment);  // 调试日志
             
-            if (imageAttachment) {
-                // await imageAttachment.compress();
-                // console.log('压缩后的 ImageAttachment:', imageAttachment);  // 调试日志
+//             if (imageAttachment) {
+//                 // await imageAttachment.compress();
+//                 // console.log('压缩后的 ImageAttachment:', imageAttachment);  // 调试日志
                 
-                // 直接将 imageAttachment 添加到 imageUploader
-                imageUploader.attachments.add(imageAttachment);
-                console.log('当前 imageUploader 中的附件:', imageUploader.getAttachments());  // 调试日志
+//                 // 直接将 imageAttachment 添加到 imageUploader
+//                 imageUploader.attachments.add(imageAttachment);
+//                 console.log('当前 imageUploader 中的附件:', imageUploader.getAttachments());  // 调试日志
                 
-                const previewContainer = document.getElementById('attachment-preview');
-                if (!previewContainer) {
-                    console.error('预览容器未找到');
-                    return;
-                }
+//                 const previewContainer = document.getElementById('attachment-preview');
+//                 if (!previewContainer) {
+//                     console.error('预览容器未找到');
+//                     return;
+//                 }
                 
-                // 使用 imageAttachment 创建预览元素
-                const previewElement = imageAttachment.createUploadPreviewElement(() => {
-                    imageUploader.attachments.delete(imageAttachment);
-                    previewContainer.removeChild(previewElement);
-                });
+//                 // 使用 imageAttachment 创建预览元素
+//                 const previewElement = imageAttachment.createUploadPreviewElement(() => {
+//                     imageUploader.attachments.delete(imageAttachment);
+//                     previewContainer.removeChild(previewElement);
+//                 });
                 
-                if (previewElement) {
-                    previewContainer.appendChild(previewElement);
-                    console.log('预览元素已添加到容器');  // 调试日志
-                }
-            }
-        } catch (error) {
-            console.error('处理图片失败:', error);
-            showError('处理图片失败，请重试');
-        }
-    }
-});
+//                 if (previewElement) {
+//                     previewContainer.appendChild(previewElement);
+//                     console.log('预览元素已添加到容器');  // 调试日志
+//                 }
+//             }
+//         } catch (error) {
+//             console.error('处理图片失败:', error);
+//             showError('处理图片失败，请重试');
+//         }
+//     }
+// });
 
 // 修改上传按钮的点击事件
 const uploadButton = document.getElementById('upload-button');
@@ -685,26 +728,12 @@ uploadButton.addEventListener('click', () => {
 
 // 修改附件相关函数
 function hasAttachments() {
-    return imageUploader.hasAttachments();
-}
-
-function collectAttachments() {
-    const attachments = imageUploader.getAttachments();
-    return attachments.map(attachment => {
-        const base64Data = attachment.getBase64Data();
-        const filePath = attachment.getFilePath();
-        return {
-            type: 'image',
-            base64: base64Data,
-            fileName: attachment.getFileName(),
-            mime_type: attachment.getMimeType(),
-            file_path: filePath
-        };
-    });
+    return uploader.getAttachments().length > 0;
 }
 
 function clearAttachmentPreview() {
-    imageUploader.clearAttachments();
+    uploader.clearAll();
+    attachmentRenderer.clearAll();
 }
 
 // 修改现有的sendMessage函数
@@ -738,8 +767,8 @@ async function sendMessage() {
     const currentConversation = conversations[0]; // 现在一定在第一位
     
     // 准备用户消息和附件
-    const attachments = collectAttachments();
-    console.log('Collected attachments:', attachments); // 调试日志
+    const attachments = uploader.collectAttachments();
+    console.log('收集到的附件:', attachments); // 调试日志
     
     const userMessage = {
         role: "user",
@@ -747,10 +776,13 @@ async function sendMessage() {
         attachments: attachments
     };
 
-    // 添加用户消息到界面和存储
-    appendMessage(content, true, messages.length, attachments);
-    messages.push(userMessage);
+    // 添加用户消息到存储
     currentConversation.messages.push(userMessage);
+    const userMessageIndex = currentConversation.messages.length - 1;
+    
+    // 添加用户消息到界面
+    appendMessage(content, true, userMessageIndex, attachments);
+    messages.push(userMessage);
     
     // 如果是第一条消息，生成对话标题
     if (currentConversation.messages.length === 1) {
@@ -1044,48 +1076,75 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         lastScrollTop = currentScrollTop;
     });
+
+    // 页面加载完成后，将聊天区域滚动到底部
+    setTimeout(() => {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }, 100);
 });
 
-// 添加加载模型列表的函数
+// 修改加载模型列表的函数
 async function loadModels() {
     try {
         const response = await fetch('/api/models');
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        }
+        
         const models = await response.json();
+        if (!models || typeof models !== 'object') {
+            throw new Error('无效的模型数据格式');
+        }
+        
         const select = document.getElementById('model-select');
+        if (!select) {
+            throw new Error('找不到模型选择器元素');
+        }
         
         // 清空现有选项
-        select.innerHTML = '<option value="" disabled>选择模型...</option>';
+        select.innerHTML = '<option value="" disabled selected>选择模型...</option>';
         
-        // 添加xAI模型组
-        if (models.xai && models.xai.models.length > 0) {
-            const xaiGroup = document.createElement('optgroup');
-            xaiGroup.label = 'xAI Models';
-            models.xai.models.forEach(model => {
-                const option = document.createElement('option');
-                option.value = model.id;
-                option.textContent = `${model.name} - ${model.description}`;
-                xaiGroup.appendChild(option);
-            });
-            select.appendChild(xaiGroup);
+        // 添加模型组
+        Object.entries(models).forEach(([provider, providerData]) => {
+            if (providerData.models && Array.isArray(providerData.models) && providerData.models.length > 0) {
+                const group = document.createElement('optgroup');
+                group.label = `${provider.toUpperCase()} Models`;
+                
+                providerData.models.forEach(model => {
+                    if (model && model.id && model.name) {
+                        const option = document.createElement('option');
+                        option.value = model.id;
+                        option.textContent = `${model.name} - ${model.description || ''}`;
+                        if (model.id === 'grok-2-vision-1212') {
+                            option.selected = true;
+                        }
+                        group.appendChild(option);
+                    }
+                });
+                
+                if (group.children.length > 0) {
+                    select.appendChild(group);
+                }
+            }
+        });
+        
+        // 如果没有选中的模型，设置默认值
+        if (!select.value) {
+            select.value = 'grok-2-vision-1212';
         }
         
-        // 添加Google模型组
-        if (models.google && models.google.models.length > 0) {
-            const googleGroup = document.createElement('optgroup');
-            googleGroup.label = 'Google Models';
-            models.google.models.forEach(model => {
-                const option = document.createElement('option');
-                option.value = model.id;
-                option.textContent = `${model.name} - ${model.description}`;
-                googleGroup.appendChild(option);
-            });
-            select.appendChild(googleGroup);
+        // 如果没有任何可用模型，显示提示
+        if (select.children.length <= 1) {
+            throw new Error('没有可用的模型');
         }
-        
-        // 设置默认选中的模型
-        select.value = 'grok-2-vision-1212';
     } catch (error) {
         console.error('获取模型列表失败:', error);
+        const select = document.getElementById('model-select');
+        if (select) {
+            select.innerHTML = '<option value="grok-2-vision-1212" selected>Grok 2 Vision - 默认模型</option>';
+        }
+        showToast(`获取模型列表失败: ${error.message}`, 'error');
     }
 }
 
@@ -1126,11 +1185,15 @@ async function regenerateMessage(messageIndex) {
     const message = currentConversation.messages[messageIndex];
     if (!message || message.role !== 'assistant') return;
     
+    // 保存后续消息
+    const subsequentMessages = currentConversation.messages.slice(messageIndex + 1);
+    
     // 初始化versions数组(如果不存在)，现在包含完整的消息对象
     if (!message.versions) {
         message.versions = [{
             content: message.content,
-            attachments: message.attachments || []
+            attachments: message.attachments || [],
+            subsequentMessages: subsequentMessages  // 保存后续消息
         }];
         message.currentVersion = 0;
     }
@@ -1208,7 +1271,7 @@ async function regenerateMessage(messageIndex) {
                                 }
                             }
                         } catch (e) {
-                            console.error('Error parsing SSE data:', e);
+                            console.error('解析标题SSE数据出错:', e, '原始数据:', line);
                         }
                     }
                 }
@@ -1222,11 +1285,11 @@ async function regenerateMessage(messageIndex) {
         }
         
         if (assistantMessage.trim()) {
-            // 创建新版本，只包含新生成的内容和附件，不包含后续消息
+            // 创建新版本，新版本不包含任何后续消息
             const newVersion = {
                 content: assistantMessage,
                 attachments: message.attachments || [], // 保留原有附件
-                subsequentMessages: [] // 新版本不包含任何后续消息
+                subsequentMessages: []  // 新版本不包含任何后续消息
             };
             
             // 将新的版本添加到versions数组
@@ -1237,10 +1300,10 @@ async function regenerateMessage(messageIndex) {
             message.content = assistantMessage;
             message.attachments = newVersion.attachments;
             
-            // 清除当前对话中这条消息后的所有消息（后端数据）
+            // 清除当前对话中这条消息后的所有消息
             currentConversation.messages = currentConversation.messages.slice(0, messageIndex + 1);
             
-            // 清除UI中这条消息后的所有消息（前端显示）
+            // 清除UI中的消息
             while (chatMessages.children.length > messageIndex + 1) {
                 chatMessages.removeChild(chatMessages.lastChild);
             }
@@ -1323,8 +1386,14 @@ async function editUserMessage(messageIndex, originalContent) {
 
     // 获取原始消息
     const originalMessage = currentConversation.messages[messageIndex];
-    if (!originalMessage || originalMessage.role !== 'user') {
-        console.error('未找到用户消息');
+    if (!originalMessage) {
+        console.error('未找到消息');
+        return;
+    }
+
+    // 检查消息角色
+    if (originalMessage.role !== 'user') {
+        console.error('只能编辑用户消息');
         return;
     }
 
@@ -1358,12 +1427,6 @@ async function editUserMessage(messageIndex, originalContent) {
     // 创建附件编辑容器
     const attachmentsContainer = document.createElement('div');
     attachmentsContainer.className = 'edit-attachments-container';
-    // 根据是否有原有附件决定显示状态
-    if (originalMessage.attachments && originalMessage.attachments.length > 0) {
-        attachmentsContainer.style.display = 'flex';
-    } else {
-        attachmentsContainer.style.display = 'none';
-    }
     
     // 修改 uploader 的配置，添加回调函数
     const uploader = new Uploader({
@@ -1382,6 +1445,47 @@ async function editUserMessage(messageIndex, originalContent) {
             attachmentsContainer.style.display = 'flex';
         }
     });
+
+    // 如果有原有附件，加载到编辑器中
+    if (originalMessage.attachments && originalMessage.attachments.length > 0) {
+        console.log('开始加载原有附件:', originalMessage.attachments);
+        attachmentsContainer.style.display = 'flex';
+        
+        for (const attachment of originalMessage.attachments) {
+            try {
+                console.log('处理附件:', attachment);
+                console.log('附件类型:', attachment.type);
+                console.log('附件MIME类型:', attachment.mime_type);
+                console.log('附件时长:', attachment.duration);
+                console.log('附件缩略图:', attachment.thumbnail);
+                
+                // 确保附件对象包含所有必要的属性
+                const fullAttachment = {
+                    ...attachment,
+                    type: attachment.type || (attachment.mime_type?.startsWith('video/') ? 'video' : 'image'),
+                    base64: attachment.base64,
+                    fileName: attachment.fileName,
+                    mime_type: attachment.mime_type,
+                    file_path: attachment.file_path,
+                    // 视频特有属性
+                    duration: attachment.duration,
+                    thumbnail: attachment.thumbnail,
+                    // 在编辑模式下允许删除
+                    disableDelete: false
+                };
+                
+                console.log('处理后的完整附件:', fullAttachment);
+                await uploader.addExistingAttachment(fullAttachment);
+            } catch (error) {
+                console.error('处理原有附件失败:', error);
+                console.error('附件数据:', attachment);
+                showError('加载原有附件失败');
+            }
+        }
+    } else {
+        console.log('没有找到原有附件，原始消息:', originalMessage);
+        attachmentsContainer.style.display = 'none';
+    }
 
     // 创建按钮容器
     const buttonContainer = document.createElement('div');
@@ -1410,15 +1514,30 @@ async function editUserMessage(messageIndex, originalContent) {
             saveButton.textContent = '保存中...';
             
             // 获取所有附件
-            const attachments = uploader.getAttachments().map(attachment => ({
-                type: attachment.type,
-                base64: attachment.getBase64Data(),
-                fileName: attachment.getFileName(),
-                mime_type: attachment.getMimeType(),
-                file_path: attachment.getFilePath()
-            }));
+            const attachments = uploader.getAttachments().map(attachment => {
+                console.log('收集附件:', attachment);
+                console.log('附件类型:', attachment.type);
+                console.log('附件方法:', {
+                    getBase64Data: attachment.getBase64Data?.(),
+                    getFileName: attachment.getFileName?.(),
+                    getMimeType: attachment.getMimeType?.(),
+                    getFilePath: attachment.getFilePath?.(),
+                    getDuration: attachment.getDuration?.(),
+                    getThumbnail: attachment.getThumbnail?.()
+                });
+                
+                return {
+                    type: attachment.type || (attachment.getMimeType?.()?.startsWith('video/') ? 'video' : 'image'),
+                    base64: attachment.getBase64Data(),
+                    fileName: attachment.getFileName(),
+                    mime_type: attachment.getMimeType(),
+                    file_path: attachment.getFilePath(),
+                    duration: attachment.getDuration?.() || undefined,
+                    thumbnail: attachment.getThumbnail?.() || undefined
+                };
+            });
             
-            console.log('收集到的附件:', attachments);
+            console.log('收集到的所有附件:', attachments);
             
             // 更新消息数组中的内容
             const updatedMessage = {
@@ -1474,18 +1593,22 @@ async function editUserMessage(messageIndex, originalContent) {
                     
                     if (attachment.base64) {
                         renderedElement = attachmentRenderer.render({
-                            type: attachment.type,
+                            type: attachment.type || 'image',  // 使用附件的实际类型
                             base64: attachment.base64,
                             filename: attachment.fileName,
                             url: `data:${attachment.mime_type};base64,${attachment.base64}`,
-                            disableDelete: true
+                            disableDelete: true,
+                            duration: attachment.duration,
+                            thumbnail: attachment.thumbnail
                         });
                     } else if (attachment.file_path) {
                         renderedElement = attachmentRenderer.render({
-                            type: attachment.type,
+                            type: attachment.type || 'image',  // 使用附件的实际类型
                             filename: attachment.fileName,
                             url: `/get_image?path=${encodeURIComponent(attachment.file_path)}`,
-                            disableDelete: true
+                            disableDelete: true,
+                            duration: attachment.duration,
+                            thumbnail: attachment.thumbnail
                         });
                     }
                     
@@ -1558,23 +1681,6 @@ async function editUserMessage(messageIndex, originalContent) {
     
     // 在消息内容之后插入编辑容器
     messageWrapper.insertBefore(editContainer, originalContentDiv.nextSibling);
-    
-    // 如果有原有附件，加载到编辑器中
-    if (originalMessage.attachments && originalMessage.attachments.length > 0) {
-        console.log('开始加载原有附件:', originalMessage.attachments);
-        for (const attachment of originalMessage.attachments) {
-            try {
-                console.log('处理附件:', attachment);
-                await uploader.addExistingAttachment(attachment);
-            } catch (error) {
-                console.error('处理原有附件失败:', error);
-                console.error('附件数据:', attachment);
-                showError('加载原有附件失败');
-            }
-        }
-    } else {
-        console.log('没有找到原有附件，原始消息:', originalMessage);
-    }
     
     // 聚焦到文本框
     textarea.focus();
@@ -1656,18 +1762,22 @@ function switchVersion(messageIndex, newVersion) {
             
             if (attachment.base64) {
                 renderedElement = attachmentRenderer.render({
-                    type: 'image',
+                    type: attachment.type || 'image',  // 使用附件的实际类型
                     base64: attachment.base64,
                     filename: attachment.fileName,
                     url: `data:${attachment.mime_type};base64,${attachment.base64}`,
-                    disableDelete: true
+                    disableDelete: true,
+                    duration: attachment.duration,
+                    thumbnail: attachment.thumbnail
                 });
             } else if (attachment.file_path) {
                 renderedElement = attachmentRenderer.render({
-                    type: 'image',
+                    type: attachment.type || 'image',  // 使用附件的实际类型
                     filename: attachment.fileName,
                     url: `/get_image?path=${encodeURIComponent(attachment.file_path)}`,
-                    disableDelete: true
+                    disableDelete: true,
+                    duration: attachment.duration,
+                    thumbnail: attachment.thumbnail
                 });
             }
             
@@ -1749,30 +1859,29 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// 在文件开头添加这个函数
-function showError(message) {
-    const toast = document.createElement('div');
-    toast.className = 'toast error';
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
-}
-
 // 添加生成标题的函数
 async function generateTitle(firstMessage) {
     try {
+        console.log('开始生成标题，消息内容:', firstMessage); 
+
         const response = await fetch('/generate_title', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({ 
-                message: firstMessage,
-                model_id: 'gemini-1.5-flash-8b'
+                message: firstMessage?.trim() || '附件对话',  // 如果没有文本消息则使用默认描述
+                model_id: 'gemini-1.5-flash-8b',
+                max_tokens: 50
             })
         });
 
-        if (!response.ok) throw new Error('生成标题失败');
+        if (!response.ok) {
+            console.error('生成标题失败，状态码:', response.status);
+            const errorData = await response.json();
+            console.error('错误详情:', errorData);
+            return firstMessage?.slice(0, 20) || '图片对话';
+        }
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -1798,23 +1907,28 @@ async function generateTitle(firstMessage) {
                             }
                         }
                     } catch (e) {
-                        console.error('Error parsing title SSE data:', e);
+                        console.error('解析标题SSE数据出错:', e, '原始数据:', line);
                     }
                 }
             }
         }
 
         // 更新对话标题
-        if (title.trim()) {
-            const currentConversation = conversations.find(c => c.id === currentConversationId);
-            if (currentConversation) {
-                currentConversation.title = title.trim();
-                await saveConversations();
-            }
+        title = title.trim() || firstMessage?.slice(0, 20) || '图片对话';
+        if (firstMessage?.length > 20) {
+            title += '...';
+        }
+        
+        const currentConversation = conversations.find(c => c.id === currentConversationId);
+        if (currentConversation) {
+            currentConversation.title = title;
+            await saveConversations();
         }
 
+        return title;
     } catch (error) {
         console.error('生成标题失败:', error);
+        return firstMessage?.slice(0, 20) || '附件对话';
     }
 }
 
