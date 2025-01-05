@@ -3,6 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 首先定义全局变量 -->
+    <script>
+        const STATIC_URL = "{{ url_for('static', filename='') }}";
+    </script>
+    
     <title>AI 聊天助手</title>
     <!-- 引入必要的库 -->
     <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js"></script>
@@ -23,9 +28,16 @@
     <!-- 添加highlight.js样式 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css">
     <!-- 添加样式 -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='attachment-styles.css') }}">
-    <link rel="stylesheet" href="/static/css/video-attachments.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chat-header.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chat-icon.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/icons.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/attachment-styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/video-attachments.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/markdown-styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modal-close-button.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/latex.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/error-message.css') }}">
     <!-- 添加常用语言包 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/javascript.min.js"></script>
@@ -51,6 +63,11 @@
                     <div class="controls-section">
                         <!-- 模型选择器 -->
                         <div class="model-selector">
+                            <!-- 模型图标 -->
+                            <div id="model-icon-container">
+                                <img src="{{ url_for('static', filename='icons/models/xai.svg') }}" alt="xAI" id="model-icon">
+                            </div>
+                            <!-- 选择框 -->
                             <select id="model-select">
                                 <option value="" disabled selected>选择模型...</option>
                             </select>
@@ -93,57 +110,13 @@
     <script type="module" src="{{ url_for('static', filename='js/script.js') }}"></script>
     <script type="module" src="{{ url_for('static', filename='js/inputRenderer.js') }}"></script>
     <script>
-        // 获取可用模型列表
-        async function fetchModels() {
-            try {
-                const response = await fetch('/api/models');
-                const models = await response.json();
-                const select = document.getElementById('model-select');
-                
-                // 清空现有选项
-                select.innerHTML = '<option value="" disabled selected>选择模型...</option>';
-                
-                // 添加xAI模型组
-                if (models.xai && models.xai.models.length > 0) {
-                    const xaiGroup = document.createElement('optgroup');
-                    xaiGroup.label = 'xAI Models';
-                    models.xai.models.forEach(model => {
-                        const option = document.createElement('option');
-                        option.value = model.id;
-                        option.textContent = `${model.name} - ${model.description}`;
-                        xaiGroup.appendChild(option);
-                    });
-                    select.appendChild(xaiGroup);
-                }
-                
-                // 添加Google模型组
-                if (models.google && models.google.models.length > 0) {
-                    const googleGroup = document.createElement('optgroup');
-                    googleGroup.label = 'Google Models';
-                    models.google.models.forEach(model => {
-                        const option = document.createElement('option');
-                        option.value = model.id;
-                        option.textContent = `${model.name} - ${model.description}`;
-                        googleGroup.appendChild(option);
-                    });
-                    select.appendChild(googleGroup);
-                }
-                
-                // 设置默认选中的模型
-                select.value = 'grok-vision-beta';
-            } catch (error) {
-                console.error('获取模型列表失败:', error);
-            }
-        }
-
-        // 页面加载时获取模型列表
-        document.addEventListener('DOMContentLoaded', fetchModels);
-
         document.getElementById('logoutBtn').addEventListener('click', () => {
             if (confirm('确定要退出登录吗？')) {
                 window.location.href = '/logout';
             }
         });
     </script>
+    <!-- 添加图标渲染器，特别的需要在fetchModel这个函数下面引用 -->
+    <script type="module" src="{{ url_for('static', filename='js/iconRenderer.js') }}"></script>
 </body>
 </html> 

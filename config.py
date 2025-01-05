@@ -1,6 +1,20 @@
 # 从file_config导入附件类型配置
 from utils.files.file_config import ATTACHMENT_TYPES, AttachmentType
-
+#svg到模型类型的映射
+SVG_TO_MODEL_TYPE = {
+    'xai': {
+        'icon_path': 'static/icons/models/xai.svg',
+        'name': 'xAI'
+    },
+    'google': {
+        'icon_path': 'static/icons/models/google.svg',
+        'name': 'Gemini'
+    },
+    'deepseek': {
+        'icon_path': 'static/icons/models/deepseek.svg',
+        'name': 'DeepSeek'
+    }
+}
 # 模型配置
 AVAILABLE_MODELS = {
     'xai': {
@@ -24,6 +38,12 @@ AVAILABLE_MODELS = {
             {'id': 'learnlm-1.5-pro-experimental', 'name': 'LearnLM 1.5 Pro', 'description': '支持音频、图片、视频和文本','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE]}
         ],
         'api_type': 'google'
+    },
+    'deepseek':{
+        'models':[
+            {'id':'deepseek-chat','name':'DeepSeek V3','description':'DeepSeek V3 是深度求索公司开发的智能助手，支持文本、图片、视频和音频等多种输入类型，能够处理复杂的任务和问题。','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT]}
+        ],
+        'api_type': 'openai'
     }
 }
 
@@ -33,11 +53,13 @@ MAX_EMAILS_PER_WINDOW = 3  # 每个时间窗口内最多发送3封邮件
 
 # API配置
 API_KEYS = {
-    'google': "AIzaSyBZmhlArtzyz0r8yR3FXMr37614-OzI1RU",
-    'xai': "xai-ustHuYhJfrn6mdl5Oi9lzIpDeeLkKCUqwOtynKE0IC9s0cHMw2QjSeQlYUkhq0URI5uVp8db66avB82B"
+    'google': "AIzaSyDWQDPJdzX0pcqqfuH7QkIarCYOUyMaYrg",
+    'xai': "xai-ustHuYhJfrn6mdl5Oi9lzIpDeeLkKCUqwOtynKE0IC9s0cHMw2QjSeQlYUkhq0URI5uVp8db66avB82B",
+    'deepseek': "sk-6f8f1e8e2d8847559db94b51f2fa21ca"
 }
 
 API_BASE_URLS = {
     'google': "https://generativelanguage.googleapis.com/v1",
-    'xai': "https://api.x.ai/v1"
+    'xai': "https://api.x.ai/v1",
+    'deepseek': "https://api.deepseek.com/v1"
 }

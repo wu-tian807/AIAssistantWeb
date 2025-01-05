@@ -1,0 +1,104 @@
+/* 段落样式优化 */
+.assistant-message p {
+    margin: 1em 0;       /* 增加段落间距 */
+    text-align: justify; /* 两端对齐 */
+}
+
+/* 表格样式优化 */
+.assistant-message table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1.5em 0;
+    background-color: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.assistant-message th,
+.assistant-message td {
+    padding: 12px 16px;
+    text-align: left;
+    border: 1px solid #e0e0e0;
+}
+
+.assistant-message th {
+    background-color: #f5f7fa;
+    font-weight: 600;
+    color: #2c3e50;
+    white-space: nowrap;
+}
+
+.assistant-message tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+.assistant-message tr:hover {
+    background-color: #f0f2f5;
+}
+
+/* 列表样式优化 */
+.assistant-message ul, 
+.assistant-message ol {
+    padding-left: 2em;   /* 增加列表缩进 */
+    margin: 1em 0;
+    list-style-position: outside; /* 确保列表标记在内容外部 */
+}
+
+.assistant-message li {
+    margin: 0.5em 0;     /* 增加列表项间距 */
+    display: list-item;  /* 确保正确的列表项显示 */
+    line-height: 1.6;    /* 调整行高 */
+    text-align: left;    /* 确保文本左对齐 */
+}
+
+.assistant-message li > * {
+    display: inline-block; /* 确保内容和标记在同一行 */
+    vertical-align: top;   /* 顶部对齐 */
+    margin: 0;            /* 移除默认外边距 */
+}
+
+/* 标题样式优化 */
+.assistant-message h1,
+.assistant-message h2,
+.assistant-message h3,
+.assistant-message h4,
+.assistant-message h5,
+.assistant-message h6 {
+    margin: 1.5em 0 1em;  /* 增加标题上下间距 */
+    line-height: 1.4;
+    color: #2c3e50;
+}
+
+/* 正常代码块的样式 - 使用特定的包装器类 */
+.code-block-wrapper {
+    margin: 1.5em 0;
+}
+
+.code-block-wrapper pre {
+    padding: 1.2em;
+    border-radius: 8px;
+    background: #282c34;
+    margin: 0;
+}
+
+.code-block-wrapper pre code {
+    color: #abb2bf;
+    display: block;
+    overflow-x: auto;
+    padding: 0;
+}
+
+/* 思考框样式 - 针对非代码块包装器的pre */
+/* 思考框样式 - 针对直接包含code的pre */
+.message-content > pre:has(> code):not(:has(.code-block-wrapper)) {
+    white-space: pre-wrap;       /* 允许文本换行 */
+    word-wrap: break-word;       /* 允许长单词断行 */
+    overflow-x: hidden;          /* 禁止横向滚动 */
+    max-width: 100%;            /* 限制最大宽度 */
+    background-color: #f6f8fa;   /* 浅灰色背景 */
+    padding: 1em;               /* 适当的内边距 */
+    border-radius: 6px;         /* 圆角边框 */
+    border: 1px solid #e1e4e8;  /* 边框 */
+    margin: 1em 0;             /* 上下外边距 */
+}
