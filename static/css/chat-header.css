@@ -1,0 +1,210 @@
+.chat-header {
+    flex-shrink: 0;
+    padding: 16px 24px;
+    background-color: #fff;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.header-main {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    gap: 20px;
+}
+
+.header-main h1 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin: 0;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.controls-section {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex: 1;
+    justify-content: center;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+/* 模型图标容器样式 */
+/* 模型图标容器 */
+/* 调整图标容器样式以适应flex布局 */
+#model-icon-container {
+    padding: 8px;
+    border-right: 1px solid #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 统一控件容器样式 */
+.model-selector {
+    display: flex;
+    align-items: center;
+    width: 450px;
+    min-width: 450px;
+    flex: 1;
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.model-selector:hover {
+    border-color: #007AFF;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.model-selector:focus-within {
+    border-color: #007AFF;
+    box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.1);
+}
+
+.system-prompt-container {
+    width: 450px;
+    min-width: 450px;
+    flex: 1;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    background-color: #ffffff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 模型选择器样式 */
+/* 调整选择框样式以适应flex布局 */
+#model-select {
+    flex: 1;
+    border: none;
+    background-color: transparent;
+    padding: 8px 32px 8px 12px;
+    font-size: 14px;
+    color: #2c3e50;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%23666' d='M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+}
+
+#model-select:hover {
+    background-color: #f8f9fa;
+}
+
+/* 移除选择框的边框和阴影 */
+#model-select:focus {
+    outline: none;
+    background-color: transparent;
+    box-shadow: none;
+}
+
+/* 系统提示词容器样式 */
+.system-prompt-container {
+    width: 450px;
+    min-width: 450px;
+    flex: 1;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    background-color: #ffffff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.system-prompt-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    background-color: #ffffff;
+    border-radius: 6px;
+    cursor: pointer;
+    height: 42px;
+    user-select: none;
+    transition: border-radius 0.3s ease;
+}
+
+.system-prompt-header:hover {
+    background-color: #f8f9fa;
+}
+
+.system-prompt-header span {
+    font-size: 14px;
+    color: #606266;
+    font-weight: 500;
+}
+
+.toggle-button {
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s ease;
+}
+
+.toggle-button svg {
+    transition: transform 0.3s ease;
+}
+
+.system-prompt-container.expanded .toggle-button svg {
+    transform: rotate(180deg);
+}
+
+.system-prompt-textarea {
+    width: 100%;
+    padding: 12px 16px;
+    border: none;
+    border-top: 1px solid #eee;
+    resize: vertical;
+    font-size: 14px;
+    line-height: 1.6;
+    border-radius: 0 0 6px 6px;
+    min-height: 100px;
+    max-height: 300px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity: 1;
+    background-color: #ffffff;
+}
+
+.system-prompt-textarea:focus {
+    outline: none;
+    background-color: #f8f9fa;
+}
+
+.system-prompt-textarea.collapsed {
+    height: 0;
+    min-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-top: none;
+    opacity: 0;
+}
+
+.logout-btn {
+    padding: 8px 20px;
+    background-color: #ff3b30;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+    flex-shrink: 0;
+    white-space: nowrap;
+    height: 42px;
+}
+
+.logout-btn:hover {
+    background-color: #dc3545;
+}

@@ -417,23 +417,35 @@ def chat():
                 
                 # 将消息转换为 Google SDK 格式
                 formatted_history = []
-                for msg in processed_messages[:-1]:  # 除了最后一条消息
-                    if msg['role'] == 'system':
-                        # 将系统提示词转换为特殊的用户-助手对话
-                        formatted_history.append({
-                            'role': 'user',
-                            'parts': [{'text': f"Instructions for your behavior: {msg.get('content', '')}"}]
-                        })
-                        formatted_history.append({
-                            'role': 'assistant',
-                            'parts': [{'text': 'I understand and will follow these instructions.'}]
-                        })
-                    else:
-                        # 处理普通消息
-                        formatted_history.append({
-                            'role': msg['role'],
-                            'parts': msg.get('parts', [{'text': msg.get('content', '')}])
-                        })
+                if model_id == 'gemini-exp-1206' or model_id == 'gemini-exp-1121' or model_id == 'learnlm-1.5-pro-experimental' :
+                    for msg in processed_messages[:-1]:  # 除了最后一条消息
+                        if msg['role'] == 'system':
+                            #暂时不适用系统词
+                            continue
+                        else:
+                            # 处理普通消息
+                            formatted_history.append({
+                                'role': msg['role'] == 'assistant' if 'model' else msg['role'],
+                                'parts': msg.get('parts', [{'text': msg.get('content', '')}])
+                            })
+                else:
+                    for msg in processed_messages[:-1]:  # 除了最后一条消息
+                        if msg['role'] == 'system':
+                            # 将系统提示词转换为特殊的用户-助手对话
+                            formatted_history.append({
+                                'role': 'user',
+                                'parts': [{'text': f"Instructions for your behavior: {msg.get('content', '')}"}]
+                            })
+                            formatted_history.append({
+                                'role': 'assistant',
+                                'parts': [{'text': 'I understand and will follow these instructions.'}]
+                            })
+                        else:
+                            # 处理普通消息
+                            formatted_history.append({
+                                'role': msg['role'],
+                                'parts': msg.get('parts', [{'text': msg.get('content', '')}])
+                            })
                 
                 # 创建聊天实例并传入历史记录
                 chat = model.start_chat(history=formatted_history)

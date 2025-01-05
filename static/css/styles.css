@@ -173,184 +173,6 @@ html, body {
     overflow: hidden;
 }
 
-.chat-header {
-    flex-shrink: 0;
-    padding: 16px 24px;
-    background-color: #fff;
-    border-bottom: 1px solid #e0e0e0;
-}
-
-.header-main {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 24px;
-    gap: 20px;
-}
-
-.header-main h1 {
-    font-size: 20px;
-    font-weight: 600;
-    color: #1a1a1a;
-    margin: 0;
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-.controls-section {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    flex: 1;
-    justify-content: center;
-    max-width: 1000px;
-    margin: 0 auto;
-}
-
-/* 统一控件容器样式 */
-.model-selector,
-.system-prompt-container {
-    width: 450px;
-    min-width: 450px;
-    flex: 1;
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
-    background-color: #ffffff;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* 模型选择器样式 */
-#model-select {
-    width: 100%;
-    height: 42px;
-    padding: 8px 32px 8px 12px;
-    font-size: 14px;
-    color: #2c3e50;
-    border: none;
-    border-radius: 6px;
-    background-color: #ffffff;
-    cursor: pointer;
-    appearance: none;
-    -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%23666' d='M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 12px center;
-    transition: all 0.2s ease;
-}
-
-#model-select:hover {
-    background-color: #f8f9fa;
-}
-
-#model-select:focus {
-    outline: none;
-    background-color: #f8f9fa;
-}
-
-/* 系统提示词容器样式 */
-.system-prompt-container {
-    width: 450px;
-    min-width: 450px;
-    flex: 1;
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
-    background-color: #ffffff;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.system-prompt-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 16px;
-    background-color: #ffffff;
-    border-radius: 6px;
-    cursor: pointer;
-    height: 42px;
-    user-select: none;
-    transition: border-radius 0.3s ease;
-}
-
-.system-prompt-header:hover {
-    background-color: #f8f9fa;
-}
-
-.system-prompt-header span {
-    font-size: 14px;
-    color: #606266;
-    font-weight: 500;
-}
-
-.toggle-button {
-    background: none;
-    border: none;
-    padding: 4px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.3s ease;
-}
-
-.toggle-button svg {
-    transition: transform 0.3s ease;
-}
-
-.system-prompt-container.expanded .toggle-button svg {
-    transform: rotate(180deg);
-}
-
-.system-prompt-textarea {
-    width: 100%;
-    padding: 12px 16px;
-    border: none;
-    border-top: 1px solid #eee;
-    resize: vertical;
-    font-size: 14px;
-    line-height: 1.6;
-    border-radius: 0 0 6px 6px;
-    min-height: 100px;
-    max-height: 300px;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    opacity: 1;
-    background-color: #ffffff;
-}
-
-.system-prompt-textarea:focus {
-    outline: none;
-    background-color: #f8f9fa;
-}
-
-.system-prompt-textarea.collapsed {
-    height: 0;
-    min-height: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-    border-top: none;
-    opacity: 0;
-}
-
-.logout-btn {
-    padding: 8px 20px;
-    background-color: #ff3b30;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.2s;
-    flex-shrink: 0;
-    white-space: nowrap;
-    height: 42px;
-}
-
-.logout-btn:hover {
-    background-color: #dc3545;
-}
-
 .chat-messages {
     max-width: none;
     flex: 1;
@@ -368,6 +190,8 @@ html, body {
     line-height: 1.5;
     word-break: break-word;  /* 添加这行 */
     white-space: pre-wrap;
+    transition: opacity 0.3s ease-out;
+    opacity: 1;
 }
 
 
@@ -402,13 +226,17 @@ html, body {
     line-height: 1.4;      /* 调整行高 */
 }
 
+/* 助手消息容器样式调整 */
 .assistant-message {
-    background-color: #f1f1f1;
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
     margin: 0 auto;
     max-width: 85%;
     width: fit-content;
-    padding: 12px 16px;
-    border-radius: 10px;
+    background-color: transparent; /* 移除外层背景色 */
+    padding: 0; /* 移除外层padding */
 }
 
 .message-wrapper {
@@ -418,6 +246,18 @@ html, body {
     flex-direction: column;
     gap: 8px;
 }
+
+/* 消息内容容器样式调整 */
+.assistant-message .message-wrapper {
+    background-color: #f1f1f1;
+    padding: 12px 24px;
+    border-radius: 10px;
+    line-height: 1.6;
+    width: fit-content; /* 让宽度适应内容 */
+    min-width: 10px; /* 设置最小宽度 */
+}
+
+
 
 .user-message .message-wrapper {
     background-color: #007AFF;
@@ -487,10 +327,6 @@ html, body {
     font-family: 'Courier New', Courier, monospace;
 }
 
-.assistant-message p {
-    margin: 10px 0;
-}
-
 /* 滚动条样式 */
 .chat-messages::-webkit-scrollbar {
     width: 8px;
@@ -518,7 +354,7 @@ html, body {
 }
 
 .code-block-wrapper {
-    margin: 8px 0;
+    margin: 1.5em 0;     /* 增加代码块上下间距 */
     border-radius: 4px;
     overflow: hidden;
     border: 1px solid #e1e4e8;
@@ -540,11 +376,11 @@ html, body {
 
 .code-block-wrapper pre {
     margin-top: -50px;
-    padding: 16px;
+    padding: 1.2em;      /* 增加代码块内边距 */
     background: #282c34;
     width: 100%;
     overflow-x: auto;  /* 添加横向滚动 */
-    border-radius: 5px;
+    border-radius: 8px;
     margin-bottom: -42px;
     user-select: none;
 }
@@ -668,6 +504,7 @@ html, body {
     opacity: 1;
 }
 
+/* 重新生成按钮样式 */
 .regenerate-btn {
     background: none;
     border: none;
@@ -1072,23 +909,6 @@ option {
     word-break: break-word;
 }
 
-/* 附件通用样式 */
-.message-attachments {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-top: 12px;
-}
-
-/* 特定类型附件容器样式 */
-.message-images,
-.message-videos,
-.message-files {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
 /* 图片附件特定样式 */
 .message-image-wrapper {
     position: relative;
@@ -1369,4 +1189,3 @@ option {
     font-size: 12px;
     padding: 0;
 }
-

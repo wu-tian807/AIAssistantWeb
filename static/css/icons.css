@@ -1,0 +1,25 @@
+/* 模型图标 */
+#model-icon {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    transition: transform 0.3s ease;
+}
+
+/* 图标悬停效果 */
+#model-icon-container:hover {
+    background-color: #f8f9fa;
+}
+
+#model-icon-container:hover #model-icon {
+    transform: scale(1.1);
+}
+
+/* 供应商特定的图标样式 */
+#model-icon[src*="xai"] {
+    filter: hue-rotate(15deg);
+}
+
+#model-icon[src*="google"] {
+    filter: none;
+}

@@ -1,0 +1,11 @@
+/* 模型图标包装器样式 */
+.model-icon-wrapper {
+    position: absolute;
+    left: -40px;
+    top: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
