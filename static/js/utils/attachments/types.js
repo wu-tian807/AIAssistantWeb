@@ -87,13 +87,13 @@ export const AttachmentConfig = {
         description: '文档'
     },
     [AttachmentType.IMAGE]: {
-        maxSize: 10 * 1024 * 1024, // 10MB
+        maxSize: 1 * 1024 * 1024 * 1024, // 1GB
         allowedExtensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'],
         icon: '🖼️',
         description: '图片'
     },
     [AttachmentType.VIDEO]: {
-        maxSize: 2000 * 1024 * 1024, // 2000MB
+        maxSize: 2 * 1024 * 1024 * 1024, // 2GB
         allowedExtensions: ['mp4', 'webm', 'avi', 'mov', 'wmv'],
         icon: '🎥',
         description: '视频'

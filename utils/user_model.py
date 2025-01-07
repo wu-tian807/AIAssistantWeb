@@ -1,5 +1,12 @@
 from initialization import db
 from werkzeug.security import generate_password_hash, check_password_hash
+
+# 默认用户设置
+DEFAULT_USER_SETTINGS = {
+    'image_compression': True,  # 默认开启图片压缩
+    'dark_theme': False,  # 默认关闭夜间主题
+}
+
 # 用户模型
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -10,6 +17,7 @@ class User(db.Model):
     code_timestamp = db.Column(db.DateTime(timezone=True))
     profile_icon = db.Column(db.String(256))
     display_name = db.Column(db.String(50))
+    settings = db.Column(db.JSON, default=lambda: dict(DEFAULT_USER_SETTINGS))
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -32,4 +40,36 @@ class User(db.Model):
         else:
             name = str(name).strip()
             self.display_name = name if name else None
+            
+    def get_setting(self, key, default=None):
+        """获取用户设置值"""
+        if self.settings is None:
+            self.settings = dict(DEFAULT_USER_SETTINGS)
+        return self.settings.get(key, default)
+
+    def set_setting(self, key, value):
+        """设置用户设置值"""
+        if self.settings is None:
+            self.settings = dict(DEFAULT_USER_SETTINGS)
+        # 确保设置是一个新的字典，避免引用问题
+        settings_copy = dict(self.settings)
+        settings_copy[key] = value
+        self.settings = settings_copy
+        
+    def update_settings(self, settings_dict):
+        """批量更新用户设置"""
+        if self.settings is None:
+            self.settings = dict(DEFAULT_USER_SETTINGS)
+        # 确保设置是一个新的字典，避免引用问题
+        settings_copy = dict(self.settings)
+        settings_copy.update(settings_dict)
+        self.settings = settings_copy
+        
+    def delete_setting(self, key):
+        """删除用户设置"""
+        if self.settings is not None and key in self.settings:
+            # 确保设置是一个新的字典，避免引用问题
+            settings_copy = dict(self.settings)
+            del settings_copy[key]
+            self.settings = settings_copy
 

@@ -1,5 +1,6 @@
 import { ImageAttachment } from '../attachment/ImageAttachment.js';
-import { AttachmentType, AttachmentConfig } from '../types.js';
+import { AttachmentType, AttachmentConfig, AttachmentUtils } from '../types.js';
+import { showToast } from '../../toast.js';
 
 /**
  * 图片上传器类
@@ -36,6 +37,17 @@ export class ImageUploader {
         try {
             console.log('ImageUploader 处理文件:', file);
             
+            // 验证文件类型
+            if (!file.type.startsWith('image/')) {
+                throw new Error('不支持的图片格式');
+            }
+
+            // 验证文件大小
+            if (file.size > this.maxSize) {
+                const maxSizeMB = this.maxSize / (1024 * 1024);
+                throw new Error(`图片文件大小不能超过 ${maxSizeMB}MB`);
+            }
+            
             // 创建 ImageAttachment 实例
             const imageAttachment = await ImageAttachment.fromFile(file);
             
@@ -45,7 +57,18 @@ export class ImageUploader {
             }
             
             // 如果需要，进行压缩
-            await imageAttachment.compress();
+            try {
+                const compressionResponse = await fetch('/api/user/settings/image_compression');
+                if (compressionResponse.ok) {
+                    const { image_compression } = await compressionResponse.json();
+                    if (image_compression && file.size > 5 * 1024 * 1024) {
+                        await imageAttachment.compress();
+                    }
+                }
+            } catch (error) {
+                console.error('获取压缩设置失败:', error);
+                // 如果获取设置失败，默认不压缩
+            }
             
             // 上传到服务器
             await this.uploadImage(imageAttachment);
@@ -56,6 +79,7 @@ export class ImageUploader {
             return imageAttachment;
         } catch (error) {
             console.error('ImageUploader 处理文件失败:', error);
+            showToast(error.message, 'error');
             this.onError(error);
             throw error;
         }
@@ -69,13 +93,33 @@ export class ImageUploader {
         try {
             const formData = imageAttachment.toFormData();
             
+            // 创建上传进度提示
+            const toast = showToast('图片上传中...', 'info', 0); // 0表示不自动关闭
+            const progressText = document.createElement('div');
+            progressText.className = 'upload-progress';
+            toast.appendChild(progressText);
+
             const response = await fetch(this.uploadUrl, {
                 method: 'POST',
-                body: formData
+                body: formData,
+                // 添加上传进度监听
+                onUploadProgress: (progressEvent) => {
+                    if (progressEvent.lengthComputable) {
+                        const percentComplete = Math.round((progressEvent.loaded / progressEvent.total) * 100);
+                        progressText.textContent = `已上传 ${percentComplete}%`;
+                        
+                        // 更新文件大小信息
+                        const uploadedSize = AttachmentUtils.formatFileSize(progressEvent.loaded);
+                        const totalSize = AttachmentUtils.formatFileSize(progressEvent.total);
+                        progressText.textContent += ` (${uploadedSize}/${totalSize})`;
+                    }
+                }
             });
             
             if (!response.ok) {
-                throw new Error('上传失败');
+                toast.remove(); // 移除进度提示
+                const errorData = await response.json();
+                throw new Error(errorData.error || '上传失败');
             }
             
             const data = await response.json();
@@ -86,10 +130,15 @@ export class ImageUploader {
                 uploadTime: new Date()
             });
             
+            toast.remove(); // 成功后移除进度提示
+            showToast('图片上传成功', 'success');
+            
             this.onSuccess(imageAttachment);
             return imageAttachment;
             
         } catch (error) {
+            console.error('图片上传失败:', error);
+            showToast(error.message || '图片上传失败', 'error');
             this.onError(error);
             throw error;
         }

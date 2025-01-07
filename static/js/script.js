@@ -6,7 +6,7 @@ import { imageUploader } from './utils/attachments/uploader/ImageUploader.js';
 import { showToast, confirmDialog,showError } from './utils/toast.js';
 import {IconRenderer} from './iconRenderer.js';
 import { getLastAssistantModel,updateModelSelect } from './utils/model_selector/modelSelect.js';
-import { initializeUserProfile } from './user_profiles/userDropdownHandler.js';
+import { initializeUserProfile ,initializeTheme} from './user_profiles/userDropdownHandler.js';
 const md = initMarkdownit();
 // 存储聊天消息历史
 let messages = [];
@@ -493,102 +493,112 @@ const default_system_prompt = `你是一个AI助理。你需要尽可能地满�
 
 请确保公式格式正确，并在适当的场景使用合适的公式环境。`;
 
-// 修改 createNewConversation 函数
+// 修改保存函数，改为只保存单个对话
+async function saveConversation(conversationId, operation = 'update') {
+    const conversation = conversations.find(c => c.id === conversationId);
+    if (!conversation) return;
+
+    try {
+        const response = await fetch('/api/conversations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                conversation: conversation,
+                operation: operation
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('保存失败');
+        }
+        // 只在特定操作时显示提示
+        if (operation === 'create') {
+            showToast('新对话已创建');
+        } else if (operation === 'delete') {
+            showToast('对话已删除');
+        }
+        // 普通的更新操作就不显示提示了，避免打扰用户
+
+    } catch (error) {
+        console.error('保存对话失败:', error);
+        showToast(`保存失败: ${error.message}`, 'error');
+    }
+}
+
+// 修改创建新对话函数
 async function createNewConversation() {
-    // 如果有正在进行的流，先停止它
     if (currentReader) {
         await stopGeneration();
     }
 
-    // 创建新对话前清理附件预览
     clearAttachmentPreview();
 
-    // 检查当前对话是否为空对话
     if (currentConversationId) {
         const currentConversation = conversations.find(c => c.id === currentConversationId);
         if (currentConversation && currentConversation.messages.length === 0) {
-            // 如果当前已经是一个空对话，就不需要创建新的
             return currentConversation;
         }
     }
     
-    // 创建新对话，直接使用默认提示词
     const conversation = {
         id: Date.now().toString(),
         title: '新对话',
         messages: [],
-        systemPrompt: default_system_prompt // 直接使用默认提示词
+        systemPrompt: default_system_prompt
     };
     
-    // 添加到对话列表
     conversations.unshift(conversation);
     currentConversationId = conversation.id;
     
-    // 清空聊天界面
     chatMessages.innerHTML = '';
-    
-    // 重置消息数组，使用默认提示词
     messages = [
         {"role": "system", "content": default_system_prompt}
     ];
     
-    // 更新系统提示词文本框
     const systemPromptTextarea = document.getElementById('system-prompt');
     systemPromptTextarea.value = default_system_prompt;
     
-    // 保存并更新UI
-    await saveConversations();
     renderConversationsList();
+    
+    // 创建新对话时立即保存
+    await saveConversation(conversation.id, 'create');
     
     return conversation;
 }
 
-// 修改 saveConversations 函数
-async function saveConversations() {
-    try {
-        // 在保存前，确保当前对话的系统提示词是最新的
-        if (currentConversationId) {
-            const currentConversation = conversations.find(c => c.id === currentConversationId);
-            if (currentConversation) {
-                const systemPrompt = document.getElementById('system-prompt').value;
-                currentConversation.systemPrompt = systemPrompt; // 不需要 trim，保持原样
+// 修改删除对话函数
+async function deleteConversation(conversationId) {
+    if (!confirm('确定要删除这个对话吗？')) {
+        return;
+    }
+    
+    const index = conversations.findIndex(c => c.id === conversationId);
+    if (index !== -1) {
+        // 先删除服务器端数据
+        try {
+            await saveConversation(conversationId, 'delete');
+            
+            // 删除成功后更新本地状态
+            conversations.splice(index, 1);
+            
+            if (conversationId === currentConversationId) {
+                if (conversations.length > 0) {
+                    currentConversationId = conversations[0].id;
+                    await switchConversation(currentConversationId);
+                } else {
+                    await createNewConversation();
+                }
             }
+            renderConversationsList();
+            
+        } catch (error) {
+            console.error('删除对话失败:', error);
+            showToast('删除对话失败', 'error');
         }
-
-        const response = await fetch('/api/conversations', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ conversations })
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || '保存对话失败');
-        }
-        
-        const data = await response.json();
-        if(data.message === '保存成功') {
-            showToast('保存成功');
-            // 移除这行，避免重新加载覆盖当前状态
-            // await loadConversations();
-        }
-        
-        return true;
-    } catch (error) {
-        console.error('保存对话出错:', error);
-        showToast(`保存失败: ${error.message}`, 'error');
-        
-        if (await confirmDialog('保存失败，是否重试？')) {
-            return saveConversations();
-        }
-        
-        return false;
     }
 }
 
-// 从数据库加载对话
+// 修改加载对话函数
 async function loadConversations() {
     try {
         const response = await fetch('/api/conversations');
@@ -598,7 +608,6 @@ async function loadConversations() {
         const data = await response.json();
         conversations = data.conversations || [];
         
-        // 如果有当前对话，更新系统提示词
         if (currentConversationId) {
             const currentConversation = conversations.find(c => c.id === currentConversationId);
             if (currentConversation) {
@@ -663,104 +672,85 @@ function renderConversationsList() {
 
 // 修改 switchConversation 函数
 async function switchConversation(conversationId) {
-    // 如果有正在进行的流，提示用户先停止
     if (currentReader) {
         showToast('请先停止当前生成再切换对话', 'error');
         return;
     }
     
-    // 切换对话前清理附件预览
     clearAttachmentPreview();
     
     currentConversationId = conversationId;
     const conversation = conversations.find(c => c.id === conversationId);
-    if (conversation) {
-        // 更新系统提示词
-        const systemPromptTextarea = document.getElementById('system-prompt');
-        systemPromptTextarea.value = conversation.hasOwnProperty('systemPrompt') ? 
-            conversation.systemPrompt : default_system_prompt;
-        
-        clearChatMessages();
-        // 直接使用对话中的所有消息，而不是重新构建
-        messages = [
-            {"role": "system", "content": conversation.systemPrompt || default_system_prompt},
-            ...conversation.messages
-        ];
+    if (!conversation) return;
+    
+    // 更新系统提示词
+    const systemPromptTextarea = document.getElementById('system-prompt');
+    systemPromptTextarea.value = conversation.systemPrompt || default_system_prompt;
+    
+    clearChatMessages();
+    messages = [
+        {"role": "system", "content": conversation.systemPrompt || default_system_prompt},
+        ...conversation.messages
+    ];
 
-        // 找到最后一条助手消息的模型信息
-        const lastAssistantModel = getLastAssistantModel(conversation);
-
-        console.log('最终找到的模型信息:', lastAssistantModel);
-        // 如果找到了最后一条助手消息的模型信息，更新选择器
-        if (lastAssistantModel) {
-            const modelSelect = document.getElementById('model-select');
-            updateModelSelect(lastAssistantModel.modelId,modelSelect);
+    // 渲染消息
+    conversation.messages.forEach((msg, index) => {
+        if (msg.role === 'assistant' && msg.versions && msg.versions[msg.currentVersion]) {
+            const currentVersion = msg.versions[msg.currentVersion];
+            appendMessage(msg.content, false, index, msg.attachments, currentVersion.modelIcon);
+        } else {
+            appendMessage(msg.content, msg.role === 'user', index, msg.attachments, msg.modelIcon);
         }
+    });
 
-        // 渲染所有消息
-        conversation.messages.forEach((msg, index) => {
-            if (msg.role === 'assistant' && msg.versions && msg.versions[msg.currentVersion]) {
-                const currentVersion = msg.versions[msg.currentVersion];
-                appendMessage(msg.content, false, index, msg.attachments, currentVersion.modelIcon);
-            } else {
-                appendMessage(msg.content, msg.role === 'user', index, msg.attachments, msg.modelIcon);
-            }
-        });
+    // 检查最后一条消息是否是用户消息
+    if (conversation.messages.length > 0) {
+        const lastMessage = conversation.messages[conversation.messages.length - 1];
+        if (lastMessage.role === 'user') {
+            // 创建重新生成按钮容器
+            const regenerateContainer = document.createElement('div');
+            regenerateContainer.className = 'regenerate-container';
+            regenerateContainer.style.cssText = 'text-align: center; margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); animation: fadeIn 0.3s ease-out;';
 
-        // 检查最后一条消息是否是用户消息
-        if (conversation.messages.length > 0) {
-            const lastMessage = conversation.messages[conversation.messages.length - 1];
-            if (lastMessage.role === 'user') {
-                // 创建重新生成按钮容器
-                const regenerateContainer = document.createElement('div');
-                regenerateContainer.className = 'regenerate-container';
-                regenerateContainer.style.cssText = 'text-align: center; margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); animation: fadeIn 0.3s ease-out;';
+            const promptText = document.createElement('div');
+            promptText.style.cssText = 'color: #666; margin-bottom: 10px; font-size: 14px;';
+            promptText.textContent = '检测到对话未完成，是否继续生成回复？';
 
-                const promptText = document.createElement('div');
-                promptText.style.cssText = 'color: #666; margin-bottom: 10px; font-size: 14px;';
-                promptText.textContent = '检测到对话未完成，是否继续生成回复？';
+            const regenerateBtn = document.createElement('button');
+            regenerateBtn.className = 'regenerate-btn';
+            regenerateBtn.innerHTML = '🔄 继续生成回复';
+            regenerateBtn.style.cssText = 'padding: 10px 20px; font-size: 15px; background-color: #007AFF; color: white; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s ease;';
+            
+            regenerateBtn.onmouseover = () => regenerateBtn.style.backgroundColor = '#0056b3';
+            regenerateBtn.onmouseout = () => regenerateBtn.style.backgroundColor = '#007AFF';
+            
+            regenerateBtn.onclick = async () => {
+                regenerateContainer.remove();
+                await regenerateErrorMessage(conversation.messages.length);
+            };
 
-                const regenerateBtn = document.createElement('button');
-                regenerateBtn.className = 'regenerate-btn';
-                regenerateBtn.innerHTML = '🔄 继续生成回复';
-                regenerateBtn.style.cssText = 'padding: 10px 20px; font-size: 15px; background-color: #007AFF; color: white; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s ease;';
-                
-                regenerateBtn.onmouseover = () => regenerateBtn.style.backgroundColor = '#0056b3';
-                regenerateBtn.onmouseout = () => regenerateBtn.style.backgroundColor = '#007AFF';
-                
-                regenerateBtn.onclick = async () => {
-                    regenerateContainer.remove();
-                    await regenerateErrorMessage(conversation.messages.length);
-                };
-                const chatMessages = document.getElementById('chat-messages');
+            regenerateContainer.appendChild(promptText);
+            regenerateContainer.appendChild(regenerateBtn);
+            chatMessages.appendChild(regenerateContainer);
 
-                regenerateContainer.appendChild(promptText);
-                regenerateContainer.appendChild(regenerateBtn);
-                chatMessages.appendChild(regenerateContainer);
-
-                // 添加淡入动画样式
-                const style = document.createElement('style');
-                style.textContent = '@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }';
-                document.head.appendChild(style);
-            }
+            // 添加淡入动画样式
+            const style = document.createElement('style');
+            style.textContent = '@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }';
+            document.head.appendChild(style);
         }
-
-        renderConversationsList();
-        
-        // 添加滚动到底部的逻辑
-        const chatMessages = document.getElementById('chat-messages');
-        setTimeout(() => {
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }, 100);
-        
-        try {
-            await fetch(`/api/conversations/${conversationId}/switch`, {
-                method: 'POST'
-            });
-        } catch (error) {
-            console.error('切换对话出错:', error);
+        else{
+            //动态加载默认选择的模型为最后一条模型的类别
+            //使用import { getLastAssistantModel,updateModelSelect } from './utils/model_selector/modelSelect.js';
+            const lastModel = getLastAssistantModel({messages: conversation.messages});
+            console.log('lastModel:', lastModel);
+            if (lastModel) {
+                const modelSelect = document.querySelector('#model-select');
+                updateModelSelect(lastModel.modelId, modelSelect);
+            }
         }
     }
+
+    renderConversationsList();
 }
 
 // 清空聊天消息
@@ -1125,7 +1115,7 @@ async function sendMessage() {
                 }],
                 currentVersion: 0
             });
-            await saveConversations();
+            await saveConversation(currentConversation.id, 'update');
         }
     } catch (e) {
         console.error('Error:', e);
@@ -1170,41 +1160,40 @@ async function sendMessage() {
     }
 }
 
-// 添加删除对话的函数
-async function deleteConversation(conversationId) {
-    if (!confirm('确定要删除这个对话吗？')) {
-        return;
-    }
+// // 添加删除对话的函数
+// async function deleteConversation(conversationId) {
+//     if (!confirm('确定要删除这个对话吗？')) {
+//         return;
+//     }
     
-    try {
-        const response = await fetch(`/api/conversations/${conversationId}`, {
-            method: 'DELETE'
-        });
+//     // 先更新本地状态
+//     const index = conversations.findIndex(c => c.id === conversationId);
+//     if (index !== -1) {
+//         conversations.splice(index, 1);
         
-        if (!response.ok) {
-            throw new Error('删除对话失败');
-        }
+//         // 立即更新UI
+//         if (conversationId === currentConversationId) {
+//             if (conversations.length > 0) {
+//                 currentConversationId = conversations[0].id;
+//                 await switchConversation(currentConversationId);
+//             } else {
+//                 await createNewConversation();
+//             }
+//         }
+//         renderConversationsList();
         
-        const index = conversations.findIndex(c => c.id === conversationId);
-        if (index !== -1) {
-            conversations.splice(index, 1);
-            await saveConversations();
-            
-            if (conversationId === currentConversationId) {
-                if (conversations.length > 0) {
-                    await switchConversation(conversations[0].id);
-                } else {
-                    await createNewConversation();
-                }
-            } else {
-                renderConversationsList();
-            }
-        }
-    } catch (error) {
-        console.error('删除对话出错:', error);
-        alert('删除对话失败，请重试');
-    }
-}
+//         // 异步删除和保存
+//         try {
+//             await Promise.all([
+//                 fetch(`/api/conversations/${conversationId}`, { method: 'DELETE' }),
+//                 debouncedSave()
+//             ]);
+//         } catch (error) {
+//             console.error('删除对话出错:', error);
+//             showToast('删除对话失败，但本地更改已保存', 'warning');
+//         }
+//     }
+// }
 
 // 将拖拽相关的代码移到单独的函数中
 function initializeDragAndDrop() {
@@ -1297,6 +1286,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('new-chat-btn').addEventListener('click', createNewConversation);
     initializeDragAndDrop();
     initializePasteHandler();
+    initializeTheme(); // 添加主题初始化
     initializeUserProfile(); // 添加用户配置初始化
     
     // 添加系统提示词展开/收起功能
@@ -1566,7 +1556,7 @@ async function regenerateMessage(messageIndex) {
             messageActions.appendChild(regenerateBtn);
             
             // 保存对话
-            await saveConversations();
+            await saveConversation(currentConversation.id, 'update');
         }
     } catch (error) {
         console.error('Error:', error);
@@ -1769,18 +1759,23 @@ async function editUserMessage(messageIndex, originalContent) {
                 attachments: attachments
             };
 
-            // 更新当前对话中的消息
-            if (currentConversationId) {
-                const currentConversation = conversations.find(c => c.id === currentConversationId);
-                if (currentConversation && currentConversation.messages[messageIndex]) {
-                    currentConversation.messages[messageIndex] = updatedMessage;
-                    // 同步更新全局消息数组
-                    messages = [
-                        {"role": "system", "content": currentConversation.systemPrompt || default_system_prompt},
-                        ...currentConversation.messages
-                    ];
-                }
+            // 获取并验证当前对话
+            const conversation = conversations.find(c => c.id === currentConversationId);
+            if (!conversation) {
+                throw new Error('当前对话不存在');
             }
+
+            if (!conversation.messages[messageIndex]) {
+                throw new Error('消息索引无效');
+            }
+
+            // 更新消息
+            conversation.messages[messageIndex] = updatedMessage;
+            // 同步更新全局消息数组
+            messages = [
+                {"role": "system", "content": conversation.systemPrompt || default_system_prompt},
+                ...conversation.messages
+            ];
             
             // 更新UI显示
             originalContentDiv.style.display = '';
@@ -1844,7 +1839,7 @@ async function editUserMessage(messageIndex, originalContent) {
             }
             
             // 保存对话
-            await saveConversations();
+            await saveConversation(conversation.id, 'update');
             
             // 显示成功提示
             showToast('编辑已保存');
@@ -1854,15 +1849,12 @@ async function editUserMessage(messageIndex, originalContent) {
 
             // 自动触发重新生成
             // 找到当前消息之后的第一个助手消息并重新生成
-            const currentConversation = conversations.find(c => c.id === currentConversationId);
-            if (currentConversation) {
-                const conversationMessages = currentConversation.messages;
-                for (let i = messageIndex + 1; i < conversationMessages.length; i++) {
-                    if (conversationMessages[i].role === 'assistant') {
-                        console.log('找到需要重新生成的助手消息，索引:', i);
-                        await regenerateMessage(i);
-                        break;
-                    }
+            const conversationMessages = conversation.messages;
+            for (let i = messageIndex + 1; i < conversationMessages.length; i++) {
+                if (conversationMessages[i].role === 'assistant') {
+                    console.log('找到需要重新生成的助手消息，索引:', i);
+                    await regenerateMessage(i);
+                    break;
                 }
             }
             
@@ -2080,7 +2072,7 @@ function switchVersion(messageIndex, newVersion) {
     }
     
     // 保存到数据库
-    saveConversations();
+    saveConversation(currentConversation.id, 'update');
 }
 
 // 添加系统提示词变更监听
@@ -2100,7 +2092,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (currentConversation) {
                     currentConversation.systemPrompt = systemPromptTextarea.value; // 更新系统提示词
                     messages[0] = {"role": "system", "content": currentConversation.systemPrompt || default_system_prompt}; // 只在发送消息时使用默认提示词
-                    await saveConversations();
+                    await saveConversation(currentConversation.id, 'update');
                 }
             }
         }, 1000); // 1秒后保存
@@ -2170,7 +2162,7 @@ async function generateTitle(firstMessage) {
         const currentConversation = conversations.find(c => c.id === currentConversationId);
         if (currentConversation) {
             currentConversation.title = title;
-            await saveConversations();
+            await saveConversation(currentConversation.id, 'update');
         }
 
         return title;
@@ -2205,7 +2197,7 @@ function editConversationTitle(conversationId) {
             const conversation = conversations.find(c => c.id === conversationId);
             if (conversation) {
                 conversation.title = newTitle;
-                await saveConversations();
+                await saveConversation(conversation.id, 'update');
             }
         }
         titleElement.textContent = newTitle || currentTitle;
@@ -2524,7 +2516,7 @@ async function regenerateErrorMessage(messageIndex) {
             }
             
             // 保存对话
-            await saveConversations();
+            await saveConversation(currentConversation.id, 'update');
         }
     } catch (error) {
         console.error('Error:', error);

@@ -14,8 +14,15 @@ app.secret_key = 'wutianrandomkey1432532534632'  # 用于session加密，请更�
 #路径用于存储上传的图片
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-# 确保上传文件夹存在
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# 创建上传相关的文件夹结构
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)  # 主上传文件夹
+os.makedirs(os.path.join(UPLOAD_FOLDER, 'temp'), exist_ok=True)  # 临时处理文件夹
+app.config['TEMP_FOLDER'] = os.path.join(UPLOAD_FOLDER, 'temp')
+
+# 设置文件上传相关的配置
+app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1GB
+app.config['MAX_CONTENT_PATH'] = None  # 不限制文件路径长度
 
 # 数据库配置
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'

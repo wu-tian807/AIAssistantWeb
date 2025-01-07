@@ -1,5 +1,9 @@
 import { showToast } from '../utils/toast.js';
+import { SettingsRenderer } from './settingsRenderer.js';
 import { ProfileRenderer } from './profileRenderer.js';
+
+// 创建一个单例的设置渲染器
+let settingsRendererInstance = null;
 
 // 获取用户头像
 async function fetchProfileIcon() {
@@ -34,132 +38,86 @@ async function updateProfileIcon(profileIcon) {
     }
 }
 
-// 用户配置初始化函数
+// 在文件开头添加主题初始化函数
+export async function initializeTheme() {
+    try {
+        // 首先检查本地存储中的主题设置
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme) {
+            document.body.classList.toggle('dark-theme', savedTheme === 'dark');
+        } else {
+            // 如果本地没有设置，从服务器获取
+            const response = await fetch('/api/user/settings/dark_theme');
+            if (response.ok) {
+                const data = await response.json();
+                document.body.classList.toggle('dark-theme', data.dark_theme);
+                localStorage.setItem('theme', data.dark_theme ? 'dark' : 'light');
+            }
+        }
+    } catch (error) {
+        console.error('初始化主题设置失败:', error);
+    }
+}
+
+// 导出初始化函数
 export async function initializeUserProfile() {
-    const userProfileBtn = document.querySelector('.user-profile-btn');
-    const profileDropdown = document.querySelector('.profile-dropdown');
-    const profileIcon = document.querySelector('.user-profile-btn img');
+    try {
+        // 获取并更新头像
+        const profileIcon = await fetchProfileIcon();
+        await updateProfileIcon(profileIcon);
 
-    if (!userProfileBtn || !profileDropdown || !profileIcon) {
-        console.error('找不到用户配置相关的DOM元素');
-        return;
-    }
+        // 初始化主题
+        await initializeTheme();
 
-    // 获取并显示用户头像
-    const profileIconData = await fetchProfileIcon();
-    await updateProfileIcon(profileIconData);
+        // 添加用户下拉菜单事件监听器
+        const userProfileBtn = document.querySelector('.user-profile-btn');
+        const profileDropdown = document.querySelector('.profile-dropdown');
 
-    let isDropdownVisible = false;
-
-    // 切换下拉菜单显示状态
-    userProfileBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        isDropdownVisible = !isDropdownVisible;
-        
-        if (isDropdownVisible) {
-            profileDropdown.style.display = 'block';
-            // 使用 requestAnimationFrame 确保 display 更改已经生效
-            requestAnimationFrame(() => {
-                profileDropdown.classList.add('show');
+        if (userProfileBtn && profileDropdown) {
+            userProfileBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                profileDropdown.classList.toggle('show');
             });
-        } else {
-            hideDropdown();
-        }
-    });
 
-    // 点击其他地方关闭下拉菜单
-    document.addEventListener('click', () => {
-        if (isDropdownVisible) {
-            hideDropdown();
-        }
-    });
-
-    // 隐藏下拉菜单的函数
-    function hideDropdown() {
-        isDropdownVisible = false;
-        profileDropdown.classList.remove('show');
-        // 等待动画完成后隐藏
-        setTimeout(() => {
-            if (!isDropdownVisible) { // 再次检查，避免用户快速点击导致的问题
-                profileDropdown.style.display = 'none';
-            }
-        }, 200); // 与 CSS 动画时长匹配
-    }
-
-    // 阻止下拉菜单内部点击事件冒泡
-    profileDropdown.addEventListener('click', (e) => {
-        e.stopPropagation();
-    });
-
-    // 处理下拉菜单项点击
-    const dropdownItems = document.querySelectorAll('.dropdown-item');
-    dropdownItems.forEach(item => {
-        item.addEventListener('click', async () => {
-            const action = item.getAttribute('data-action');
-            try {
-                switch (action) {
-                    case 'profile':
-                        await handleProfile();
-                        break;
-                    case 'settings':
-                        await handleSettings();
-                        break;
-                    case 'logout':
-                        await handleLogout();
-                        break;
+            // 点击其他地方关闭下拉菜单
+            document.addEventListener('click', () => {
+                if (profileDropdown.classList.contains('show')) {
+                    profileDropdown.classList.remove('show');
                 }
-            } catch (error) {
-                console.error('处理用户操作时出错:', error);
-                showToast('操作失败，请重试', 'error');
+            });
+
+            // 设置按钮点击事件
+            const settingsBtn = document.querySelector('[data-action="settings"]');
+            if (settingsBtn) {
+                settingsBtn.addEventListener('click', async () => {
+                    if (!settingsRendererInstance) {
+                        settingsRendererInstance = new SettingsRenderer();
+                    }
+                    await settingsRendererInstance.initialize();
+                });
             }
-            hideDropdown();
-        });
-    });
-}
 
-// 处理个人档案
-async function handleProfile() {
-    try {
-        const profileRenderer = new ProfileRenderer();
-        await profileRenderer.showProfileModal();
-    } catch (error) {
-        console.error('打开个人资料失败:', error);
-        showToast('无法打开个人资料，请稍后重试', 'error');
-    }
-}
+            // 个人资料按钮点击事件
+            const profileBtn = document.querySelector('[data-action="profile"]');
+            if (profileBtn) {
+                profileBtn.addEventListener('click', async () => {
+                    const profileRenderer = new ProfileRenderer();
+                    await profileRenderer.showProfileModal();
+                });
+            }
 
-// 处理设置
-async function handleSettings() {
-    try {
-        const response = await fetch('/settings');
-        if (response.ok) {
-            window.location.href = '/settings';
-        } else {
-            throw new Error('无法访问设置页面');
+            // 退出登录按钮点击事件
+            const logoutBtn = document.querySelector('[data-action="logout"]');
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', async () => {
+                    if (confirm('确定要退出登录吗？')) {
+                        window.location.href = '/logout';
+                    }
+                });
+            }
         }
     } catch (error) {
-        console.error('访问设置页面失败:', error);
-        showToast('无法访问设置页面，请稍后重试', 'error');
+        console.error('初始化用户配置失败:', error);
+        showToast('初始化用户配置失败', 'error');
     }
-}
-
-// 处理退出登录
-async function handleLogout() {
-    if (await confirmLogout()) {
-        try {
-            // 直接使用 GET 请求访问 /logout 路由
-            window.location.href = '/logout';
-        } catch (error) {
-            console.error('退出登录失败:', error);
-            showToast('退出登录失败，请重试', 'error');
-        }
-    }
-}
-
-// 确认退出登录
-function confirmLogout() {
-    return new Promise((resolve) => {
-        const result = confirm('确定要退出登录吗？');
-        resolve(result);
-    });
 }

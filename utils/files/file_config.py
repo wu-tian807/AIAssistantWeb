@@ -12,7 +12,7 @@ ATTACHMENT_TYPES = {
     AttachmentType.IMAGE: {
         'extensions': ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic', '.heif'],
         'mime_types': ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/heic', 'image/heif'],
-        'max_size': 20 * 1024 * 1024  # 20MB
+        'max_size': 1 * 1024 * 1024 * 1024  # 1GB
     },
     AttachmentType.VIDEO: {
         'extensions': ['.mp4', '.webm', '.ogg', '.mkv', '.m4v', '.ts', '.mts', '.vob', '.divx', '.rm', '.rmvb', '.asf'],
@@ -26,7 +26,7 @@ ATTACHMENT_TYPES = {
             'video/vnd.rn-realvideo', # .rm, .rmvb
             'video/x-ms-asf'       # .asf
         ],
-        'max_size': 100 * 1024 * 1024  # 100MB
+        'max_size': 2 * 1024 * 1024 * 1024  # 2GB (与Gemini限制一致)
     },
     AttachmentType.DOCUMENT: {
         'extensions': [

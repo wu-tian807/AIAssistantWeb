@@ -17,11 +17,6 @@ export class VideoUploader {
      */
     async handleFileSelect(file) {
         try {
-            // 验证文件类型
-            if (!file.type.startsWith('video/')) {
-                throw new Error('不支持的视频格式');
-            }
-
             // 验证文件大小
             if (file.size > this.maxSize) {
                 const maxSizeMB = this.maxSize / (1024 * 1024);
@@ -64,13 +59,10 @@ export class VideoUploader {
                 const previewElement = videoAttachment.createUploadPreviewElement(
                     // 删除回调
                     () => {
-                        // 从容器中移除预览元素
                         if (previewElement.parentNode) {
                             previewElement.parentNode.removeChild(previewElement);
                         }
-                        // 从附件集合中移除
                         this.attachments.delete(videoAttachment);
-                        // 调用外部的 onDelete 回调
                         if (this.options.onDelete) {
                             this.options.onDelete(videoAttachment);
                         }
@@ -78,7 +70,6 @@ export class VideoUploader {
                 );
                 
                 if (previewElement) {
-                    console.log('添加视频预览元素到容器');
                     this.options.container.appendChild(previewElement);
                 }
             }
@@ -91,21 +82,6 @@ export class VideoUploader {
     }
 
     /**
-     * 获取所有视频附件
-     * @returns {Set<VideoAttachment>}
-     */
-    getAttachments() {
-        return this.attachments;
-    }
-
-    /**
-     * 清空所有视频附件
-     */
-    clearAttachments() {
-        this.attachments.clear();
-    }
-
-    /**
      * 上传视频到服务器
      * @param {VideoAttachment} videoAttachment 
      */
@@ -114,23 +90,44 @@ export class VideoUploader {
             const formData = new FormData();
             formData.append('video', videoAttachment.file);
 
+            // 创建上传进度提示
+            const toast = showToast('视频上传中...', 'info', 0);
+            const progressText = document.createElement('div');
+            progressText.className = 'upload-progress';
+            toast.appendChild(progressText);
+
             const response = await fetch(this.uploadUrl, {
                 method: 'POST',
-                body: formData
+                body: formData,
+                onUploadProgress: (progressEvent) => {
+                    if (progressEvent.lengthComputable) {
+                        const percentComplete = Math.round((progressEvent.loaded / progressEvent.total) * 100);
+                        progressText.textContent = `已上传 ${percentComplete}%`;
+                        
+                        const uploadedSize = AttachmentUtils.formatFileSize(progressEvent.loaded);
+                        const totalSize = AttachmentUtils.formatFileSize(progressEvent.total);
+                        progressText.textContent += ` (${uploadedSize}/${totalSize})`;
+                    }
+                }
             });
 
             if (!response.ok) {
-                throw new Error('上传失败');
+                const errorData = await response.json();
+                toast.remove();
+                throw new Error(errorData.error || '上传失败');
             }
 
             const data = await response.json();
-
+            
             // 更新附件信息
             videoAttachment.update({
                 filePath: data.file_path,
                 mimeType: data.mime_type,
                 uploadTime: new Date()
             });
+
+            toast.remove();
+            showToast('视频上传成功', 'success');
 
             this.attachments.add(videoAttachment);
             return videoAttachment;
@@ -139,6 +136,14 @@ export class VideoUploader {
             console.error('视频上传失败:', error);
             throw error;
         }
+    }
+
+    getAttachments() {
+        return this.attachments;
+    }
+
+    clearAttachments() {
+        this.attachments.clear();
     }
 }
 

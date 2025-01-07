@@ -29,6 +29,10 @@
     <!-- 添加highlight.js样式 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css">
     <!-- 添加样式 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/darkness.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/upload-status.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/toast.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/profile-styles.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chat-header.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chat-icon.css') }}">
@@ -133,5 +137,7 @@
     <script>
         // 移除原有的logout事件监听
     </script>
+    <script src="{{ url_for('static', filename='js/utils/upload_status.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/utils/upload_status_listener.js') }}"></script>
 </body>
 </html> 

@@ -1,17 +1,44 @@
-// 显示提示信息
-export function showToast(message, type = 'success') {
+/**
+ * 显示提示信息
+ * @param {string} message - 提示消息
+ * @param {string} type - 提示类型 ('success' | 'error' | 'info' | 'warning')
+ * @param {number} duration - 持续时间(毫秒)，0表示不自动消失
+ * @returns {HTMLElement} toast元素
+ */
+export function showToast(message, type = 'success', duration = 3000) {
     // 创建提示元素
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    toast.textContent = message;
+    
+    // 如果是持久化的toast，添加关闭按钮
+    if (duration === 0) {
+        toast.className += ' persistent';
+        
+        // 创建消息容器
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'toast-message';
+        messageDiv.textContent = message;
+        
+        // 创建关闭按钮
+        const closeButton = document.createElement('button');
+        closeButton.className = 'toast-close';
+        closeButton.innerHTML = '×';
+        closeButton.onclick = () => toast.remove();
+        
+        toast.appendChild(messageDiv);
+        toast.appendChild(closeButton);
+    } else {
+        toast.textContent = message;
+        // 设置定时器自动消失
+        setTimeout(() => {
+            toast.remove();
+        }, duration);
+    }
     
     // 添加到页面
     document.body.appendChild(toast);
     
-    // 3秒后自动消失
-    setTimeout(() => {
-        toast.remove();
-    }, 3000);
+    return toast;
 }
 
 // 确认对话框
