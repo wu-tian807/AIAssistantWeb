@@ -41,7 +41,7 @@ AVAILABLE_MODELS = {
     },
     'deepseek':{
         'models':[
-            {'id':'deepseek-chat','name':'DeepSeek V3','description':'DeepSeek V3 是深度求索公司开发的智能助手，支持文本、图片、视频和音频等多种输入类型，能够处理复杂的任务和问题。','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT]}
+            {'id':'deepseek-chat','name':'DeepSeek V3','description':'DeepSeek V3 是深度求索公司开发的智能助手，支持文本输入，64K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT]}
         ],
         'api_type': 'openai'
     }
@@ -53,9 +53,9 @@ MAX_EMAILS_PER_WINDOW = 3  # 每个时间窗口内最多发送3封邮件
 
 # API配置
 API_KEYS = {
-    'google': "AIzaSyDWQDPJdzX0pcqqfuH7QkIarCYOUyMaYrg",
-    'xai': "xai-ustHuYhJfrn6mdl5Oi9lzIpDeeLkKCUqwOtynKE0IC9s0cHMw2QjSeQlYUkhq0URI5uVp8db66avB82B",
-    'deepseek': "sk-6f8f1e8e2d8847559db94b51f2fa21ca"
+    'google': "YOUR_GOOGLE_API_KEY",
+    'xai': "YOUR_XAI_API_KEY", 
+    'deepseek': "YOUR_DEEPSEEK_API_KEY"
 }
 
 API_BASE_URLS = {
@@ -63,3 +63,10 @@ API_BASE_URLS = {
     'xai': "https://api.x.ai/v1",
     'deepseek': "https://api.deepseek.com/v1"
 }
+
+#文字+latex公式图像ocr API和网址
+#感谢https://simpletex.cn
+OCR_API_KEY = "YOUR_OCR_API_KEY"
+# OCR_TURBO_LATEX_API_URL = "https://server.simpletex.cn/api/latex_ocr_turbo" #轻量级图像提取公式
+# OCR_STANDARD_LATEX_API_URL = "https://server.simpletex.cn/api/latex_ocr" #标准图像提取公式
+OCR_COMMON_API_URL = "https://server.simpletex.cn/api/simpletex_ocr" #通用图像提取

@@ -1,0 +1,51 @@
+# 配置文件
+config.py
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虚拟环境
+venv/
+ENV/
+
+# 数据库
+*.db
+*.sqlite3
+
+# 上传文件
+uploads/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# 日志
+*.log
+
+# 缓存文件
+.ocr_cache/
+.gemini_files_cache.txt 
