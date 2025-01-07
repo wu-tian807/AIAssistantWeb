@@ -149,6 +149,7 @@ def process_image_attachment(
                     "text": attachment_text
                 })
                 processed_message['parts'].append(image)
+                print("加入Gemini的图片信息："+str(image))
                 return
             except Exception as e:
                 print(f"无法打开本地图片文件: {str(e)}")
@@ -442,3 +443,117 @@ def process_binary_attachment(
         processed_message['parts'].append({
             "text": attachment_text
         })
+
+def process_image_attachment_by_ocr(
+    attachment: Dict[str, Any],
+    model_type: str,
+    processed_message: Dict[str, Any],
+    user_id: str = None
+) -> None:
+    """
+    使用OCR处理图片附件，提取文本内容并添加到消息中
+    
+    Args:
+        attachment: 附件信息字典
+        model_type: 模型类型 ('openai' 或 'google')
+        processed_message: 要处理的消息字典
+        user_id: 用户ID，用于缓存OCR结果
+    """
+    from utils.ocr.image_ocr import ImageOCR
+    from utils.ocr.ocr_cache import OCRCache
+    import os
+    
+    file_name = attachment.get('fileName', '未命名文件')
+    file_path = attachment.get('file_path')
+    
+    if not file_path or not os.path.exists(file_path):
+        error_text = f"[图片OCR失败：找不到文件 {file_name}]"
+        if model_type == 'openai':
+            processed_message['content'].append({
+                "type": "text",
+                "text": error_text
+            })
+        else:
+            processed_message['parts'].append({
+                "text": error_text
+            })
+        return
+        
+    try:
+        # 初始化OCR缓存
+        cache_dir = os.path.join(os.path.dirname(file_path), '.ocr_cache')
+        ocr_cache = OCRCache(cache_dir)
+        
+        # 尝试从缓存获取OCR结果
+        cached_result = None
+        if user_id:
+            cached_result = ocr_cache.get_ocr_result(user_id, file_path)
+            
+        if cached_result:
+            print("使用缓存的OCR结果")
+            extracted_text = cached_result
+        else:
+            print("执行新的OCR处理")
+            # 创建OCR实例并处理图片
+            ocr = ImageOCR()
+            
+            # 设置OCR参数，使用auto模式自动判断内容类型
+            params = {
+                'rec_mode': 'auto',  # 自动识别模式
+                'enable_img_rot': True,  # 启用图片旋转校正
+                'inline_formula_wrapper': ['$', '$'],  # 行内公式包装
+                'isolated_formula_wrapper': ['$$', '$$']  # 独立公式包装
+            }
+            
+            # 使用通用OCR的auto模式
+            print("使用OCR自动识别模式...")
+            ocr_result = ocr.image_to_text(file_path, use_common_ocr=True, ocr_params=params)
+            extracted_text = ocr.get_text_content(ocr_result)
+            
+            # 保存OCR结果到缓存
+            if user_id and extracted_text:
+                ocr_cache.save_ocr_result(user_id, file_path, extracted_text)
+        
+        # 构建消息文本
+        if extracted_text:
+            message_text = (
+                f"[图片OCR结果 - {file_name}]\n"
+                f"提取的文本内容：\n"
+                f"{extracted_text}"
+            )
+        else:
+            # 检查原始结果中的错误信息
+            error_info = None
+            if ocr_result.get('res'):
+                if isinstance(ocr_result['res'], dict):
+                    error_info = ocr_result['res'].get('error')
+                elif isinstance(ocr_result['res'], list):
+                    error_info = next((r.get('error') for r in ocr_result['res'] if isinstance(r, dict) and 'error' in r), None)
+            
+            message_text = (
+                f"[图片OCR结果 - {file_name}]\n"
+                f"OCR处理结果：{error_info if error_info else '无法提取文本'}"
+            )
+        
+        # 根据模型类型添加到消息中
+        if model_type == 'openai':
+            processed_message['content'].append({
+                "type": "text",
+                "text": message_text
+            })
+        else:
+            processed_message['parts'].append({
+                "text": message_text
+            })
+            
+    except Exception as e:
+        error_text = f"[图片OCR处理失败：{str(e)}]"
+        if model_type == 'openai':
+            processed_message['content'].append({
+                "type": "text",
+                "text": error_text
+            })
+        else:
+            processed_message['parts'].append({
+                "text": error_text
+            })

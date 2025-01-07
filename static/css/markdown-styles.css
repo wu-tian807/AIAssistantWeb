@@ -38,24 +38,39 @@
 }
 
 /* 列表样式优化 */
-.assistant-message ul, 
-.assistant-message ol {
+.assistant-message .custom-list {
     padding-left: 2em;   /* 增加列表缩进 */
     margin: 1em 0;
     list-style-position: outside; /* 确保列表标记在内容外部 */
 }
 
-.assistant-message li {
+.assistant-message .custom-list-item {
     margin: 0.5em 0;     /* 增加列表项间距 */
-    display: list-item;  /* 确保正确的列表项显示 */
     line-height: 1.6;    /* 调整行高 */
     text-align: left;    /* 确保文本左对齐 */
 }
 
-.assistant-message li > * {
-    display: inline-block; /* 确保内容和标记在同一行 */
-    vertical-align: top;   /* 顶部对齐 */
-    margin: 0;            /* 移除默认外边距 */
+.assistant-message .list-item-content {
+    display: inline;     /* 内联显示 */
+}
+
+.assistant-message .custom-list-item > ul,
+.assistant-message .custom-list-item > ol {
+    display: block;      /* 子列表块级显示 */
+    margin: 0.5em 0 0.5em 2em; /* 上边距和左缩进 */
+}
+
+/* 处理列表项内的内联元素 */
+.assistant-message .custom-list-item > code,
+.assistant-message .custom-list-item > strong {
+    display: inline;
+    vertical-align: baseline;
+}
+
+/* 确保列表项内的所有直接子元素正确对齐 */
+.assistant-message .custom-list-item > * {
+    margin-top: 0;        /* 移除顶部外边距 */
+    margin-bottom: 0;     /* 移除底部外边距 */
 }
 
 /* 标题样式优化 */
@@ -73,22 +88,165 @@
 /* 正常代码块的样式 - 使用特定的包装器类 */
 .code-block-wrapper {
     margin: 1.5em 0;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #282c34;
+}
+
+.code-block-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    background: #21252b;
+    border-bottom: 1px solid #181a1f;
+}
+
+.code-block-header span {
+    color: #ac9800;
+    font-size: 0.9em;
+    font-weight: bold;
+}
+
+.code-block-header .copy-button {
+    background: #ffffff;
+    border: 1px solid #4b5263;
+    color: #000000;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: all 0.3s ease; /* 增加过渡时间和缓动效果 */
+}
+
+.code-block-header .copy-button:hover {
+    background: #5e5e5e;
+    color: #fff;
+}
+
+/* 优化激活状态样式 */
+.code-block-header .copy-button.copied {
+    background: #28a745;
+    border-color: #28a745;
+    color: #ffffff;
+    pointer-events: none; /* 防止在激活状态下触发hover效果 */
 }
 
 .code-block-wrapper pre {
     padding: 1.2em;
-    border-radius: 8px;
-    background: #282c34;
     margin: 0;
+    background: #282c34;
+    overflow-x: auto;
 }
 
 .code-block-wrapper pre code {
     color: #abb2bf;
     display: block;
-    overflow-x: auto;
-    padding: 0;
+    font-family: 'Fira Code', 'Consolas', monospace;
+    line-height: 1.5;
+    tab-size: 4;
 }
 
+/* 代码高亮主题覆盖 */
+.hljs {
+    color: #abb2bf !important;
+    background: #282c34 !important;
+}
+
+.hljs-keyword,
+.hljs-operator {
+    color: #c678dd !important;
+}
+
+.hljs-function {
+    color: #61afef !important;
+}
+
+.hljs-string {
+    color: #98c379 !important;
+}
+
+.hljs-number {
+    color: #d19a66 !important;
+}
+
+.hljs-comment {
+    color: #5c6370 !important;
+    font-style: italic;
+}
+
+.hljs-class {
+    color: #e5c07b !important;
+}
+
+.hljs-variable {
+    color: #e06c75 !important;
+}
+
+.hljs-title {
+    color: #61afef !important;
+}
+
+.hljs-params {
+    color: #abb2bf !important;
+}
+
+/* 代码高亮主题覆盖 */
+.hljs {
+    color: #abb2bf !important;
+    background: #282c34 !important;
+}
+
+.hljs-keyword,
+.hljs-operator {
+    color: #c678dd !important;
+}
+
+.hljs-function {
+    color: #61afef !important;
+}
+
+.hljs-string {
+    color: #98c379 !important;
+}
+
+/* 字符串模板变量 */
+.hljs-string .hljs-subst,
+.hljs-subst,
+.hljs-template-variable {
+    color: #56b6c2 !important;  /* 使用青色调 */
+}
+
+.hljs-number {
+    color: #d19a66 !important;
+}
+
+.hljs-comment {
+    color: #5c6370 !important;
+    font-style: italic;
+}
+
+.hljs-class {
+    color: #e5c07b !important;
+}
+
+/* 调整变量的颜色 */
+.hljs-variable,
+.hljs-attr {
+    color: #56b6c2 !important;
+}
+
+.hljs-title {
+    color: #61afef !important;
+}
+
+.hljs-params {
+    color: #e06c75 !important;
+}
+
+.hljs-built_in {
+    color: #e5c07b !important;
+}
 /* 思考框样式 - 针对非代码块包装器的pre */
 /* 思考框样式 - 针对直接包含code的pre */
 .message-content > pre:has(> code):not(:has(.code-block-wrapper)) {

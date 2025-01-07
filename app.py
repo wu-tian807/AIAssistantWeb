@@ -5,12 +5,13 @@ import json
 from datetime import datetime, timezone, timedelta
 import PIL.Image
 from werkzeug.utils import secure_filename
+import secrets
 
 from config import AVAILABLE_MODELS
 from config import RATE_LIMIT_WINDOW
 from utils.files.file_config import ATTACHMENT_TYPES, AttachmentType
 
-from initialization import app, db, mail, xai_client, genai
+from initialization import app, db, mail, xai_client, genai, deepseek_client
 
 
 from utils.user_model import User
@@ -23,7 +24,24 @@ from utils.image_handler import encode_image
 
 from utils.files.files_extension_helper import get_image_extension
 from utils.files.file_config import MIME_TYPE_MAPPING, AttachmentType
-from utils.chat.message_processor import process_image_attachment, process_binary_attachment,process_video_attachment
+from utils.chat.message_processor import process_image_attachment, process_binary_attachment,process_video_attachment,process_image_attachment_by_ocr
+
+from routes.user import user_profile
+
+# 在每个请求之前生成CSRF Token
+@app.before_request
+def before_request():
+    if 'csrf_token' not in session:
+        session['csrf_token'] = secrets.token_hex(16)
+
+# 添加模板全局函数
+@app.context_processor
+def utility_processor():
+    def csrf_token():
+        if 'csrf_token' not in session:
+            session['csrf_token'] = secrets.token_hex(16)
+        return session['csrf_token']
+    return dict(csrf_token=csrf_token)
 
 # 修改注册路由
 @app.route('/register', methods=['GET', 'POST'])
@@ -155,7 +173,7 @@ def home():
     if not user:
         session.clear()
         return redirect(url_for('login'))
-    return render_template('chat.html')
+    return render_template('chat.html', current_user=user)
 
 
 
@@ -229,13 +247,15 @@ def chat():
     data = request.json
     messages = data.get('messages', [])
     conversation_id = data.get('conversation_id')
-    model_id = data.get('model_id', 'gemini-1.5-pro')  # 修改默认模型为gemini-1.5-pro
+    model_id = data.get('model_id', 'gemini-1.5-pro')
+    user_id = session.get('user_id')  # 获取用户ID
     
     print(f"\n=== 聊天请求信息 ===")
     print(f"模型ID: {model_id}")
     print(f"会话ID: {conversation_id}")
     print(f"消息数量: {len(messages)}")
-    
+    print(f"用户ID: {user_id}")
+
     # 验证对话归属权
     if conversation_id:
         conversation = Conversation.query.filter_by(id=conversation_id, user_id=session['user_id']).first()
@@ -259,7 +279,7 @@ def chat():
     if not model_type:
         return jsonify({'error': '不支持的模型'}), 400
 
-    def process_message_with_attachments(message, model_type, model_support_list):
+    def process_message_with_attachments(message, model_type, model_support_list, user_id):
         # 从配置中获取支持的图片类型
         from utils.files.file_config import MIME_TYPE_MAPPING, ATTACHMENT_TYPES, AttachmentType
         
@@ -305,6 +325,36 @@ def chat():
                 if mime_type:
                     supported_type = MIME_TYPE_MAPPING.get(mime_type)
                     print(f"MIME类型映射结果: {supported_type}")
+                    
+                    # 首先判断是否为图片类型
+                    is_image = (supported_type == AttachmentType.IMAGE and 
+                              file_ext in ATTACHMENT_TYPES[AttachmentType.IMAGE]['extensions'] and 
+                              mime_type in ATTACHMENT_TYPES[AttachmentType.IMAGE]['mime_types'])
+                    
+                    if is_image:
+                        print("检测到图片文件")
+                        # 检查模型是否支持图片处理
+                        if AttachmentType.IMAGE in model_support_list:
+                            print("模型支持图片处理，使用标准图片处理流程")
+                            process_image_attachment(
+                                attachment,
+                                model_type,
+                                processed_message,
+                                supported_type,
+                                mime_type,
+                                genai
+                            )
+                        else:
+                            print("模型不支持图片处理，使用OCR提取文本")
+                            process_image_attachment_by_ocr(
+                                attachment,
+                                model_type,
+                                processed_message,
+                                user_id  # 传递用户ID
+                            )
+                        continue
+                        
+                    # 如果不是图片，再检查其他类型
                     if not supported_type:
                         supported_type = AttachmentType.BINARY
                         print(f"未找到MIME类型映射，使用默认类型: {supported_type}")
@@ -319,24 +369,8 @@ def chat():
                         print(f"模型支持的类型: {model_support_list}")
                         supported_type = AttachmentType.BINARY
                         
-                    # 对于图片类型的特殊处理
-                    if supported_type == AttachmentType.IMAGE:
-                        if (file_ext not in ATTACHMENT_TYPES[AttachmentType.IMAGE]['extensions'] or 
-                            mime_type not in ATTACHMENT_TYPES[AttachmentType.IMAGE]['mime_types']):
-                            print(f"图片格式不受支持: {file_ext}, {mime_type}")
-                            supported_type = AttachmentType.BINARY
-                            continue
-                            
-                        process_image_attachment(
-                            attachment,
-                            model_type,
-                            processed_message,
-                            supported_type,
-                            mime_type,
-                            genai
-                        )
-                    #视频附件处理:
-                    elif supported_type == AttachmentType.VIDEO:
+                    # 处理视频附件
+                    if supported_type == AttachmentType.VIDEO:
                         print(f"处理视频附件: model_type={model_type}, file_ext={file_ext}, mime_type={mime_type}")
                         # 如果是Google模型，使用GEMINI_VIDEO配置
                         if model_type == 'google':
@@ -394,17 +428,68 @@ def chat():
         try:
             # 处理消息列表
             processed_messages = [
-                process_message_with_attachments(msg, model_type, model_support_list) for msg in messages
+                process_message_with_attachments(msg, model_type, model_support_list, user_id) for msg in messages
             ]
             
             if model_type == 'openai':
                 # OpenAI 模型调用
-                stream = xai_client.chat.completions.create(
-                    model=model_id,
-                    messages=processed_messages,
-                    stream=True,
-                    temperature=0.7
-                )
+                if model_id.startswith('deepseek'):
+                    client = deepseek_client
+                    # DeepSeek API 需要特殊处理消息格式
+                    formatted_messages = []
+                    for i, msg in enumerate(processed_messages):
+                        print(f"处理第 {i} 条消息:", msg)  # 调试日志
+                        
+                        # 确保content是字符串
+                        content = ''
+                        if isinstance(msg.get('content'), str):
+                            content = msg['content']
+                        elif isinstance(msg.get('content'), list):
+                            # 如果content是数组，提取所有文本
+                            text_parts = []
+                            for item in msg['content']:
+                                if isinstance(item, dict):
+                                    if item.get('type') == 'text':
+                                        text_parts.append(item.get('text', ''))
+                                    elif 'text' in item:
+                                        text_parts.append(item['text'])
+                                elif isinstance(item, str):
+                                    text_parts.append(item)
+                            content = ' '.join(text_parts)
+                        
+                        # 处理parts字段
+                        if 'parts' in msg:
+                            parts_content = []
+                            for part in msg['parts']:
+                                if isinstance(part, dict) and 'text' in part:
+                                    parts_content.append(part['text'])
+                                elif isinstance(part, str):
+                                    parts_content.append(part)
+                            if parts_content:
+                                content = content + ' ' + ' '.join(parts_content)
+                        
+                        formatted_msg = {
+                            'role': msg['role'],
+                            'content': content.strip()
+                        }
+                        print(f"格式化后的消息:", formatted_msg)  # 调试日志
+                        formatted_messages.append(formatted_msg)
+                    
+                    print("最终发送给 DeepSeek 的消息:", formatted_messages)  # 调试日志
+                    stream = client.chat.completions.create(
+                        model=model_id,
+                        messages=formatted_messages,
+                        stream=True,
+                        temperature=0.7
+                    )
+                else:
+                    client = xai_client
+                    stream = client.chat.completions.create(
+                        model=model_id,
+                        messages=processed_messages,
+                        stream=True,
+                        temperature=0.7
+                    )
 
                 for chunk in stream:
                     if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
@@ -419,15 +504,21 @@ def chat():
                 formatted_history = []
                 if model_id == 'gemini-exp-1206' or model_id == 'gemini-exp-1121' or model_id == 'learnlm-1.5-pro-experimental' :
                     for msg in processed_messages[:-1]:  # 除了最后一条消息
+                        #暂时不适用系统词
                         if msg['role'] == 'system':
-                            #暂时不适用系统词
                             continue
-                        else:
-                            # 处理普通消息
-                            formatted_history.append({
-                                'role': msg['role'] == 'assistant' if 'model' else msg['role'],
-                                'parts': msg.get('parts', [{'text': msg.get('content', '')}])
-                            })
+                        message_parts = []
+                        # 添加文本内容
+                        if msg.get('content'):
+                            message_parts.append({'text': msg['content']})
+                        # 添加其他部分（如图片）
+                        if 'parts' in msg:
+                            message_parts.extend(msg['parts'])
+                        
+                        formatted_history.append({
+                            'role': 'model' if msg['role'] == 'assistant' else 'user',
+                            'parts': message_parts
+                        })
                 else:
                     for msg in processed_messages[:-1]:  # 除了最后一条消息
                         if msg['role'] == 'system':
@@ -442,9 +533,17 @@ def chat():
                             })
                         else:
                             # 处理普通消息
+                            message_parts = []
+                            # 添加文本内容
+                            if msg.get('content'):
+                                message_parts.append({'text': msg['content']})
+                            # 添加其他部分（如图片）
+                            if 'parts' in msg:
+                                message_parts.extend(msg['parts'])
+                            
                             formatted_history.append({
                                 'role': msg['role'],
-                                'parts': msg.get('parts', [{'text': msg.get('content', '')}])
+                                'parts': message_parts
                             })
                 
                 # 创建聊天实例并传入历史记录
@@ -452,7 +551,17 @@ def chat():
                 
                 # 获取并处理最后一条消息
                 last_message = processed_messages[-1]
-                last_message_parts = last_message.get('parts', [{'text': last_message.get('content', '')}])
+                last_message_parts = []
+                
+                # 添加文本内容
+                if last_message.get('content'):
+                    last_message_parts.append({'text': last_message['content']})
+                
+                # 添加其他部分（如图片）
+                if 'parts' in last_message:
+                    last_message_parts.extend(last_message['parts'])
+                
+                print("发送给Gemini的消息内容：", last_message_parts)
                 
                 # 发送消息并获取流式响应
                 response = chat.send_message(last_message_parts, stream=True)
@@ -904,6 +1013,9 @@ def get_video():
     except Exception as e:
         print(f"获取视频失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+# 注册蓝图
+app.register_blueprint(user_profile)
 
 # 启动应用
 if __name__ == '__main__':

@@ -5,6 +5,7 @@ from flask_mail import Mail
 from openai import OpenAI
 import google.generativeai as genai
 from config import API_KEYS, API_BASE_URLS
+from flask_migrate import Migrate
 
 # 初始化 Flask 应用
 app = Flask(__name__)
@@ -38,4 +39,8 @@ mail = Mail(app)
 
 # 初始化API客户端
 xai_client = OpenAI(api_key=API_KEYS['xai'], base_url=API_BASE_URLS['xai'])
+deepseek_client = OpenAI(api_key=API_KEYS['deepseek'], base_url=API_BASE_URLS['deepseek'])
 genai.configure(api_key=API_KEYS['google'])
+
+# 初始化数据库迁移
+migrate = Migrate(app, db)

@@ -3,3 +3,7 @@ export const model_to_svg = {
     'google': STATIC_URL + 'icons/models/google.svg',
     'deepseek': STATIC_URL + 'icons/models/deepseek.svg'
 }
+
+export const user_to_svg = {
+    'default_profile': STATIC_URL + 'icons/users/default_profile.svg'
+}
