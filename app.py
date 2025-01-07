@@ -1,3 +1,4 @@
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
 import base64
 import os
 from flask import render_template, request, jsonify, Response, session, redirect, url_for, send_file
@@ -6,6 +7,8 @@ from datetime import datetime, timezone, timedelta
 import PIL.Image
 from werkzeug.utils import secure_filename
 import secrets
+import traceback
+import time
 
 from config import AVAILABLE_MODELS
 from config import RATE_LIMIT_WINDOW
@@ -27,6 +30,8 @@ from utils.files.file_config import MIME_TYPE_MAPPING, AttachmentType
 from utils.chat.message_processor import process_image_attachment, process_binary_attachment,process_video_attachment,process_image_attachment_by_ocr
 
 from routes.user import user_profile
+from routes.upload_status import upload_status_bp
+from routes.user.settings import user_settings
 
 # 在每个请求之前生成CSRF Token
 @app.before_request
@@ -177,67 +182,127 @@ def home():
 
 
 
-@app.route('/upload_image',methods=['POST'])
+@app.route('/upload_image', methods=['POST'])
 @login_required
 def upload_image():
     try:
+        print("=== 开始处理图片上传请求 ===")
+        
         if 'image' not in request.files:
-            print("No image in request.files")
-            return jsonify({'error': 'No image provided'}), 400
+            return jsonify({'error': '没有提供图片'}), 400
         
         image = request.files['image']
         if image.filename == '':
-            print("No selected filename")
-            return jsonify({'error': 'No selected file'}), 400
+            return jsonify({'error': '没有选择文件'}), 400
 
-        # 获取当前用户的 user_id
-        user_id = session.get('user_id')
-        if not user_id:
-            print("User not logged in")
-            return jsonify({'error': 'User not logged in'}), 401
-            
-        user = User.query.get(user_id)
+        # 基本验证
+        validation_result = validate_image_file(image)
+        if validation_result:
+            return validation_result
+
+        # 获取用户信息
+        user = User.query.get(session.get('user_id'))
         if not user:
-            print("User not found")
-            return jsonify({'error': 'User not found'}), 404
-        
-        # 处理文件名：添加时间戳
-        original_filename = secure_filename(image.filename)
-        if not original_filename:
-            print("Invalid filename")
-            return jsonify({'error': 'Invalid filename'}), 400
-        ext = get_image_extension(original_filename,image)
-        
-        # 生成新文件名
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        new_filename = f"{timestamp}{ext}"
-        
-        # 保存图片到本地
-        user_email = user.email.replace('@','_').replace('.','_')
-        user_folder = os.path.join(app.config['UPLOAD_FOLDER'], user_email)
-        os.makedirs(user_folder, exist_ok=True)
+            return jsonify({'error': '用户未找到'}), 404
 
-        # 保存图片到用户目录
-        image_path = os.path.join(user_folder, new_filename)
-        print(f"Saving image to: {image_path}")
-        image.save(image_path)
-
-        # 转换图片到base64
+        # 准备文件路径
+        file_path = prepare_file_path(image.filename, user)
+        
         try:
-            base64_image = encode_image(image_path)
+            # 获取文件大小
+            image.seek(0, 2)
+            file_size = image.tell()
+            image.seek(0)
+            
+            # 检查是否需要特殊处理（比如大图片压缩）
+            needs_processing = file_size > 5 * 1024 * 1024  # 5MB
+            
+            if needs_processing:
+                # 保存到临时目录
+                temp_path = os.path.join(app.config['TEMP_FOLDER'], 
+                    secure_filename(f"temp_{datetime.now().timestamp()}_{image.filename}"))
+                image.save(temp_path)
+                
+                # 处理图片（压缩等）
+                processed_path = process_image(temp_path, file_path)
+                
+                # 读取处理后的图片并转为base64
+                with open(processed_path, 'rb') as img_file:
+                    base64_image = base64.b64encode(img_file.read()).decode('utf-8')
+                    
+                # 清理临时文件
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                    
+            else:
+                # 直接保存小文件
+                image.save(file_path)
+                # 转换为base64
+                with open(file_path, 'rb') as img_file:
+                    base64_image = base64.b64encode(img_file.read()).decode('utf-8')
+            
             return jsonify({
+                'message': '图片上传成功',
+                'file_path': file_path,
+                'mime_type': image.content_type,
                 'base64_image': base64_image,
-                'message': 'Image uploaded successfully',
-                'file_path': image_path
+                'needs_processing': needs_processing
             }), 200
+
         except Exception as e:
-            print(f"Error encoding image: {str(e)}")
-            return jsonify({'error': 'Error processing image'}), 500
+            print(f"保存文件时出错: {str(e)}")
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            raise
 
     except Exception as e:
-        print(f"Upload error: {str(e)}")
+        print(f"图片上传失败: {str(e)}")
+        print(f"错误详情: {traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
+
+def validate_image_file(image):
+    """验证图片文件"""
+    # 检查文件扩展名
+    file_ext = os.path.splitext(image.filename)[1].lower()
+    if file_ext not in ATTACHMENT_TYPES[AttachmentType.IMAGE]['extensions']:
+        return jsonify({'error': f'不支持的图片格式: {file_ext}'}), 400
+        
+    # 检查MIME类型
+    if image.content_type not in ATTACHMENT_TYPES[AttachmentType.IMAGE]['mime_types']:
+        return jsonify({'error': f'不支持的图片格式: {image.content_type}'}), 400
+        
+    # 检查文件大小
+    image.seek(0, 2)
+    file_size = image.tell()
+    image.seek(0)
     
+    max_size = ATTACHMENT_TYPES[AttachmentType.IMAGE]['max_size']
+    if file_size > max_size:
+        return jsonify({'error': f'文件大小超过限制 ({max_size/(1024*1024)}MB)'}), 400
+    
+    return None
+
+def process_image(temp_path, output_path):
+    """处理大图片（压缩等）"""
+    try:
+        from PIL import Image
+        import io
+        
+        # 打开图片
+        with Image.open(temp_path) as img:
+            # 保持宽高比进行压缩
+            max_size = (1920, 1920)  # 最大尺寸
+            img.thumbnail(max_size, Image.Resampling.LANCZOS)
+            
+            # 保存压缩后的图片
+            img.save(output_path, optimize=True, quality=85)
+            
+        return output_path
+        
+    except Exception as e:
+        print(f"处理图片失败: {str(e)}")
+        raise
+
 @app.route('/chat', methods=['POST', 'GET'])
 @login_required
 def chat():
@@ -283,13 +348,15 @@ def chat():
         # 从配置中获取支持的图片类型
         from utils.files.file_config import MIME_TYPE_MAPPING, ATTACHMENT_TYPES, AttachmentType
         
-        processed_message = message.copy()
-        has_attachments = False
+        # 创建新的消息对象，只复制必要的字段
+        processed_message = {
+            'role': message.get('role', ''),
+        }
         
-        # 初始化消息格式
+        # 根据模型类型初始化消息格式
         if model_type == 'openai':
             processed_message['content'] = []
-            if message.get('content'):
+            if message.get('content') and isinstance(message['content'], str):
                 processed_message['content'].append({
                     "type": "text",
                     "text": message['content']
@@ -298,13 +365,14 @@ def chat():
             processed_message['parts'] = []
             # 确保始终添加文本内容，即使是空字符串
             text_content = message.get('content', '')
-            if not text_content and 'attachments' in message:
-                # 如果没有文本但有附件，添加默认文本
-                text_content = "请分析以下附件内容："
-            processed_message['parts'].append({
-                "text": text_content
-            })
-            
+            if isinstance(text_content, str):
+                if not text_content and 'attachments' in message:
+                    # 如果没有文本但有附件，添加默认文本
+                    text_content = "请分析以下附件内容："
+                processed_message['parts'].append({
+                    "text": text_content
+                })
+        
         # 处理消息中的附件
         if 'attachments' in message and message['attachments']:
             attachments = message['attachments']
@@ -360,17 +428,23 @@ def chat():
                         print(f"未找到MIME类型映射，使用默认类型: {supported_type}")
                         
                     # 检查模型是否支持该类型的附件
-                    # 特殊处理视频类型：如果模型支持GEMINI_VIDEO，也视为支持VIDEO
-                    if (supported_type == AttachmentType.VIDEO and 
-                        AttachmentType.GEMINI_VIDEO in model_support_list):
-                        print("检测到视频类型，模型支持GEMINI_VIDEO，允许处理")
+                    # 特殊处理视频类型：统一处理 VIDEO 和 GEMINI_VIDEO
+                    if supported_type == AttachmentType.VIDEO:
+                        if AttachmentType.VIDEO in model_support_list or AttachmentType.GEMINI_VIDEO in model_support_list:
+                            print("检测到视频类型，模型支持视频处理")
+                            # 如果是Gemini模型，将类型转换为GEMINI_VIDEO
+                            if model_type == 'google':
+                                supported_type = AttachmentType.GEMINI_VIDEO
+                        else:
+                            print(f"模型不支持视频类型，将作为二进制文件处理")
+                            supported_type = AttachmentType.BINARY
                     elif supported_type not in model_support_list:
                         print(f"模型不支持的附件类型: {supported_type}")
                         print(f"模型支持的类型: {model_support_list}")
                         supported_type = AttachmentType.BINARY
                         
-                    # 处理视频附件
-                    if supported_type == AttachmentType.VIDEO:
+                    # 处理视频附件（包括 VIDEO 和 GEMINI_VIDEO）
+                    if supported_type in [AttachmentType.VIDEO, AttachmentType.GEMINI_VIDEO]:
                         print(f"处理视频附件: model_type={model_type}, file_ext={file_ext}, mime_type={mime_type}")
                         # 如果是Google模型，使用GEMINI_VIDEO配置
                         if model_type == 'google':
@@ -388,15 +462,23 @@ def chat():
                                 )
                             else:
                                 print(f"视频格式不受Gemini支持: {file_ext}, {mime_type}")
-                                processed_message['parts'].append({
-                                    "text": f"\n注意：该视频格式不受Gemini支持。\n支持的格式：{', '.join(ATTACHMENT_TYPES[AttachmentType.GEMINI_VIDEO]['extensions'])}"
-                                })
+                                process_binary_attachment(
+                                    attachment,
+                                    model_type,
+                                    processed_message,
+                                    AttachmentType.BINARY
+                                )
+                                if model_type == 'google':
+                                    processed_message['parts'].append({
+                                        "text": f"\n注意：该视频格式不受Gemini支持。\n支持的格式：{', '.join(ATTACHMENT_TYPES[AttachmentType.GEMINI_VIDEO]['extensions'])}"
+                                    })
                         else:
+                            # 非Google模型的视频处理
                             process_video_attachment(
                                 attachment,
                                 model_type,
                                 processed_message,
-                                supported_type,
+                                AttachmentType.VIDEO,
                                 mime_type,
                                 genai
                             )
@@ -415,7 +497,7 @@ def chat():
                 "type": "text",
                 "text": ""
             })
-        
+            
         # 如果是Google模型且没有任何内容，添加一个空文本
         if model_type == 'google' and not processed_message['parts']:
             processed_message['parts'].append({
@@ -563,12 +645,101 @@ def chat():
                 
                 print("发送给Gemini的消息内容：", last_message_parts)
                 
-                # 发送消息并获取流式响应
-                response = chat.send_message(last_message_parts, stream=True)
+                try:
+                    print("\n=== 开始发送消息到Gemini ===")
+                
+                    
+                    safety_settings = {
+                        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+                        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+                        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+                        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+                    }
+                    
+                    print("\n=== 安全设置 ===")
+                    for category, threshold in safety_settings.items():
+                        print(f"{category}: {threshold}")
+                    
+                    # 使用新的配置创建聊天实例
+                    chat = model.start_chat(
+                        history=formatted_history
+                    )
+                    
+                    try:
+                        response = chat.send_message(
+                            last_message_parts,
+                            stream=True,
+                            safety_settings=safety_settings,
+                            generation_config=genai.GenerationConfig(
+                                max_output_tokens=1,
+                                temperature=2,
+                            )
+                        )
+                        print("成功获取响应流")
+                        
+                        for chunk in response:
+                            print("\n=== 处理响应块 ===")
+                            try:
+                                # 处理安全评级
+                                safety_ratings = None
+                                if hasattr(chunk, 'candidates') and chunk.candidates:
+                                    for candidate in chunk.candidates:
+                                        if hasattr(candidate, 'safety_ratings'):
+                                            safety_ratings = candidate.safety_ratings
+                                            break
+                                elif hasattr(chunk, 'safety_ratings'):
+                                    safety_ratings = chunk.safety_ratings
 
-                for chunk in response:
-                    if chunk.text:
-                        yield f"data: {json.dumps({'content': chunk.text})}\n\n"
+                                if safety_ratings:
+                                    print("\n=== 安全评级信息 ===")
+                                    for rating in safety_ratings:
+                                        category = str(rating.category).replace('HarmCategory.', '')
+                                        probability = str(rating.probability)
+                                        blocked = getattr(rating, 'blocked', False)
+                                        
+                                        print(f"类别: {category}")
+                                        print(f"概率等级: {probability}")
+                                        print(f"是否被阻止: {blocked}")
+                                        print("---")
+                                        
+                                        # 如果内容被阻止，记录详细信息
+                                        if blocked:
+                                            print(f"警告：{category} 内容被阻止，概率等级：{probability}")
+
+                                # 检查chunk的内容
+                                if hasattr(chunk, 'text') and chunk.text:
+                                    print(f"响应文本: {chunk.text}")
+                                    yield f"data: {json.dumps({'content': chunk.text})}\n\n"
+                                else:
+                                    print("响应块没有文本内容")
+                                    if hasattr(chunk, 'finish_reason'):
+                                        print(f"完成原因: {chunk.finish_reason}")
+                                    
+                            except Exception as e:
+                                print(f"处理响应块时出错: {str(e)}")
+                                print(f"响应块内容: {dir(chunk)}")  # 打印chunk的所有属性
+                                raise
+                                
+                    except Exception as e:
+                        print(f"发送消息时出错: {str(e)}")
+                        if "safety_ratings" in str(e):
+                            print("\n=== 安全评级错误详情 ===")
+                            error_str = str(e)
+                            if "HARM_CATEGORY" in error_str:
+                                # 解析并打印详细的安全评级信息
+                                ratings_str = error_str[error_str.find("[category:"):]
+                                print(f"详细安全评级: {ratings_str}")
+                            yield f"data: {json.dumps({'error': '内容被安全系统拦截，这可能是由于内容涉及敏感话题。请尝试更委婉的表达方式。'})}\n\n"
+                        else:
+                            raise
+
+                except Exception as e:
+                    print(f"\n=== 发送消息时出错 ===")
+                    print(f"错误类型: {type(e).__name__}")
+                    print(f"错误信息: {str(e)}")
+                    print("详细错误信息:")
+                    traceback.print_exc()
+                    yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
             else:
                 yield f"data: {json.dumps({'error': '不支持的模型类型'})}\n\n"
@@ -646,54 +817,43 @@ def get_conversations():
 @login_required
 def save_conversations():
     data = request.json
-    conversations_data = data.get('conversations', [])
+    conversation_data = data.get('conversation')  # 改为单个对话
+    operation = data.get('operation', 'update')  # 添加操作类型
     
-    # 获取当前用户的所有对话并构建字典 {conv_id: conv_object}
-    current_conversations = {
-        conv.id: conv for conv in Conversation.query.filter_by(user_id=session['user_id']).all()
-    }
-    
-    # 分别处理更新和创建
-    updated_ids = set()
     try:
-        for conv_data in conversations_data:
-            conv_id = conv_data.get('id')
-            if not conv_id:
-                continue
+        if operation == 'create':
+            # 创建新对话
+            conversation = Conversation(
+                id=conversation_data['id'],
+                title=conversation_data['title'],
+                messages=conversation_data['messages'],
+                system_prompt=conversation_data.get('systemPrompt'),
+                user_id=session['user_id']
+            )
+            db.session.add(conversation)
             
-            title = conv_data.get('title', '新对话')
-            messages = conv_data.get('messages', [])
-            system_prompt = conv_data.get('systemPrompt')  # 获取系统提示词
+        elif operation == 'update':
+            # 更新现有对话
+            conversation = Conversation.query.filter_by(
+                id=conversation_data['id'], 
+                user_id=session['user_id']
+            ).first()
             
-            if conv_id in current_conversations:
-                # 更新现有对话
-                conv = current_conversations[conv_id]
-                conv.title = title
-                conv.messages = messages
-                conv.system_prompt = system_prompt  # 更新系统提示词
-                updated_ids.add(conv_id)
-            else:
-                # 创建新对话
-                new_conv = Conversation(
-                    id=conv_id,
-                    title=title,
-                    messages=messages,
-                    system_prompt=system_prompt,  # 设置系统提示词
-                    user_id=session['user_id']
-                )
-                db.session.add(new_conv)
-        
-        # 删除不存在于新数据中的旧对话
-        obsolete_ids = set(current_conversations.keys()) - updated_ids
-        if obsolete_ids:
-            Conversation.query.filter(
-                Conversation.id.in_(obsolete_ids),
-                Conversation.user_id == session['user_id']
-            ).delete(synchronize_session=False)
+            if conversation:
+                conversation.title = conversation_data['title']
+                conversation.messages = conversation_data['messages']
+                conversation.system_prompt = conversation_data.get('systemPrompt')
+            
+        elif operation == 'delete':
+            # 删除对话
+            Conversation.query.filter_by(
+                id=conversation_data['id'], 
+                user_id=session['user_id']
+            ).delete()
         
         db.session.commit()
         return jsonify({'message': '保存成功'})
-    
+        
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"保存对话失败: {str(e)}")
@@ -708,20 +868,24 @@ def delete_conversation(conversation_id):
         return jsonify({'error': '对话不存在'}), 404
         
     try:
+        # 删除相关的本地文件
+        for message in conversation.messages:
+            if 'attachments' in message and message['attachments']:
+                for attachment in message['attachments']:
+                    file_path = attachment.get('file_path')
+                    if file_path and os.path.exists(file_path):
+                        try:
+                            os.remove(file_path)
+                            print(f"已删除文件: {file_path}")
+                        except Exception as e:
+                            print(f"删除文件失败 {file_path}: {str(e)}")
+        
         db.session.delete(conversation)
         db.session.commit()
         return jsonify({'message': '删除成功'})
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
-
-@app.route('/api/conversations/<conversation_id>/switch', methods=['POST'])
-@login_required
-def switch_conversation(conversation_id):
-    conversation = Conversation.query.filter_by(id=conversation_id, user_id=session['user_id']).first()
-    if not conversation:
-        return jsonify({'error': '对话不存在'}), 404
-    return jsonify({'message': '切换成功'})
 
 # 添加获取可用模型列表的API
 @app.route('/api/models', methods=['GET'])
@@ -880,96 +1044,148 @@ def get_image():
 @login_required
 def upload_video():
     try:
-        print("开始处理视频上传请求")
+        print("=== 开始处理视频上传请求 ===")
         
         if 'video' not in request.files:
-            print("请求中没有视频文件")
-            return jsonify({'error': 'No video provided'}), 400
+            return jsonify({'error': '没有提供视频'}), 400
         
         video = request.files['video']
-        print(f"接收到的文件信息: 文件名={video.filename}, MIME类型={video.content_type}")
-        
         if video.filename == '':
-            print("没有选择文件")
-            return jsonify({'error': 'No selected file'}), 400
+            return jsonify({'error': '没有选择文件'}), 400
 
-        # 检查文件扩展名
-        file_ext = os.path.splitext(video.filename)[1].lower()
-        print(f"文件扩展名: {file_ext}")
-        if file_ext not in ATTACHMENT_TYPES[AttachmentType.VIDEO]['extensions']:
-            print(f"不支持的文件扩展名: {file_ext}")
-            print(f"支持的扩展名列表: {ATTACHMENT_TYPES[AttachmentType.VIDEO]['extensions']}")
-            return jsonify({'error': f'不支持的视频格式: {file_ext}'}), 400
-            
-        # 检查MIME类型
-        if video.content_type not in ATTACHMENT_TYPES[AttachmentType.VIDEO]['mime_types']:
-            print(f"不支持的MIME类型: {video.content_type}")
-            print(f"支持的MIME类型列表: {ATTACHMENT_TYPES[AttachmentType.VIDEO]['mime_types']}")
-            return jsonify({'error': f'不支持的视频格式: {video.content_type}'}), 400
+        # 基本验证
+        validation_result = validate_video_file(video)
+        if validation_result:
+            return validation_result
 
-        user_id = session.get('user_id')
-        if not user_id:
-            print("用户未登录")
-            return jsonify({'error': 'User not logged in'}), 401
-            
-        user = User.query.get(user_id)
+        # 获取用户信息
+        user = User.query.get(session.get('user_id'))
         if not user:
-            print("找不到用户")
-            return jsonify({'error': 'User not found'}), 404
-        
-        # 处理文件名
-        original_filename = secure_filename(video.filename)
-        if not original_filename:
-            print(f"文件名不安全: {video.filename}")
-            return jsonify({'error': 'Invalid filename'}), 400
-            
-        # 检查文件大小
-        video.seek(0, 2)  # 移动到文件末尾
-        file_size = video.tell()  # 获取文件大小
-        video.seek(0)  # 移动回文件开头
-        
-        print(f"文件大小: {file_size} 字节")
-        max_size = ATTACHMENT_TYPES[AttachmentType.VIDEO]['max_size']
-        print(f"最大允许大小: {max_size} 字节")
-        
-        if file_size > max_size:
-            print(f"文件太大: {file_size} 字节, 超过限制: {max_size} 字节")
-            return jsonify({'error': f'文件大小超过限制 ({max_size/(1024*1024)}MB)'}), 400
-            
-        # 生成新文件名
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        ext = os.path.splitext(original_filename)[1]
-        new_filename = f"{timestamp}{ext}"
-        
-        # 保存视频到用户目录
+            return jsonify({'error': '用户未找到'}), 404
+
+        # 准备文件路径
         user_email = user.email.replace('@','_').replace('.','_')
         user_folder = os.path.join(app.config['UPLOAD_FOLDER'], user_email)
         os.makedirs(user_folder, exist_ok=True)
 
-        # 确保路径是字符串类型
-        video_path = str(os.path.join(user_folder, new_filename))
-        print(f"正在保存视频到: {video_path}")
-        
-        # 保存文件
+        # 生成文件名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = secure_filename(f"{timestamp}_{video.filename}")
+        file_path = os.path.join(user_folder, filename)
+
         try:
-            video.save(video_path)
-            print(f"视频文件保存成功")
+            # 直接保存文件
+            video.save(file_path)
+            
+            return jsonify({
+                'message': '视频上传成功',
+                'file_path': file_path,
+                'mime_type': video.content_type
+            }), 200
+
         except Exception as e:
             print(f"保存文件时出错: {str(e)}")
+            if os.path.exists(file_path):
+                os.remove(file_path)
             raise
-        
-        print(f"视频上传成功: {video_path}")
-        return jsonify({
-            'message': 'Video uploaded successfully',
-            'file_path': video_path,
-            'mime_type': video.content_type
-        }), 200
 
     except Exception as e:
         print(f"视频上传失败: {str(e)}")
-        import traceback
         print(f"错误详情: {traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
+
+def validate_video_file(video):
+    """验证视频文件"""
+    # 检查文件扩展名
+    file_ext = os.path.splitext(video.filename)[1].lower()
+    if file_ext not in ATTACHMENT_TYPES[AttachmentType.VIDEO]['extensions']:
+        return jsonify({'error': f'不支持的视频格式: {file_ext}'}), 400
+        
+    # 检查MIME类型
+    if video.content_type not in ATTACHMENT_TYPES[AttachmentType.VIDEO]['mime_types']:
+        return jsonify({'error': f'不支持的视频格式: {video.content_type}'}), 400
+        
+    # 检查文件大小
+    video.seek(0, 2)
+    file_size = video.tell()
+    video.seek(0)
+    
+    max_size = ATTACHMENT_TYPES[AttachmentType.VIDEO]['max_size']
+    if file_size > max_size:
+        return jsonify({'error': f'文件大小超过限制 ({max_size/(1024*1024)}MB)'}), 400
+    
+    return None
+
+@app.route('/api/upload_to_file_api', methods=['POST'])
+@login_required
+def process_large_file():
+    try:
+        data = request.json
+        temp_path = data.get('tempPath')
+        
+        if not temp_path or not os.path.exists(temp_path):
+            return jsonify({'error': '临时文件不存在'}), 400
+            
+        try:
+            # 获取用户信息
+            user = User.query.get(session.get('user_id'))
+            if not user:
+                return jsonify({'error': 'User not found'}), 404
+
+            # 准备最终的文件路径
+            final_path = prepare_file_path(os.path.basename(temp_path), user)
+            
+            # 处理大文件（这里可以添加具体的处理逻辑）
+            process_result = process_video_file(temp_path, final_path)
+            
+            return jsonify({
+                'message': 'File processed successfully',
+                'file_path': final_path,
+                'process_result': process_result
+            }), 200
+            
+        finally:
+            # 清理临时文件
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+                
+    except Exception as e:
+        print(f"处理大文件失败: {str(e)}")
+        print(f"错误详情: {traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
+def prepare_file_path(filename, user):
+    """准备文件保存路径"""
+    # 生成安全的文件名
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    original_filename = secure_filename(filename)
+    ext = os.path.splitext(original_filename)[1]
+    new_filename = f"{timestamp}{ext}"
+    
+    # 创建用户目录
+    user_email = user.email.replace('@','_').replace('.','_')
+    user_folder = os.path.join(app.config['UPLOAD_FOLDER'], user_email)
+    os.makedirs(user_folder, exist_ok=True)
+    
+    return os.path.join(user_folder, new_filename)
+
+def process_video_file(temp_path, final_path):
+    """处理大视频文件"""
+    try:
+        # 这里可以添加视频处理逻辑
+        # 例如：压缩、转码等
+        
+        # 暂时只是移动文件
+        import shutil
+        shutil.move(temp_path, final_path)
+        
+        return {
+            'status': 'success',
+            'message': '文件处理完成'
+        }
+    except Exception as e:
+        print(f"处理视频文件失败: {str(e)}")
+        raise
 
 @app.route('/get_video')
 @login_required
@@ -1016,7 +1232,8 @@ def get_video():
 
 # 注册蓝图
 app.register_blueprint(user_profile)
-
+app.register_blueprint(user_settings)  # 注册用户设置蓝图
+app.register_blueprint(upload_status_bp, url_prefix='/api/upload-status')
 # 启动应用
 if __name__ == '__main__':
     app.run(debug=True)

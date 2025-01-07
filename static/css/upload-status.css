@@ -1,0 +1,29 @@
+/* 上传状态消息样式 */
+.status-message {
+    opacity: 0.9;
+    transition: all 0.3s ease;
+}
+
+.status-message.uploading {
+    animation: pulse 1.5s infinite;
+}
+
+.status-message.success {
+    background-color: rgba(76, 175, 80, 0.1);
+}
+
+.status-message.error {
+    background-color: rgba(244, 67, 54, 0.1);
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 0.7;
+    }
+    50% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0.7;
+    }
+} 

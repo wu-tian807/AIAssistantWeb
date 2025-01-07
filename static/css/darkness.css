@@ -1,0 +1,280 @@
+/* 暗色主题变量 */
+:root {
+    --dark-bg-primary: #1a1a1a;
+    --dark-bg-secondary: #2d2d2d;
+    --dark-text-primary: #e0e0e0;
+    --dark-text-secondary: #a0a0a0;
+    --dark-border-color: #404040;
+    --dark-hover-color: #353535;
+    --dark-active-color: #404040;
+}
+
+/* 应用暗色主题 */
+body.dark-theme {
+    background-color: var(--dark-bg-primary);
+    color: var(--dark-text-primary);
+}
+
+/* 聊天容器背景 */
+body.dark-theme .chat-container {
+    background-color: var(--dark-bg-primary);
+}
+
+/* 聊天消息区域背景 */
+body.dark-theme .chat-messages {
+    background-color: var(--dark-bg-primary);
+}
+
+/* 助手消息样式 */
+body.dark-theme .assistant-message {
+    background-color: #f1f1f1;
+    color: #2c3e50;
+}
+
+/* 助手消息中的列表项样式 */
+body.dark-theme .assistant-message .custom-list-item {
+    color: #2c3e50;
+}
+
+/* 助手消息中的强调文本样式 */
+body.dark-theme .assistant-message strong {
+    color: #1a1a1a;
+}
+
+/* 助手消息中的段落样式 */
+body.dark-theme .assistant-message p {
+    color: #2c3e50;
+}
+
+/* 侧边栏暗色样式 */
+body.dark-theme .sidebar {
+    background-color: var(--dark-bg-secondary);
+    border-right-color: var(--dark-border-color);
+}
+
+body.dark-theme #new-chat-btn {
+    background-color: #2196F3;
+    color: white;
+}
+
+body.dark-theme #new-chat-btn:hover {
+    background-color: #1976D2;
+}
+
+/* 对话列表项暗色样式 */
+body.dark-theme .conversation-item {
+    color: var(--dark-text-primary);
+}
+
+body.dark-theme .conversation-item:hover {
+    background-color: var(--dark-hover-color);
+}
+
+body.dark-theme .conversation-item.active {
+    background-color: var(--dark-active-color);
+}
+
+/* 头部区域暗色样式 */
+body.dark-theme .chat-header {
+    background-color: var(--dark-bg-secondary);
+    border-bottom-color: var(--dark-border-color);
+}
+
+body.dark-theme .header-main h1 {
+    color: var(--dark-text-primary);
+}
+
+/* 用户名和头像样式 */
+body.dark-theme .user-profile-btn .user-display-name {
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* 控制区域暗色样式 */
+body.dark-theme .model-selector {
+    background-color: var(--dark-bg-secondary);
+    border-color: var(--dark-border-color);
+}
+
+body.dark-theme .model-selector #model-select {
+    color: var(--dark-text-primary);
+    background-color: var(--dark-bg-secondary);
+}
+
+/* 系统提示词容器样式 */
+body.dark-theme .system-prompt-container {
+    background-color: var(--dark-bg-secondary);
+    border-color: var(--dark-border-color);
+}
+
+body.dark-theme .system-prompt-header {
+    background-color: var(--dark-bg-secondary);
+}
+
+body.dark-theme .system-prompt-header span {
+    color: var(--dark-text-primary);
+}
+
+body.dark-theme .system-prompt-textarea {
+    background-color: var(--dark-bg-secondary);
+    color: var(--dark-text-primary);
+    border-color: var(--dark-border-color);
+}
+
+/* 输入区域暗色样式 */
+body.dark-theme .message-input-container {
+    background-color: var(--dark-bg-secondary);
+    border-color: var(--dark-border-color);
+}
+
+body.dark-theme .chat-input-container {
+    background-color: var(--dark-bg-secondary);
+    border-top-color: var(--dark-border-color);
+}
+
+body.dark-theme #user-input {
+    background-color: var(--dark-bg-secondary);
+    color: var(--dark-text-primary);
+    border-color: var(--dark-border-color);
+}
+
+/* 设置模态框暗色样式 */
+body.dark-theme .settings-modal .settings-container {
+    background-color: var(--dark-bg-secondary);
+}
+
+body.dark-theme .settings-sidebar {
+    background-color: var(--dark-bg-primary);
+    border-right-color: var(--dark-border-color);
+}
+
+body.dark-theme .settings-content {
+    background-color: var(--dark-bg-secondary);
+}
+
+body.dark-theme .settings-menu-item {
+    color: var(--dark-text-primary);
+}
+
+body.dark-theme .settings-menu-item:hover {
+    background-color: var(--dark-hover-color);
+}
+
+body.dark-theme .settings-menu-item.active {
+    background-color: var(--dark-active-color);
+    color: #2196F3;
+}
+
+body.dark-theme .settings-section h2 {
+    color: var(--dark-text-primary);
+    border-bottom: 1px solid var(--dark-border-color);
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+body.dark-theme .setting-item {
+    border-bottom-color: var(--dark-border-color);
+    padding: 20px;
+    margin: 0 -20px;
+    transition: background-color 0.2s ease;
+}
+
+body.dark-theme .setting-item:hover {
+    background-color: var(--dark-hover-color);
+}
+
+body.dark-theme .setting-label > div:first-child {
+    color: var(--dark-text-primary);
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+body.dark-theme .setting-description {
+    color: var(--dark-text-secondary);
+    font-size: 0.9em;
+}
+
+/* 开关按钮暗色样式 */
+body.dark-theme .switch .slider {
+    background-color: var(--dark-border-color);
+}
+
+body.dark-theme .switch input:checked + .slider {
+    background-color: #2196F3;
+}
+
+/* 滚动条样式 */
+body.dark-theme .settings-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+body.dark-theme .settings-content::-webkit-scrollbar-track {
+    background: var(--dark-bg-secondary);
+}
+
+body.dark-theme .settings-content::-webkit-scrollbar-thumb {
+    background: var(--dark-border-color);
+    border-radius: 4px;
+}
+
+body.dark-theme .settings-content::-webkit-scrollbar-thumb:hover {
+    background: var(--dark-text-secondary);
+}
+
+/* 用户下拉菜单暗色样式 */
+body.dark-theme .profile-dropdown {
+    background-color: var(--dark-bg-secondary);
+    border-color: var(--dark-border-color);
+}
+
+body.dark-theme .dropdown-item {
+    color: var(--dark-text-primary);
+}
+
+body.dark-theme .dropdown-item:hover {
+    background-color: var(--dark-hover-color);
+}
+
+/* 上传按钮暗色样式 */
+body.dark-theme .upload-button {
+    color: var(--dark-text-secondary);
+}
+
+body.dark-theme .upload-button:hover {
+    color: var(--dark-text-primary);
+}
+
+/* 附件预览暗色样式 */
+body.dark-theme .attachment-preview {
+    background-color: var(--dark-bg-secondary);
+    border-color: var(--dark-border-color);
+}
+
+/* 滚动条暗色样式 */
+body.dark-theme ::-webkit-scrollbar-track {
+    background: var(--dark-bg-primary);
+}
+
+body.dark-theme ::-webkit-scrollbar-thumb {
+    background: var(--dark-border-color);
+}
+
+body.dark-theme ::-webkit-scrollbar-thumb:hover {
+    background: var(--dark-text-secondary);
+}
+
+/* 用户消息保持原有样式 */
+body.dark-theme .user-message {
+    background-color: #007AFF;
+    color: white;
+}
+
+/* 代码块保持原有样式 */
+body.dark-theme .code-block-wrapper,
+body.dark-theme .code-block-header,
+body.dark-theme pre,
+body.dark-theme code {
+    /* 保持代码块的原有样式 */
+    background-color: inherit;
+    color: inherit;
+} 
