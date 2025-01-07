@@ -13,14 +13,74 @@ export function initMarkdownit() {
                 <pre><code class="language-${lang || 'plaintext'}">${md.utils.escapeHtml(str)}</code></pre>
             </div>`;
         }
-    })
+    });
+
+    // 统一列表渲染规则
+    const customListRender = (tokens, idx, options, env, type) => {
+        return `<${type} class="custom-list">`;
+    };
+
+    md.renderer.rules.bullet_list_open = function(tokens, idx, options, env) {
+        return customListRender(tokens, idx, options, env, 'ul');
+    };
+
+    md.renderer.rules.ordered_list_open = function(tokens, idx, options, env) {
+        return customListRender(tokens, idx, options, env, 'ol');
+    };
+
+    // 重写列表项渲染规则
+    md.renderer.rules.list_item_open = function(tokens, idx, options, env) {
+        return '<li class="custom-list-item">';
+    };
+
+    md.renderer.rules.paragraph_open = function(tokens, idx, options, env) {
+        // 检查是否在列表项内部
+        let isInListItem = false;
+        for (let i = idx; i >= 0; i--) {
+            if (tokens[i].type === 'list_item_open') {
+                isInListItem = true;
+                break;
+            }
+            if (tokens[i].type === 'list_item_close') {
+                break;
+            }
+        }
+        
+        // 如果在列表项内，使用span而不是p
+        if (isInListItem) {
+            return '<span class="list-item-content">';
+        }
+        return '<p>';
+    };
+
+    md.renderer.rules.paragraph_close = function(tokens, idx, options, env) {
+        // 检查是否在列表项内部
+        let isInListItem = false;
+        for (let i = idx; i >= 0; i--) {
+            if (tokens[i].type === 'list_item_open') {
+                isInListItem = true;
+                break;
+            }
+            if (tokens[i].type === 'list_item_close') {
+                break;
+            }
+        }
+        
+        // 如果在列表项内，关闭span而不是p
+        if (isInListItem) {
+            return '</span>';
+        }
+        return '</p>';
+    };
+
     // 添加 LaTeX 数学公式支持
-    .use(window.texmath, {
+    md.use(window.texmath, {
         engine: katex,
         delimiters: 'dollars',
         katexOptions: { macros: { "\\RR": "\\mathbb{R}" } }
     });
-    return md
+
+    return md;
 }
 
 // 应用代码高亮的函数
@@ -31,12 +91,20 @@ export function applyCodeHighlight(container) {
             .find(className => className.startsWith('language-'));
         const lang = langClass ? langClass.replace('language-', '') : '';
         
-        // 如果指定了语言，设置到 hljs 的类名中
+        // 保持原有的语言类名
         if (lang && lang !== 'plaintext') {
             block.className = `hljs language-${lang}`;
+        } else {
+            block.className = 'hljs';
         }
         
         // 应用高亮
-        hljs.highlightElement(block);
+        try {
+            hljs.highlightElement(block);
+        } catch (e) {
+            console.warn('Code highlighting failed:', e);
+            // 如果高亮失败，至少确保基本样式
+            block.className = 'hljs';
+        }
     });
 }

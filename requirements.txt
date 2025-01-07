@@ -19,3 +19,5 @@ flake8==6.1.0
 Image == 1.5.33
 
 redis == 5.2.1
+
+Flask-Migrate == 4.0.7

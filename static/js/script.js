@@ -6,6 +6,7 @@ import { imageUploader } from './utils/attachments/uploader/ImageUploader.js';
 import { showToast, confirmDialog,showError } from './utils/toast.js';
 import {IconRenderer} from './iconRenderer.js';
 import { getLastAssistantModel,updateModelSelect } from './utils/model_selector/modelSelect.js';
+import { initializeUserProfile } from './user_profiles/userDropdownHandler.js';
 const md = initMarkdownit();
 // 存储聊天消息历史
 let messages = [];
@@ -248,6 +249,48 @@ function shouldAutoScroll(container) {
 //     return container;
 // }
 
+// 在文件开头定义函数
+function createRegenerateButton(messageIndex, messageActions, isError = false) {
+    const regenerateBtn = document.createElement('button');
+    regenerateBtn.className = 'regenerate-btn';
+    regenerateBtn.innerHTML = '🔄 重新生成';
+    
+    // 根据是否是错误消息选择不同的重新生成函数
+    regenerateBtn.onclick = isError ? 
+        () => regenerateErrorMessage(messageIndex) : 
+        () => regenerateMessage(messageIndex);
+    
+    // 控制按钮显示状态的函数
+    const updateButtonVisibility = () => {
+        // 检查是否正在生成（currentReader存在）或发送按钮处于停止状态
+        const isGenerating = currentReader || sendButton.classList.contains('stop');
+        if (isGenerating) {
+            regenerateBtn.style.visibility = 'hidden';
+            regenerateBtn.style.opacity = '0';
+            regenerateBtn.style.pointerEvents = 'none';
+        } else {
+            regenerateBtn.style.visibility = 'visible';
+            regenerateBtn.style.opacity = '1';
+            regenerateBtn.style.pointerEvents = 'auto';
+        }
+    };
+    
+    // 初始状态设置
+    updateButtonVisibility();
+    
+    // 定期检查状态
+    const visibilityInterval = setInterval(() => {
+        updateButtonVisibility();
+        // 如果按钮已被移除，清除定时器
+        if (!regenerateBtn.isConnected) {
+            clearInterval(visibilityInterval);
+        }
+    }, 100);
+    
+    messageActions.appendChild(regenerateBtn);
+    return regenerateBtn;
+}
+
 // 修改后的 appendMessage 函数
 function appendMessage(content, isUser = false, messageIndex = null, attachments = [], modelInfo = null,error = false) {
     const messageDiv = document.createElement('div');
@@ -364,18 +407,7 @@ function appendMessage(content, isUser = false, messageIndex = null, attachments
         applyCodeHighlight(messageContent);
         
         // 为助手消息添加重新生成按钮
-        const regenerateBtn = document.createElement('button');
-        regenerateBtn.className = 'regenerate-btn';
-        regenerateBtn.innerHTML = '🔄 重新生成';
-        
-        // 根据是否是错误消息选择不同的重新生成函数
-        if (error) {
-            regenerateBtn.onclick = () => regenerateErrorMessage(messageIndex);
-        } else {
-            regenerateBtn.onclick = () => regenerateMessage(messageIndex);
-        }
-        
-        messageActions.appendChild(regenerateBtn);
+        createRegenerateButton(messageIndex, messageActions, error);
         
         // 如果存在多个版本，添加版本控制
         const message = currentConversationId && conversations.find(c => c.id === currentConversationId)?.messages[messageIndex];
@@ -649,8 +681,10 @@ async function switchConversation(conversationId) {
             conversation.systemPrompt : default_system_prompt;
         
         clearChatMessages();
+        // 直接使用对话中的所有消息，而不是重新构建
         messages = [
-            {"role": "system", "content": conversation.systemPrompt || default_system_prompt}
+            {"role": "system", "content": conversation.systemPrompt || default_system_prompt},
+            ...conversation.messages
         ];
 
         // 找到最后一条助手消息的模型信息
@@ -665,7 +699,6 @@ async function switchConversation(conversationId) {
 
         // 渲染所有消息
         conversation.messages.forEach((msg, index) => {
-            messages.push(msg);
             if (msg.role === 'assistant' && msg.versions && msg.versions[msg.currentVersion]) {
                 const currentVersion = msg.versions[msg.currentVersion];
                 appendMessage(msg.content, false, index, msg.attachments, currentVersion.modelIcon);
@@ -884,7 +917,12 @@ async function sendMessage() {
     
     // 添加用户消息到界面
     appendMessage(content, true, userMessageIndex, attachments,error);
-    messages.push(userMessage);
+    
+    // 更新 messages 数组，确保包含系统提示词和所有历史消息
+    messages = [
+        {"role": "system", "content": currentConversation.systemPrompt || default_system_prompt},
+        ...currentConversation.messages
+    ];
     
     // 如果是第一条消息，生成对话标题
     if (currentConversation.messages.length === 1) {
@@ -922,20 +960,24 @@ async function sendMessage() {
     
     const messageContent = document.createElement('div');
     messageContent.className = 'message-content';
+    messageContent.innerHTML = ''; // 初始化为空内容
     
     const messageActions = document.createElement('div');
     messageActions.className = 'message-actions';
     
-    const regenerateBtn = document.createElement('button');
-    regenerateBtn.className = 'regenerate-btn';
-    regenerateBtn.innerHTML = '🔄 重新生成';
-    regenerateBtn.onclick = () => regenerateMessage(messageIndex);
+    // 添加重新生成按钮
+    createRegenerateButton(messageIndex, messageActions, false);
     
-    messageActions.appendChild(regenerateBtn);
     messageWrapper.appendChild(messageContent);
     messageWrapper.appendChild(messageActions);
     messageDiv.appendChild(messageWrapper);
-    chatMessages.appendChild(messageDiv);
+    
+    // 插入到正确的位置
+    if (messageIndex < chatMessages.children.length) {
+        chatMessages.insertBefore(messageDiv, chatMessages.children[messageIndex]);
+    } else {
+        chatMessages.appendChild(messageDiv);
+    }
     
     try {
         // 发送请求到服务器
@@ -953,15 +995,22 @@ async function sendMessage() {
 
         if (!response.ok) {
             error = true;
-            // 确保先完全移除旧的消息
-            await new Promise(resolve => {
-                messageDiv.addEventListener('transitionend', () => {
-                    messageDiv.remove();
-                    resolve();
-                }, { once: true });
-                messageDiv.style.opacity = '0';
-            });
-            appendMessage('发生错误，请重试\n'+response.statusText, false, messageIndex, attachments, modelIcon, error);
+            // 清理状态
+            if (currentReader) {
+                await currentReader.cancel();
+                currentReader = null;
+            }
+            userInput.disabled = false;
+            sendButton.textContent = '发送';
+            sendButton.classList.remove('stop');
+            sendButton.disabled = false;
+            
+            messageDiv.classList.add('error-message');
+            messageContent.innerHTML = md.render('发生错误，请重试\n'+response.statusText);
+            
+            // 重新创建重新生成按钮
+            messageActions.innerHTML = '';
+            createRegenerateButton(messageIndex, messageActions, true);
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
@@ -985,15 +1034,22 @@ async function sendMessage() {
                             const data = JSON.parse(line.slice(6));
                             if (data.error) {
                                 error = true;
-                                // 确保先完全移除旧的消息
-                                await new Promise(resolve => {
-                                    messageDiv.addEventListener('transitionend', () => {
-                                        messageDiv.remove();
-                                        resolve();
-                                    }, { once: true });
-                                    messageDiv.style.opacity = '0';
-                                });
-                                appendMessage('发生错误，请重试\n'+data.error, false, messageIndex, attachments, modelIcon, error);
+                                // 清理状态
+                                if (currentReader) {
+                                    await currentReader.cancel();
+                                    currentReader = null;
+                                }
+                                userInput.disabled = false;
+                                sendButton.textContent = '发送';
+                                sendButton.classList.remove('stop');
+                                sendButton.disabled = false;
+                                
+                                messageDiv.classList.add('error-message');
+                                messageContent.innerHTML = md.render('发生错误，请重试\n'+data.error);
+                                
+                                // 重新创建重新生成按钮
+                                messageActions.innerHTML = '';
+                                createRegenerateButton(messageIndex, messageActions, true);
                                 throw new Error(data.error);
                             }
                             if (data.content) {
@@ -1007,16 +1063,22 @@ async function sendMessage() {
                             }
                         } catch (e) {
                             error = true;
-                            // 确保先完全移除旧的消息
-                            await new Promise(resolve => {
-                                messageDiv.addEventListener('transitionend', () => {
-                                    messageDiv.remove();
-                                    resolve();
-                                }, { once: true });
-                                messageDiv.style.opacity = '0';
-                            });
-                            appendMessage('发生错误，请重试\n'+e.message, false, messageIndex, attachments, modelIcon, error);
-                            console.error('Error parsing SSE message:', error);
+                            // 清理状态
+                            if (currentReader) {
+                                await currentReader.cancel();
+                                currentReader = null;
+                            }
+                            userInput.disabled = false;
+                            sendButton.textContent = '发送';
+                            sendButton.classList.remove('stop');
+                            sendButton.disabled = false;
+                            
+                            messageDiv.classList.add('error-message');
+                            messageContent.innerHTML = md.render('发生错误，请重试\n'+e.message);
+                            
+                            // 重新创建重新生成按钮
+                            messageActions.innerHTML = '';
+                            createRegenerateButton(messageIndex, messageActions, true);
                             break;
                         }
                     }
@@ -1027,15 +1089,22 @@ async function sendMessage() {
                     break;
                 }
                 error = true;
-                // 确保先完全移除旧的消息
-                await new Promise(resolve => {
-                    messageDiv.addEventListener('transitionend', () => {
-                        messageDiv.remove();
-                        resolve();
-                    }, { once: true });
-                    messageDiv.style.opacity = '0';
-                });
-                appendMessage('发生错误，请重试\n'+e.message, false, messageIndex, attachments, modelIcon, error);
+                // 清理状态
+                if (currentReader) {
+                    await currentReader.cancel();
+                    currentReader = null;
+                }
+                userInput.disabled = false;
+                sendButton.textContent = '发送';
+                sendButton.classList.remove('stop');
+                sendButton.disabled = false;
+                
+                messageDiv.classList.add('error-message');
+                messageContent.innerHTML = md.render('发生错误，请重试\n'+e.message);
+                
+                // 重新创建重新生成按钮
+                messageActions.innerHTML = '';
+                createRegenerateButton(messageIndex, messageActions, true);
                 throw error;
             }
         }
@@ -1061,30 +1130,34 @@ async function sendMessage() {
     } catch (e) {
         console.error('Error:', e);
         error = true;
-        // 确保先完全移除旧的消息
-        await new Promise(resolve => {
-            messageDiv.addEventListener('transitionend', () => {
-                messageDiv.remove();
-                resolve();
-            }, { once: true });
-            messageDiv.style.opacity = '0';
-        });
-        appendMessage('发生错误，请重试\n'+e.message, false, messageIndex, attachments, modelIcon, error);
+        // 清理状态
+        if (currentReader) {
+            await currentReader.cancel();
+            currentReader = null;
+        }
+        userInput.disabled = false;
+        sendButton.textContent = '发送';
+        sendButton.classList.remove('stop');
+        sendButton.disabled = false;
+        userInput.focus();
     } finally {
         if (currentReader) {
             try {
                 await currentReader.cancel();
             } catch (e) {
                 error = true;
-                // 确保先完全移除旧的消息
-                await new Promise(resolve => {
-                    messageDiv.addEventListener('transitionend', () => {
-                        messageDiv.remove();
-                        resolve();
-                    }, { once: true });
-                    messageDiv.style.opacity = '0';
-                });
-                appendMessage('发生错误，请重试\n'+e.message, false, messageIndex, attachments, modelIcon, error);
+                // 清理状态
+                if (currentReader) {
+                    await currentReader.cancel();
+                    currentReader = null;
+                }
+                userInput.disabled = false;
+                sendButton.textContent = '发送';
+                sendButton.classList.remove('stop');
+                sendButton.disabled = false;
+                
+                messageDiv.classList.add('error-message');
+                messageContent.innerHTML = md.render('发生错误，请重试\n'+e.message);
                 console.log('Error cancelling stream:', e);
             }
             currentReader = null;
@@ -1224,6 +1297,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('new-chat-btn').addEventListener('click', createNewConversation);
     initializeDragAndDrop();
     initializePasteHandler();
+    initializeUserProfile(); // 添加用户配置初始化
     
     // 添加系统提示词展开/收起功能
     const systemPromptHeader = document.getElementById('system-prompt-header');
@@ -1364,6 +1438,7 @@ async function regenerateMessage(messageIndex) {
         
         // 获取当前消息元素
         const messageDiv = chatMessages.children[messageIndex];
+        messageDiv.classList.remove('error-message');
         const messageContent = messageDiv.querySelector('.message-content');
 
                 
@@ -2222,16 +2297,14 @@ async function regenerateErrorMessage(messageIndex) {
         
         const messageContent = document.createElement('div');
         messageContent.className = 'message-content';
+        messageContent.innerHTML = ''; // 初始化为空内容
         
         const messageActions = document.createElement('div');
         messageActions.className = 'message-actions';
         
-        const regenerateBtn = document.createElement('button');
-        regenerateBtn.className = 'regenerate-btn';
-        regenerateBtn.innerHTML = '🔄 重新生成';
-        regenerateBtn.onclick = () => regenerateMessage(messageIndex);
+        // 添加重新生成按钮
+        createRegenerateButton(messageIndex, messageActions, false);
         
-        messageActions.appendChild(regenerateBtn);
         messageWrapper.appendChild(messageContent);
         messageWrapper.appendChild(messageActions);
         messageDiv.appendChild(messageWrapper);
@@ -2256,8 +2329,22 @@ async function regenerateErrorMessage(messageIndex) {
         });
 
         if (!response.ok) {
+            // 清理状态
+            if (currentReader) {
+                await currentReader.cancel();
+                currentReader = null;
+            }
+            userInput.disabled = false;
+            sendButton.textContent = '发送';
+            sendButton.classList.remove('stop');
+            sendButton.disabled = false;
+            
             messageDiv.classList.add('error-message');
             messageContent.innerHTML = md.render('发生错误，请重试\n'+response.status);
+            
+            // 重新创建重新生成按钮
+            messageActions.innerHTML = '';
+            createRegenerateButton(messageIndex, messageActions, true);
             return;
         }
 
@@ -2280,8 +2367,23 @@ async function regenerateErrorMessage(messageIndex) {
                         try {
                             const data = JSON.parse(line.slice(6));
                             if (data.error) {
+                                // 清理状态
+                                if (currentReader) {
+                                    await currentReader.cancel();
+                                    currentReader = null;
+                                }
+                                userInput.disabled = false;
+                                sendButton.textContent = '发送';
+                                sendButton.classList.remove('stop');
+                                sendButton.disabled = false;
+                                
                                 messageDiv.classList.add('error-message');
                                 messageContent.innerHTML = md.render('发生错误，请重试\n'+data.error);
+                                
+                                // 重新创建重新生成按钮
+                                messageActions.innerHTML = '';
+                                createRegenerateButton(messageIndex, messageActions, true);
+                                throw new Error(data.error);
                             } else if (data.content) {
                                 assistantMessage += data.content;
                                 messageContent.innerHTML = md.render(assistantMessage);
@@ -2291,19 +2393,62 @@ async function regenerateErrorMessage(messageIndex) {
                                 }
                             }
                         } catch (e) {
+                            // 清理状态
+                            if (currentReader) {
+                                await currentReader.cancel();
+                                currentReader = null;
+                            }
+                            userInput.disabled = false;
+                            sendButton.textContent = '发送';
+                            sendButton.classList.remove('stop');
+                            sendButton.disabled = false;
+                            
                             messageDiv.classList.add('error-message');
                             messageContent.innerHTML = md.render('发生错误，请重试\n'+e.message);
+                            
+                            // 重新创建重新生成按钮
+                            messageActions.innerHTML = '';
+                            createRegenerateButton(messageIndex, messageActions, true);
+                            break;
                         }
                     }
                 }
             } catch (error) {
                 if (error.name === 'AbortError' || error.name === 'CancelError') {
+                    // 清理状态
+                    if (currentReader) {
+                        await currentReader.cancel();
+                        currentReader = null;
+                    }
+                    userInput.disabled = false;
+                    sendButton.textContent = '发送';
+                    sendButton.classList.remove('stop');
+                    sendButton.disabled = false;
+                    
                     messageDiv.classList.add('error-message');
                     messageContent.innerHTML = md.render('生成被中断');
+                    
+                    // 重新创建重新生成按钮
+                    messageActions.innerHTML = '';
+                    createRegenerateButton(messageIndex, messageActions, true);
                     break;
                 }
+                // 清理状态
+                if (currentReader) {
+                    await currentReader.cancel();
+                    currentReader = null;
+                }
+                userInput.disabled = false;
+                sendButton.textContent = '发送';
+                sendButton.classList.remove('stop');
+                sendButton.disabled = false;
+                
                 messageDiv.classList.add('error-message');
                 messageContent.innerHTML = md.render('发生错误，请重试\n'+error.message);
+                
+                // 重新创建重新生成按钮
+                messageActions.innerHTML = '';
+                createRegenerateButton(messageIndex, messageActions, true);
                 throw error;
             }
         }
@@ -2403,4 +2548,6 @@ async function regenerateErrorMessage(messageIndex) {
         sendButton.disabled = false;
     }
 }
+
+
 

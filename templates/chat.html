@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <!-- 首先定义全局变量 -->
     <script>
         const STATIC_URL = "{{ url_for('static', filename='') }}";
@@ -28,6 +29,7 @@
     <!-- 添加highlight.js样式 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css">
     <!-- 添加样式 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/profile-styles.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chat-header.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chat-icon.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/icons.css') }}">
@@ -86,8 +88,27 @@
                         </div>
                     </div>
 
-                    <!-- 右侧：退出按钮 -->
-                    <button id="logoutBtn" class="logout-btn">退出登录</button>
+                    <!-- 右侧：用户配置按钮 -->
+                    <div class="user-profile-container">
+                        <button class="user-profile-btn">
+                            <img src="{{ url_for('static', filename='icons/users/default_profile.svg') }}" alt="用户头像">
+                            <span class="user-display-name">{{ current_user.get_display_name() if current_user else '' }}</span>
+                        </button>
+                        <div class="profile-dropdown">
+                            <div class="dropdown-item" data-action="profile">
+                                <i class="fas fa-user"></i>
+                                <span>个人资料</span>
+                            </div>
+                            <div class="dropdown-item" data-action="settings">
+                                <i class="fas fa-cog"></i>
+                                <span>设置</span>
+                            </div>
+                            <div class="dropdown-item" data-action="logout">
+                                <i class="fas fa-sign-out-alt"></i>
+                                <span>退出登录</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div id="chat-messages" class="chat-messages"></div>
@@ -110,13 +131,7 @@
     <script type="module" src="{{ url_for('static', filename='js/script.js') }}"></script>
     <script type="module" src="{{ url_for('static', filename='js/inputRenderer.js') }}"></script>
     <script>
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            if (confirm('确定要退出登录吗？')) {
-                window.location.href = '/logout';
-            }
-        });
+        // 移除原有的logout事件监听
     </script>
-    <!-- 添加图标渲染器，特别的需要在fetchModel这个函数下面引用 -->
-    <script type="module" src="{{ url_for('static', filename='js/iconRenderer.js') }}"></script>
 </body>
 </html> 
