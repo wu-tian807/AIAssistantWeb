@@ -35,6 +35,7 @@ ENV/
 
 # 上传文件
 uploads/
+**/uploads/
 
 # IDE
 .idea/
@@ -42,6 +43,7 @@ uploads/
 *.swp
 *.swo
 .DS_Store
+Thumbs.db
 
 # 日志
 *.log
