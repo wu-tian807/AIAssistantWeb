@@ -144,7 +144,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.8);
+    background: rgba(0, 0, 0, 0.9);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -153,23 +153,46 @@
     animation: fadeIn 0.3s forwards;
 }
 
+.modal-image-container {
+    position: relative;
+    max-width: 90vw;
+    max-height: 90vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .modal-image {
-    max-width: 90%;
+    max-width: 100%;
     max-height: 90vh;
     object-fit: contain;
     border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
 }
 
 .modal-close-btn {
-    position: absolute;
+    position: fixed;
     top: 20px;
     right: 20px;
-    background: none;
+    background: rgba(0, 0, 0, 0.5);
     border: none;
     color: white;
     font-size: 24px;
     cursor: pointer;
     padding: 10px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.modal-close-btn:hover {
+    background: rgba(0, 0, 0, 0.7);
 }
 
 @keyframes fadeIn {
@@ -192,7 +215,13 @@
     to {
         opacity: 0;
     }
-} 
+}
+
+/* 防止滚动穿透 */
+body.modal-open {
+    overflow: hidden;
+    padding-right: 15px; /* 防止滚动条消失导致页面抖动 */
+}
 
 /* 消息附件外层容器样式 */
 .message-outer-container {
@@ -210,14 +239,14 @@
     overflow-x: auto;
     gap: 10px;
     padding: 8px;
-    background-color: #f8f9fa;
+    background-color: rgba(0, 0, 0, 0.03);
     border-radius: 8px;
     scrollbar-width: thin;
     scrollbar-color: #ccc transparent;
     max-width: 600px;
     width: fit-content;
     min-width: 216px;
-    margin: 0;
+    margin: 10px 0;
     border: 1px solid #e9ecef;
     align-self: flex-end;
 }
@@ -245,6 +274,22 @@
     background: white;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.message-attachments-container img {
+    max-width: 200px;
+    max-height: 200px;
+    border-radius: 4px;
+    object-fit: cover;
+}
+
+.message-attachments-container video {
+    max-width: 300px;
+    max-height: 300px;
+    border-radius: 4px;
 }
 
 .message-attachments-container .image-container {
@@ -283,14 +328,72 @@
     text-overflow: ellipsis;
 }
 
-/* 调整消息样式以匹配附件容器 */
+.attachment-error {
+    color: #ff4444;
+    padding: 8px;
+    background-color: #ffeeee;
+    border-radius: 4px;
+    font-size: 14px;
+}
 
-/* 用户消息的外层容器特殊处理 */
+/* 确保附件预览在消息内容下方正确显示 */
+.message {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.message-wrapper {
+    flex: 1;
+    min-width: 0;
+}
+
+/* 优化预览框中的图片和视频布局 */
+.preview-item {
+    position: relative;
+    margin: 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    overflow: hidden;
+    background-color: #f8f9fa;
+}
+
+.preview-item img,
+.preview-item video {
+    max-width: 150px;
+    max-height: 150px;
+    object-fit: cover;
+}
+
+.preview-item .delete-button {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: background-color 0.2s;
+}
+
+.preview-item .delete-button:hover {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+/* 调整消息样式以匹配附件容器 */
 .message-outer-container .user-message {
     align-self: flex-end;
 }
 
-/* AI消息的外层容器特殊处理 */
 .message-outer-container .assistant-message {
     align-self: flex-start;
 }

@@ -3,6 +3,12 @@
  * @param {string} src 图片源地址
  */
 export function createImageModal(src) {
+    // 防止重复创建
+    const existingModal = document.querySelector('.image-modal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
     const modal = document.createElement('div');
     modal.className = 'image-modal';
     
@@ -15,28 +21,43 @@ export function createImageModal(src) {
     const imageContainer = document.createElement('div');
     imageContainer.className = 'modal-image-container';
     
+    // 创建加载指示器
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.className = 'loading-indicator';
+    loadingIndicator.innerHTML = '加载中...';
+    imageContainer.appendChild(loadingIndicator);
+    
     // 创建图片元素
     const modalImg = document.createElement('img');
-    modalImg.src = src;
     modalImg.className = 'modal-image';
+    modalImg.alt = '预览图片';
     
-    // 添加图片加载动画
-    modalImg.style.opacity = '0';
+    // 处理图片加载
     modalImg.onload = () => {
-        modalImg.style.transition = 'opacity 0.3s ease-in-out';
+        loadingIndicator.remove();
         modalImg.style.opacity = '1';
     };
+    
+    modalImg.onerror = () => {
+        loadingIndicator.innerHTML = '图片加载失败';
+        loadingIndicator.style.color = '#ff4444';
+    };
+    
+    // 设置图片源
+    modalImg.src = src;
     
     // 组装模态框
     imageContainer.appendChild(modalImg);
     modal.appendChild(closeBtn);
     modal.appendChild(imageContainer);
-    document.body.appendChild(modal);
     
     // 处理关闭事件
     const closeModal = () => {
         modal.classList.add('modal-closing');
-        setTimeout(() => modal.remove(), 300); // 等待动画完成后移除
+        document.body.classList.remove('modal-open');
+        setTimeout(() => {
+            modal.remove();
+        }, 300);
     };
     
     // 点击关闭按钮关闭
@@ -62,8 +83,13 @@ export function createImageModal(src) {
     document.addEventListener('keydown', handleKeyDown);
     
     // 防止滚动穿透
-    document.body.style.overflow = 'hidden';
-    modal.addEventListener('remove', () => {
-        document.body.style.overflow = '';
-    });
+    document.body.classList.add('modal-open');
+    
+    // 添加到页面
+    document.body.appendChild(modal);
+    
+    // 自动聚焦到关闭按钮，方便键盘操作
+    closeBtn.focus();
+    
+    return modal;
 }

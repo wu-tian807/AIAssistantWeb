@@ -269,12 +269,21 @@ body.dark-theme .user-message {
     color: white;
 }
 
-/* 代码块保持原有样式 */
-body.dark-theme .code-block-wrapper,
-body.dark-theme .code-block-header,
-body.dark-theme pre,
-body.dark-theme code {
-    /* 保持代码块的原有样式 */
-    background-color: inherit;
-    color: inherit;
-} 
+/* 模型选择框选项组和选项的暗色样式 */
+body.dark-theme .model-selector #model-select optgroup {
+    background-color: var(--dark-bg-secondary);
+    color: var(--dark-text-primary);
+}
+
+body.dark-theme .model-selector #model-select option {
+    background-color: var(--dark-bg-secondary);
+    color: var(--dark-text-primary);
+}
+
+body.dark-theme .model-selector #model-select option:hover {
+    background-color: var(--dark-hover-color);
+}
+
+body.dark-theme .model-selector #model-select option:checked {
+    background-color: var(--dark-active-color);
+}

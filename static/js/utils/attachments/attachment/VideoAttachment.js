@@ -1,17 +1,17 @@
 import { AttachmentType } from '../types.js';
 import { VideoModal } from '../modal/VideoModal.js';
-import { videoUploader } from '../uploader/VideoUploader.js';
+import { showToast } from '../../toast.js';
 
 export class VideoAttachment {
     constructor(options = {}) {
         this.type = AttachmentType.VIDEO;
-        this.fileName = options.fileName || '';
-        this.mimeType = options.mimeType || 'video/mp4';
-        this.base64 = options.base64 || null;
-        this.filePath = options.filePath || null;
-        this.thumbnail = options.thumbnail || null;
-        this.duration = options.duration || 0;
         this.file = options.file || null;
+        this.fileName = options.fileName || '';
+        this.mime_type = options.mime_type || 'video/mp4';
+        this.filePath = options.filePath || null;
+        this.thumbnail_base64_id = options.thumbnail_base64_id || null;
+        this.duration = options.duration || 0;
+        this.previewElement = null;
     }
 
     /**
@@ -20,31 +20,18 @@ export class VideoAttachment {
      * @returns {Promise<VideoAttachment>}
      */
     static async fromFile(file) {
-        return new Promise((resolve, reject) => {
-            try {
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    const base64 = e.target.result.split(',')[1];
-                    const attachment = new VideoAttachment({
-                        fileName: file.name,
-                        mimeType: file.type,
-                        base64: base64,
-                        file: file
-                    });
-                    
-                    try {
-                        // 上传视频文件
-                        await videoUploader.uploadVideo(attachment);
-                        resolve(attachment);
-                    } catch (error) {
-                        reject(error);
-                    }
-                };
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            } catch (error) {
-                reject(error);
-            }
+        if (!file) {
+            throw new Error('没有提供文件');
+        }
+
+        if (!file.type.startsWith('video/')) {
+            throw new Error('不支持的视频格式');
+        }
+
+        return new VideoAttachment({
+            file: file,
+            fileName: file.name,
+            mime_type: file.type
         });
     }
 
@@ -54,9 +41,41 @@ export class VideoAttachment {
      */
     async generateThumbnail() {
         try {
-            const { thumbnail, duration } = await VideoModal.generateThumbnail(this.getUrl());
-            this.thumbnail = thumbnail;
+            if (!this.file && !this.filePath) {
+                throw new Error('没有可用的视频源');
+            }
+
+            let videoUrl;
+            if (this.file) {
+                videoUrl = URL.createObjectURL(this.file);
+            } else if (this.filePath) {
+                videoUrl = `/get_video?path=${encodeURIComponent(this.filePath)}`;
+            }
+
+            const { thumbnail, duration } = await VideoModal.generateThumbnail(videoUrl);
+            
+            // 保存缩略图到服务器
+            const response = await fetch('/api/save_thumbnail', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    thumbnail: thumbnail.split(',')[1]
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('保存缩略图失败');
+            }
+            
+            const data = await response.json();
+            this.thumbnail_base64_id = data.base64_id;
             this.duration = duration;
+
+            if (this.file) {
+                URL.revokeObjectURL(videoUrl);
+            }
         } catch (error) {
             console.error('生成视频缩略图失败:', error);
             throw error;
@@ -64,127 +83,177 @@ export class VideoAttachment {
     }
 
     /**
-     * 获取视频URL
-     * @returns {string}
+     * 更新附件信息
+     * @param {Object} data 更新数据
      */
-    getUrl() {
-        if (this.base64) {
-            return `data:${this.mimeType};base64,${this.base64}`;
-        } else if (this.filePath) {
-            return `/get_video?path=${encodeURIComponent(this.filePath)}`;
-        }
-        return '';
+    update(data) {
+        Object.assign(this, data);
     }
 
     /**
-     * 获取视频缩略图URL
+     * 获取文件路径
+     * @returns {string|null}
+     */
+    getFilePath() {
+        return this.filePath;
+    }
+
+    /**
+     * 获取文件名
      * @returns {string}
      */
-    getThumbnailUrl() {
-        if (this.thumbnail) {
-            if (this.thumbnail.startsWith('data:')) {
-                return this.thumbnail;
-            } else {
-                return `data:image/jpeg;base64,${this.thumbnail}`;
-            }
-        }
-        return '/static/images/default-thumbnail.png';
+    getFileName() {
+        return this.fileName;
+    }
+
+    /**
+     * 获取MIME类型
+     * @returns {string}
+     */
+    getMimeType() {
+        return this.mime_type;
+    }
+
+    /**
+     * 获取缩略图Base64 ID
+     * @returns {string|null}
+     */
+    getThumbnailBase64Id() {
+        return this.thumbnail_base64_id;
+    }
+
+    /**
+     * 获取视频时长
+     * @returns {number}
+     */
+    getDuration() {
+        return this.duration;
+    }
+
+    /**
+     * 验证附件是否有效
+     * @returns {boolean}
+     */
+    isValid() {
+        return !!(this.file || this.filePath);
     }
 
     /**
      * 创建上传预览元素
      * @param {Function} onDelete 删除回调
-     * @returns {HTMLElement}
+     * @returns {Promise<HTMLElement>} 预览元素
      */
-    createUploadPreviewElement(onDelete) {
-        const element = VideoModal.createThumbnailPreview({
-            thumbnailUrl: this.getThumbnailUrl(),
-            fileName: this.fileName,
-            duration: this.duration,
-            onClick: () => this.openVideoPreview(),
-            onDelete
-        });
-        
-        // 添加上传中的状态
-        element.classList.add('uploading');
-        
-        // 监听上传完成事件
-        const checkUploadStatus = setInterval(() => {
-            if (this.filePath) {
-                element.classList.remove('uploading');
-                clearInterval(checkUploadStatus);
+    async createUploadPreviewElement(onDelete) {
+        try {
+            const previewItem = document.createElement('div');
+            previewItem.className = 'preview-item video-preview-item';
+            
+            // 创建视频缩略图容器
+            const thumbnailContainer = document.createElement('div');
+            thumbnailContainer.className = 'video-thumbnail-container';
+            
+            // 创建缩略图
+            const thumbnail = document.createElement('img');
+            thumbnail.className = 'video-thumbnail';
+            thumbnail.alt = this.fileName;
+            
+            // 设置默认缩略图
+            thumbnail.src = '/static/images/default-thumbnail.png';
+            
+            // 如果有缩略图ID，从服务器获取
+            if (this.thumbnail_base64_id) {
+                await this.loadThumbnailFromServer(thumbnail);
             }
-        }, 500);
-        
-        return element;
+            
+            // 创建播放按钮
+            const playButton = document.createElement('div');
+            playButton.className = 'video-play-button';
+            playButton.innerHTML = '▶';
+            
+            // 创建时长显示
+            const duration = document.createElement('div');
+            duration.className = 'video-duration';
+            duration.textContent = VideoModal.formatDuration(this.duration || 0);
+            
+            // 创建文件名显示
+            const fileName = document.createElement('div');
+            fileName.className = 'file-name';
+            fileName.textContent = this.fileName;
+            
+            // 创建删除按钮
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'delete-button';
+            deleteButton.innerHTML = '×';
+            deleteButton.onclick = (e) => {
+                e.stopPropagation();
+                if (typeof onDelete === 'function') {
+                    onDelete();
+                }
+            };
+            
+            // 添加点击事件打开视频预览
+            thumbnailContainer.onclick = () => {
+                let videoUrl;
+                if (this.filePath) {
+                    videoUrl = `/get_video?path=${encodeURIComponent(this.filePath)}`;
+                } else if (this.file) {
+                    videoUrl = URL.createObjectURL(this.file);
+                }
+                
+                if (videoUrl) {
+                    const modal = VideoModal.createPreviewModal(videoUrl);
+                    document.body.appendChild(modal);
+                    
+                    // 如果使用了 createObjectURL，在模态框关闭时释放
+                    if (this.file) {
+                        modal.addEventListener('remove', () => {
+                            URL.revokeObjectURL(videoUrl);
+                        });
+                    }
+                }
+            };
+            
+            // 组装预览项
+            thumbnailContainer.appendChild(thumbnail);
+            thumbnailContainer.appendChild(playButton);
+            thumbnailContainer.appendChild(duration);
+            previewItem.appendChild(thumbnailContainer);
+            previewItem.appendChild(fileName);
+            previewItem.appendChild(deleteButton);
+            
+            // 保存预览元素的引用
+            this.previewElement = previewItem;
+            
+            return previewItem;
+        } catch (error) {
+            console.error('创建预览元素失败:', error);
+            const errorElement = document.createElement('div');
+            errorElement.className = 'preview-item error';
+            errorElement.textContent = '预览加载失败';
+            return errorElement;
+        }
     }
 
     /**
-     * 创建消息预览元素
-     * @returns {HTMLElement}
+     * 从服务器加载缩略图
+     * @param {HTMLImageElement} img 图片元素
      */
-    createMessagePreviewElement() {
-        return VideoModal.createThumbnailPreview({
-            thumbnailUrl: this.getThumbnailUrl(),
-            fileName: this.fileName,
-            duration: this.duration,
-            onClick: () => this.openVideoPreview(),
-            disableDelete: true
-        });
-    }
-
-    /**
-     * 打开视频预览
-     */
-    openVideoPreview() {
-        const modal = VideoModal.createPreviewModal(this.getUrl());
-        document.body.appendChild(modal);
-    }
-
-    getFileName(){
-        return this.fileName;
-    }
-
-    getMimeType(){
-        return this.mimeType;
-    }
-    getFilePath(){
-        return this.filePath;
-    }
-    getBase64Data(){
-        return this.base64;
-    }
-
-    getDuration() {
-        return this.duration;
-    }
-
-    getThumbnail() {
-        return this.thumbnail;
-    }
-
-    /**
-     * 更新附件信息
-     * @param {Object} data 更新的数据
-     */
-    update(data) {
-        if (data.filePath !== undefined) {
-            this.filePath = data.filePath;
-        }
-        if (data.base64 !== undefined) {
-            this.base64 = data.base64;
-        }
-        if (data.fileName !== undefined) {
-            this.fileName = data.fileName;
-        }
-        if (data.mimeType !== undefined) {
-            this.mimeType = data.mimeType;
-        }
-        if (data.thumbnail !== undefined) {
-            this.thumbnail = data.thumbnail;
-        }
-        if (data.duration !== undefined) {
-            this.duration = data.duration;
+    async loadThumbnailFromServer(img) {
+        try {
+            const response = await fetch(`/api/image/base64/${this.thumbnail_base64_id}`);
+            if (!response.ok) {
+                throw new Error('获取缩略图失败');
+            }
+            const data = await response.json();
+            if (data.base64) {
+                img.src = `data:image/jpeg;base64,${data.base64}`;
+            } else {
+                throw new Error('缩略图数据无效');
+            }
+        } catch (error) {
+            console.error('加载缩略图失败:', error);
+            img.src = '/static/images/error.png';
+            showToast('缩略图加载失败', 'error');
         }
     }
 } 

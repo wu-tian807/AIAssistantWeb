@@ -23,7 +23,9 @@ const attachmentPreview = document.getElementById('attachment-preview');
 function canSendMessage() {
     const hasText = userInput.value.trim().length > 0;
     const hasAttachments = attachmentPreview && attachmentPreview.children.length > 0;
-    return hasText || hasAttachments;
+    const stopStatus = sendButton.classList.contains('stop');
+    // 如果处于停止状态，总是返回 true
+    return stopStatus || hasText || hasAttachments;
 }
 
 // 监听输入框变化，控制发送按钮状态
@@ -48,8 +50,10 @@ if (attachmentPreview) {
 userInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        if (!sendButton.disabled) {
+        if (!sendButton.classList.contains('stop')) {
             sendMessage();
+        }else{
+            stopGeneration();
         }
     }
 });
@@ -75,7 +79,7 @@ function stopGeneration() {
     }
     sendButton.textContent = '发送';
     sendButton.classList.remove('stop');
-    sendButton.disabled = false;
+    sendButton.disabled = !canSendMessage();  // 使用 canSendMessage 来决定按钮状态
     userInput.disabled = false;
 }
 
@@ -94,160 +98,6 @@ function shouldAutoScroll(container) {
     const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
     return isNearBottom;
 }
-
-// // 定义支持的自定义附件类型
-// const SUPPORTED_ATTACHMENT_TYPES = ['image', 'documents', 'text', 'audio', 'video', 'binary'];
-// // 附件处理函数
-// function createAttachmentElement(attachment) {
-//     // 类型校验
-//     if (!attachment || !attachment.type || !SUPPORTED_ATTACHMENT_TYPES.includes(attachment.type)) {
-//         console.warn(`Invalid or unsupported attachment type: ${attachment?.type}`);
-//         return null;
-//     }
-    
-//     // 如果有 mime_type，使用它来决定类型
-//     if (attachment.mime_type) {
-//         const customType = FILE_TYPE_MAPPING[attachment.mime_type];
-//         switch (customType) {
-//             case 'image':
-//                 return createImageAttachment(attachment);
-//             case 'video':
-//                 return createVideoAttachment(attachment);
-//             case 'file':
-//                 return createFileAttachment(attachment);
-//             default:
-//                 return null;
-//         }
-//     }
-    
-//     // 如果没有 mime_type，使用 type 字段
-//     switch (attachment.type) {
-//         case 'image':
-//             return createImageAttachment(attachment);
-//         case 'video':
-//             return createVideoAttachment(attachment);
-//         case 'file':
-//             return createFileAttachment(attachment);
-//         default:
-//             return null;
-//     }
-// }
-// // 图片附件处理
-// function createImageAttachment(attachment) {
-//     const imgWrapper = document.createElement('div');
-//     imgWrapper.className = 'message-image-wrapper';
-    
-//     const img = document.createElement('img');
-//     img.src = `data:image/jpeg;base64,${attachment.base64}`;
-//     img.alt = attachment.fileName;
-//     img.className = 'message-image';
-    
-//     // 添加点击放大功能
-//     img.onclick = () => createImageModal(img.src);
-    
-//     imgWrapper.appendChild(img);
-//     return imgWrapper;
-// }
-
-// // 创建图片模态框
-// function createImageModal(src) {
-//     const modal = document.createElement('div');
-//     modal.className = 'image-modal';
-    
-//     // 创建关闭按钮
-//     const closeBtn = document.createElement('button');
-//     closeBtn.className = 'modal-close-btn';
-//     closeBtn.innerHTML = '×';
-    
-//     const modalImg = document.createElement('img');
-//     modalImg.src = src;
-//     modalImg.className = 'modal-image';
-    
-//     // 添加关闭按钮和图片到模态框
-//     modal.appendChild(closeBtn);
-//     modal.appendChild(modalImg);
-//     document.body.appendChild(modal);
-    
-//     // 处理关闭事件
-//     const closeModal = () => {
-//         modal.classList.add('modal-closing');
-//         setTimeout(() => modal.remove(), 300); // 等待动画完成后移除
-//     };
-    
-//     // 点击关闭按钮关闭
-//     closeBtn.onclick = (e) => {
-//         e.stopPropagation();
-//         closeModal();
-//     };
-    
-//     // 点击模态框背景关闭
-//     modal.onclick = (e) => {
-//         if (e.target === modal) {
-//             closeModal();
-//         }
-//     };
-    
-//     // 按 ESC 键关闭
-//     const handleKeyDown = (e) => {
-//         if (e.key === 'Escape') {
-//             closeModal();
-//             document.removeEventListener('keydown', handleKeyDown);
-//         }
-//     };
-//     document.addEventListener('keydown', handleKeyDown);
-    
-//     // 防止滚动穿透
-//     document.body.style.overflow = 'hidden';
-//     modal.addEventListener('remove', () => {
-//         document.body.style.overflow = '';
-//     });
-// }
-
-// // 预留的视频附件处理函数
-// function createVideoAttachment(attachment) {
-//     // TODO: 实现视频附件处理
-//     return null;
-// }
-
-// // 预留的文件附件处理函数
-// function createFileAttachment(attachment) {
-//     // TODO: 实现文件附件处理
-//     return null;
-// }
-
-// // 创建附件容器
-// function createAttachmentsContainer(attachments) {
-//     if (!attachments || attachments.length === 0) return null;
-    
-//     const container = document.createElement('div');
-//     container.className = 'message-attachments';
-    
-//     // 根据附件类型分组
-//     const attachmentsByType = attachments.reduce((acc, attachment) => {
-//         if (!acc[attachment.type]) {
-//             acc[attachment.type] = [];
-//         }
-//         acc[attachment.type].push(attachment);
-//         return acc;
-//     }, {});
-    
-//     // 处理每种类型的附件
-//     Object.entries(attachmentsByType).forEach(([type, items]) => {
-//         const typeContainer = document.createElement('div');
-//         typeContainer.className = `message-${type}s`;
-        
-//         items.forEach(item => {
-//             const element = createAttachmentElement(item);
-//             if (element) {
-//                 typeContainer.appendChild(element);
-//             }
-//         });
-        
-//         container.appendChild(typeContainer);
-//     });
-    
-//     return container;
-// }
 
 // 在文件开头定义函数
 function createRegenerateButton(messageIndex, messageActions, isError = false) {
@@ -333,16 +183,21 @@ function appendMessage(content, isUser = false, messageIndex = null, attachments
     const messageContent = document.createElement('div');
     messageContent.className = 'message-content';
     
+    // 创建文本内容容器
+    const textContent = document.createElement('div');
+    textContent.className = 'text-content';
+    if (isUser) {
+        textContent.textContent = content;
+    } else {
+        textContent.innerHTML = md.render(content);
+        applyCodeHighlight(textContent);
+    }
+    messageContent.appendChild(textContent);
+    
     const messageActions = document.createElement('div');
     messageActions.className = 'message-actions';
     
     if (isUser) {
-        // 创建文本内容容器
-        const textContent = document.createElement('div');
-        textContent.className = 'text-content';
-        textContent.textContent = content;
-        messageContent.appendChild(textContent);
-        
         // 添加编辑按钮
         const editBtn = document.createElement('button');
         editBtn.className = 'edit-btn';
@@ -354,59 +209,8 @@ function appendMessage(content, isUser = false, messageIndex = null, attachments
             }
         };
         messageActions.appendChild(editBtn);
-        
-        // 处理附件 - 移到消息框外部
-        if (attachments && attachments.length > 0) {
-            console.log('开始处理附件:', attachments);  // 调试日志
-            const attachmentRenderer = new AttachmentRenderer();
-            const attachmentsContainer = document.createElement('div');
-            attachmentsContainer.className = 'message-attachments-container';
-            
-            attachments.forEach(attachment => {
-                console.log('处理单个附件:', attachment);  // 调试日志
-                if (!attachment || (!attachment.base64 && !attachment.file_path)) {
-                    console.error('无效的附件数据:', attachment);
-                    return;
-                }
-                
-                let url;
-                if (attachment.base64) {
-                    url = attachment.base64.startsWith('data:') ? 
-                        attachment.base64 : 
-                        `data:${attachment.mime_type};base64,${attachment.base64}`;
-                } else if (attachment.file_path) {
-                    url = `/get_image?path=${encodeURIComponent(attachment.file_path)}`;
-                }
-
-                const renderedAttachment = attachmentRenderer.render({
-                    type: attachment.type || 'image',  // 默认为图片类型
-                    base64: attachment.base64,
-                    filename: attachment.fileName || 'file',
-                    url: url,
-                    disableDelete: true,
-                    // 视频特有属性
-                    duration: attachment.duration,
-                    thumbnail: attachment.thumbnail
-                });
-                
-                console.log('渲染结果:', renderedAttachment);  // 调试日志
-                if (renderedAttachment) {
-                    attachmentsContainer.appendChild(renderedAttachment);
-                }
-            });
-            
-            console.log('附件容器子元素数量:', attachmentsContainer.children.length);  // 调试日志
-            if (attachmentsContainer.children.length > 0) {
-                messageDiv.appendChild(attachmentsContainer);
-            }
-        } else {
-            console.log('没有附件需要处理');  // 调试日志
-        }
     } else {
-        messageContent.innerHTML = md.render(content);
-        applyCodeHighlight(messageContent);
-        
-        // 为助手消息添加重新生成按钮
+        // 添加重新生成按钮
         createRegenerateButton(messageIndex, messageActions, error);
         
         // 如果存在多个版本，添加版本控制
@@ -440,7 +244,58 @@ function appendMessage(content, isUser = false, messageIndex = null, attachments
     
     messageWrapper.appendChild(messageContent);
     messageWrapper.appendChild(messageActions);
-    messageDiv.appendChild(messageWrapper);
+
+    // 处理附件
+    if (attachments && attachments.length > 0) {
+        const attachmentsContainer = document.createElement('div');
+        attachmentsContainer.className = 'message-attachments-container';
+        
+        const attachmentRenderer = new AttachmentRenderer();
+        const renderPromises = attachments.map(async attachment => {
+            try {
+                const renderedElement = await attachmentRenderer.render({
+                    type: attachment.type || 'image',
+                    base64_id: attachment.base64_id,
+                    filename: attachment.fileName,
+                    file_path: attachment.file_path,
+                    mime_type: attachment.mime_type,
+                    disableDelete: true,
+                    duration: attachment.duration,
+                    thumbnail_base64_id: attachment.thumbnail_base64_id
+                });
+                
+                if (renderedElement) {
+                    attachmentsContainer.appendChild(renderedElement);
+                }
+            } catch (error) {
+                console.error('渲染附件失败:', error);
+                const errorElement = document.createElement('div');
+                errorElement.className = 'attachment-error';
+                errorElement.textContent = '附件加载失败';
+                attachmentsContainer.appendChild(errorElement);
+            }
+        });
+        
+        Promise.all(renderPromises).then(() => {
+            if (attachmentsContainer.children.length > 0) {
+                // 如果是用户消息，将附件容器插入到消息内容之前
+                if (isUser) {
+                    messageDiv.insertBefore(attachmentsContainer, messageWrapper);
+                } else {
+                    // 如果是助手消息，将附件容器添加到消息内容之后
+                    messageDiv.appendChild(attachmentsContainer);
+                }
+            }
+        });
+    }
+
+    // 根据消息类型调整添加顺序
+    if (isUser) {
+        messageDiv.appendChild(messageWrapper);
+    } else {
+        messageDiv.appendChild(messageWrapper);
+    }
+
     chatMessages.appendChild(messageDiv);
     
     if (shouldAutoScroll(chatMessages)) {
@@ -926,7 +781,8 @@ async function sendMessage() {
     clearAttachmentPreview();
     sendButton.textContent = '停止';
     sendButton.classList.add('stop');
-    userInput.disabled = true;
+    sendButton.disabled = !canSendMessage();  // 使用 canSendMessage 来决定按钮状态
+    userInput.disabled = false;  // 在生成过程中禁用输入框
 
     let assistantMessage = '';
     const messageIndex = currentConversation.messages.length;
@@ -1160,41 +1016,6 @@ async function sendMessage() {
     }
 }
 
-// // 添加删除对话的函数
-// async function deleteConversation(conversationId) {
-//     if (!confirm('确定要删除这个对话吗？')) {
-//         return;
-//     }
-    
-//     // 先更新本地状态
-//     const index = conversations.findIndex(c => c.id === conversationId);
-//     if (index !== -1) {
-//         conversations.splice(index, 1);
-        
-//         // 立即更新UI
-//         if (conversationId === currentConversationId) {
-//             if (conversations.length > 0) {
-//                 currentConversationId = conversations[0].id;
-//                 await switchConversation(currentConversationId);
-//             } else {
-//                 await createNewConversation();
-//             }
-//         }
-//         renderConversationsList();
-        
-//         // 异步删除和保存
-//         try {
-//             await Promise.all([
-//                 fetch(`/api/conversations/${conversationId}`, { method: 'DELETE' }),
-//                 debouncedSave()
-//             ]);
-//         } catch (error) {
-//             console.error('删除对话出错:', error);
-//             showToast('删除对话失败，但本地更改已保存', 'warning');
-//         }
-//     }
-// }
-
 // 将拖拽相关的代码移到单独的函数中
 function initializeDragAndDrop() {
     const dropZone = document.getElementById('message-input-container');
@@ -1358,6 +1179,10 @@ window.copyCode = copyCode;
 
 // 修改重新生成消息的函数
 async function regenerateMessage(messageIndex) {
+    const sendButton = document.getElementById('send-button');
+    if (sendButton.classList.contains('stop')) {
+        sendButton.disabled = false;
+    }
     if (!currentConversationId) return;
     
     const currentConversation = conversations.find(c => c.id === currentConversationId);
@@ -1394,7 +1219,8 @@ async function regenerateMessage(messageIndex) {
     // 禁用发送按钮，显示停止按钮
     sendButton.textContent = '停止';
     sendButton.classList.add('stop');
-    userInput.disabled = true;
+    sendButton.disabled = false;  // 确保停止按钮可点击
+    userInput.disabled = false;  // 禁用输入框
     
     try {
         // 获取选中的模型ID和图标信息
@@ -1676,7 +1502,7 @@ async function editUserMessage(messageIndex, originalContent) {
                 const fullAttachment = {
                     ...attachment,
                     type: attachment.type || (attachment.mime_type?.startsWith('video/') ? 'video' : 'image'),
-                    base64: attachment.base64,
+                    base64_id: attachment.base64_id,
                     fileName: attachment.fileName,
                     mime_type: attachment.mime_type,
                     file_path: attachment.file_path,
@@ -1731,7 +1557,7 @@ async function editUserMessage(messageIndex, originalContent) {
                 console.log('收集附件:', attachment);
                 console.log('附件类型:', attachment.type);
                 console.log('附件方法:', {
-                    getBase64Data: attachment.getBase64Data?.(),
+                    getBase64Id: attachment.getBase64Id?.(),
                     getFileName: attachment.getFileName?.(),
                     getMimeType: attachment.getMimeType?.(),
                     getFilePath: attachment.getFilePath?.(),
@@ -1741,7 +1567,7 @@ async function editUserMessage(messageIndex, originalContent) {
                 
                 return {
                     type: attachment.type || (attachment.getMimeType?.()?.startsWith('video/') ? 'video' : 'image'),
-                    base64: attachment.getBase64Data(),
+                    base64_id: attachment.getBase64Id?.(),
                     fileName: attachment.getFileName(),
                     mime_type: attachment.getMimeType(),
                     file_path: attachment.getFilePath(),
@@ -1806,34 +1632,29 @@ async function editUserMessage(messageIndex, originalContent) {
                 }
                 
                 const attachmentRenderer = new AttachmentRenderer();
-                for (const attachment of attachments) {
-                    let renderedElement;
-                    
-                    if (attachment.base64) {
-                        renderedElement = attachmentRenderer.render({
-                            type: attachment.type || 'image',  // 使用附件的实际类型
-                            base64: attachment.base64,
+                const renderPromises = attachments.map(async (attachment) => {
+                    try {
+                        const renderedElement = await attachmentRenderer.render({
+                            type: attachment.type || 'image',
+                            base64_id: attachment.base64_id,
                             filename: attachment.fileName,
-                            url: `data:${attachment.mime_type};base64,${attachment.base64}`,
+                            file_path: attachment.file_path,
+                            mime_type: attachment.mime_type,
                             disableDelete: true,
                             duration: attachment.duration,
-                            thumbnail: attachment.thumbnail
+                            thumbnail_base64_id: attachment.thumbnail_base64_id
                         });
-                    } else if (attachment.file_path) {
-                        renderedElement = attachmentRenderer.render({
-                            type: attachment.type || 'image',  // 使用附件的实际类型
-                            filename: attachment.fileName,
-                            url: `/get_image?path=${encodeURIComponent(attachment.file_path)}`,
-                            disableDelete: true,
-                            duration: attachment.duration,
-                            thumbnail: attachment.thumbnail
-                        });
+                        
+                        if (renderedElement) {
+                            attachmentsDiv.appendChild(renderedElement);
+                        }
+                    } catch (error) {
+                        console.error('渲染附件失败:', error);
+                        showToast('附件渲染失败', 'error');
                     }
-                    
-                    if (renderedElement) {
-                        attachmentsDiv.appendChild(renderedElement);
-                    }
-                }
+                });
+                
+                await Promise.all(renderPromises);
             } else if (originalAttachmentsContainer) {
                 originalAttachmentsContainer.remove();
             }
@@ -1853,7 +1674,124 @@ async function editUserMessage(messageIndex, originalContent) {
             for (let i = messageIndex + 1; i < conversationMessages.length; i++) {
                 if (conversationMessages[i].role === 'assistant') {
                     console.log('找到需要重新生成的助手消息，索引:', i);
-                    await regenerateMessage(i);
+                    
+                    // 获取现有的消息元素
+                    const messageDiv = chatMessages.children[i];
+                    if (!messageDiv) {
+                        console.error('未找到消息元素');
+                        continue;
+                    }
+
+                    // 获取消息内容元素
+                    const messageContent = messageDiv.querySelector('.message-content');
+                    if (!messageContent) {
+                        console.error('未找到消息内容元素');
+                        continue;
+                    }
+
+                    // 清空现有内容
+                    messageContent.innerHTML = '';
+                    messageDiv.classList.remove('error-message');
+
+                    try {
+                        // 获取选中的模型ID和图标信息
+                        const modelSelect = document.getElementById('model-select');
+                        const selectedOption = modelSelect.options[modelSelect.selectedIndex];
+                        const selectedModel = modelSelect.value;
+                        const modelIcon = selectedOption.getAttribute('data-model-icon');
+                        
+                        if (!selectedModel) {
+                            throw new Error('请选择一个模型');
+                        }
+
+                        // 更新模型图标
+                        const iconWrapper = messageDiv.querySelector('.model-icon-wrapper');
+                        if (iconWrapper) {
+                            const iconRenderer = new IconRenderer(modelIcon);
+                            iconWrapper.innerHTML = '';
+                            iconWrapper.setAttribute('data-model-icon', modelIcon);
+                            iconWrapper.appendChild(iconRenderer.modelIcon);
+                        }
+
+                        // 准备消息历史
+                        const messagesUntilIndex = conversation.messages.slice(0, i);
+                        const messages = [
+                            {"role": "system", "content": conversation.systemPrompt || default_system_prompt},
+                            ...messagesUntilIndex
+                        ];
+
+                        // 发送请求
+                        const response = await fetch('/chat', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ 
+                                messages: messages,
+                                conversation_id: currentConversationId,
+                                model_id: selectedModel
+                            })
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        const reader = response.body.getReader();
+                        const decoder = new TextDecoder();
+                        let assistantMessage = '';
+
+                        while (true) {
+                            const { value, done } = await reader.read();
+                            if (done) break;
+
+                            const chunk = decoder.decode(value);
+                            const lines = chunk.split('\n');
+
+                            for (const line of lines) {
+                                if (line.startsWith('data: ')) {
+                                    const data = JSON.parse(line.slice(6));
+                                    if (data.content) {
+                                        assistantMessage += data.content;
+                                        messageContent.innerHTML = md.render(assistantMessage);
+                                        applyCodeHighlight(messageContent);
+                                    }
+                                }
+                            }
+                        }
+
+                        // 更新消息内容
+                        if (assistantMessage.trim()) {
+                            conversation.messages[i] = {
+                                role: "assistant",
+                                content: assistantMessage,
+                                modelIcon: modelIcon,
+                                modelId: selectedModel,
+                                versions: [{
+                                    content: assistantMessage,
+                                    attachments: [],
+                                    subsequentMessages: [],
+                                    modelIcon: modelIcon,
+                                    modelId: selectedModel
+                                }],
+                                currentVersion: 0
+                            };
+
+                            // 删除后续消息
+                            conversation.messages = conversation.messages.slice(0, i + 1);
+                            while (chatMessages.children.length > i + 1) {
+                                chatMessages.removeChild(chatMessages.lastChild);
+                            }
+
+                            // 保存对话
+                            await saveConversation(conversation.id, 'update');
+                        }
+
+                    } catch (error) {
+                        console.error('重新生成失败:', error);
+                        messageDiv.classList.add('error-message');
+                        messageContent.innerHTML = md.render('发生错误，请重试\n' + error.message);
+                    }
                     break;
                 }
             }
@@ -2000,24 +1938,26 @@ function switchVersion(messageIndex, newVersion) {
         message.attachments.forEach(attachment => {
             let renderedElement;
             
-            if (attachment.base64) {
+            if (attachment.type === 'video') {
+                // 视频附件：使用 file_path 和 thumbnail_base64_id
                 renderedElement = attachmentRenderer.render({
-                    type: attachment.type || 'image',
-                    base64: attachment.base64,
+                    type: 'video',
                     filename: attachment.fileName,
-                    url: `data:${attachment.mime_type};base64,${attachment.base64}`,
-                    disableDelete: true,
+                    file_path: attachment.file_path,
+                    mime_type: attachment.mime_type,
                     duration: attachment.duration,
-                    thumbnail: attachment.thumbnail
+                    thumbnail_base64_id: attachment.thumbnail_base64_id,
+                    disableDelete: true
                 });
-            } else if (attachment.file_path) {
+            } else {
+                // 图片附件：使用 base64_id
                 renderedElement = attachmentRenderer.render({
-                    type: attachment.type || 'image',
+                    type: 'image',
                     filename: attachment.fileName,
-                    url: `/get_image?path=${encodeURIComponent(attachment.file_path)}`,
-                    disableDelete: true,
-                    duration: attachment.duration,
-                    thumbnail: attachment.thumbnail
+                    mime_type: attachment.mime_type,
+                    file_path: attachment.file_path,
+                    base64_id: attachment.base64_id,
+                    disableDelete: true
                 });
             }
             
@@ -2219,6 +2159,10 @@ function editConversationTitle(conversationId) {
 
 // 添加新的函数用于处理临时错误消息的重新生成
 async function regenerateErrorMessage(messageIndex) {
+    const sendButton = document.getElementById('send-button');
+    if (sendButton.classList.contains('stop')) {
+        sendButton.disabled = false;
+    }
     // 获取当前对话
     if (!currentConversationId) return;
     const currentConversation = conversations.find(c => c.id === currentConversationId);
@@ -2250,7 +2194,6 @@ async function regenerateErrorMessage(messageIndex) {
     // 禁用发送按钮，显示停止按钮
     sendButton.textContent = '停止';
     sendButton.classList.add('stop');
-    userInput.disabled = true;
 
     // 创建新的消息元素
     const messageDiv = document.createElement('div');

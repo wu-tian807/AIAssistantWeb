@@ -14,7 +14,7 @@ from config import AVAILABLE_MODELS
 from config import RATE_LIMIT_WINDOW
 from utils.files.file_config import ATTACHMENT_TYPES, AttachmentType
 
-from initialization import app, db, mail, xai_client, genai, deepseek_client
+from initialization import app, db, mail, xai_client, deepseek_client,gemini_pool
 
 
 from utils.user_model import User
@@ -23,15 +23,21 @@ from utils.conversation_model import Conversation
 from utils.wrapper import login_required
 from utils.email_vailder import check_rate_limit, generate_verification_code, send_verification_email
 
-from utils.image_handler import encode_image
-
-from utils.files.files_extension_helper import get_image_extension
 from utils.files.file_config import MIME_TYPE_MAPPING, AttachmentType
 from utils.chat.message_processor import process_image_attachment, process_binary_attachment,process_video_attachment,process_image_attachment_by_ocr
 
 from routes.user import user_profile
 from routes.upload_status import upload_status_bp
 from routes.user.settings import user_settings
+from routes.image import image_bp  # 添加这行
+from utils.price.sentence2token import TokenCounter
+from utils.price.usage_model import Usage
+from utils.image_handler import delete_base64_file, save_base64_locally
+# 注册蓝图
+app.register_blueprint(user_profile)
+app.register_blueprint(user_settings)  # 注册用户设置蓝图
+app.register_blueprint(upload_status_bp, url_prefix='/api/upload-status')
+app.register_blueprint(image_bp, url_prefix='/api/image')  # 添加这行
 
 # 在每个请求之前生成CSRF Token
 @app.before_request
@@ -241,13 +247,15 @@ def upload_image():
                 with open(file_path, 'rb') as img_file:
                     base64_image = base64.b64encode(img_file.read()).decode('utf-8')
             
+            # 保存 base64 数据到本地文件
+            base64_id = save_base64_locally(base64_image, session['user_id'])
+            
             return jsonify({
                 'message': '图片上传成功',
                 'file_path': file_path,
                 'mime_type': image.content_type,
-                'base64_image': base64_image,
-                'needs_processing': needs_processing
-            }), 200
+                'base64_id': base64_id
+            })
 
         except Exception as e:
             print(f"保存文件时出错: {str(e)}")
@@ -313,7 +321,10 @@ def chat():
     messages = data.get('messages', [])
     conversation_id = data.get('conversation_id')
     model_id = data.get('model_id', 'gemini-1.5-pro')
-    user_id = session.get('user_id')  # 获取用户ID
+    user_id = session.get('user_id')
+    
+    # 创建token计数器实例
+    token_counter = TokenCounter()
     
     print(f"\n=== 聊天请求信息 ===")
     print(f"模型ID: {model_id}")
@@ -344,7 +355,7 @@ def chat():
     if not model_type:
         return jsonify({'error': '不支持的模型'}), 400
 
-    def process_message_with_attachments(message, model_type, model_support_list, user_id):
+    def process_message_with_attachments(message, model_type, model_support_list, user_id,genai):
         # 从配置中获取支持的图片类型
         from utils.files.file_config import MIME_TYPE_MAPPING, ATTACHMENT_TYPES, AttachmentType
         
@@ -509,9 +520,22 @@ def chat():
     def generate():
         try:
             # 处理消息列表
-            processed_messages = [
-                process_message_with_attachments(msg, model_type, model_support_list, user_id) for msg in messages
-            ]
+            processed_messages = []
+            for msg in messages:
+                # 获取新的genai实例
+                genai_instance, GenerativeModel = gemini_pool.get_client()
+                processed_msg = process_message_with_attachments(
+                    msg, 
+                    model_type, 
+                    model_support_list, 
+                    user_id,
+                    genai_instance
+                )
+                processed_messages.append(processed_msg)
+            
+            # 计算输入token数
+            input_tokens, _ = token_counter.estimate_tokens(processed_messages)
+            accumulated_output = []  # 用于累积输出文本
             
             if model_type == 'openai':
                 # OpenAI 模型调用
@@ -576,11 +600,13 @@ def chat():
                 for chunk in stream:
                     if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
                         content = chunk.choices[0].delta.content
+                        accumulated_output.append(content)  # 累积输出文本
                         yield f"data: {json.dumps({'content': content})}\n\n"
 
             elif model_type == 'google':
                 # Google 模型调用
-                model = genai.GenerativeModel(model_id)
+                genai, GenerativeModel = gemini_pool.get_client()
+                model = GenerativeModel(model_id)
                 
                 # 将消息转换为 Google SDK 格式
                 formatted_history = []
@@ -647,7 +673,9 @@ def chat():
                 
                 try:
                     print("\n=== 开始发送消息到Gemini ===")
-                
+                    
+                    # 获取新的genai实例用于生成配置
+                    genai_instance, GenerativeModel = gemini_pool.get_client()
                     
                     safety_settings = {
                         HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
@@ -670,9 +698,9 @@ def chat():
                             last_message_parts,
                             stream=True,
                             safety_settings=safety_settings,
-                            generation_config=genai.GenerationConfig(
-                                max_output_tokens=1,
-                                temperature=2,
+                            generation_config=genai_instance.GenerationConfig(
+                                max_output_tokens=2048,
+                                temperature=0.7,
                             )
                         )
                         print("成功获取响应流")
@@ -709,6 +737,7 @@ def chat():
                                 # 检查chunk的内容
                                 if hasattr(chunk, 'text') and chunk.text:
                                     print(f"响应文本: {chunk.text}")
+                                    accumulated_output.append(chunk.text)  # 累积输出文本
                                     yield f"data: {json.dumps({'content': chunk.text})}\n\n"
                                 else:
                                     print("响应块没有文本内容")
@@ -741,8 +770,46 @@ def chat():
                     traceback.print_exc()
                     yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
-            else:
-                yield f"data: {json.dumps({'error': '不支持的模型类型'})}\n\n"
+            # 计算输出token数并记录使用情况
+            output_text = ''.join(accumulated_output)
+            _, output_tokens = token_counter.estimate_tokens([{
+                'role': 'assistant',
+                'content': output_text
+            }])
+            
+            try:
+                with app.app_context():
+                    # 记录使用情况
+                    usage = Usage(
+                        user_id=user_id,
+                        model_name=model_id,
+                        tokens_in=input_tokens,
+                        tokens_out=output_tokens
+                    )
+                    usage.calculate_cost()  # 在添加到session之前计算成本
+                    db.session.add(usage)
+                    db.session.commit()
+                    
+                    # 打印使用统计
+                    print("\n=== 使用统计 ===")
+                    print(f"输入token数: {input_tokens}, 成本: ${usage.input_cost:.6f}")
+                    print(f"输出token数: {output_tokens}, 成本: ${usage.output_cost:.6f}")
+                    print(f"总成本: ${usage.total_cost:.6f}")
+                    
+                    # 发送最终的token统计信息
+                    usage_info = {
+                        'type': 'usage_info',
+                        'input_tokens': input_tokens,
+                        'output_tokens': output_tokens,
+                        'total_tokens': input_tokens + output_tokens,
+                        'input_cost': usage.input_cost,
+                        'output_cost': usage.output_cost,
+                        'total_cost': usage.total_cost
+                    }
+                yield f"data: {json.dumps(usage_info)}\n\n"
+            except Exception as e:
+                print(f"记录使用情况时出错: {str(e)}")
+                db.session.rollback()
 
         except Exception as e:
             print(f"Error in generate(): {str(e)}")
@@ -868,10 +935,11 @@ def delete_conversation(conversation_id):
         return jsonify({'error': '对话不存在'}), 404
         
     try:
-        # 删除相关的本地文件
+        # 删除相关的本地文件和 base64 文件
         for message in conversation.messages:
             if 'attachments' in message and message['attachments']:
                 for attachment in message['attachments']:
+                    # 删除本地文件
                     file_path = attachment.get('file_path')
                     if file_path and os.path.exists(file_path):
                         try:
@@ -879,6 +947,15 @@ def delete_conversation(conversation_id):
                             print(f"已删除文件: {file_path}")
                         except Exception as e:
                             print(f"删除文件失败 {file_path}: {str(e)}")
+                            
+                    # 删除 base64 文件
+                    base64_id = attachment.get('base64_id')
+                    if base64_id:
+                        try:
+                            delete_base64_file(base64_id, session['user_id'])
+                            print(f"已删除 base64 文件: {base64_id}")
+                        except Exception as e:
+                            print(f"删除 base64 文件失败 {base64_id}: {str(e)}")
         
         db.session.delete(conversation)
         db.session.commit()
@@ -979,7 +1056,8 @@ def stream_chat_response_for_title(messages, model_id):
 
     elif model_type == 'google':
         # Google 模型调用
-        model = genai.GenerativeModel(model_id)
+        genai, GenerativeModel = gemini_pool.get_client()
+        model = GenerativeModel(model_id)
         chat = model.start_chat(history=[])
         response = chat.send_message(messages[-1]['content'], stream=True)
         for chunk in response:
@@ -1162,10 +1240,12 @@ def prepare_file_path(filename, user):
     ext = os.path.splitext(original_filename)[1]
     new_filename = f"{timestamp}{ext}"
     
-    # 创建用户目录
+    # 创建用户目录和 base64_store 子目录
     user_email = user.email.replace('@','_').replace('.','_')
     user_folder = os.path.join(app.config['UPLOAD_FOLDER'], user_email)
+    base64_store = os.path.join(user_folder, 'base64_store')
     os.makedirs(user_folder, exist_ok=True)
+    os.makedirs(base64_store, exist_ok=True)
     
     return os.path.join(user_folder, new_filename)
 
@@ -1230,10 +1310,6 @@ def get_video():
         print(f"获取视频失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-# 注册蓝图
-app.register_blueprint(user_profile)
-app.register_blueprint(user_settings)  # 注册用户设置蓝图
-app.register_blueprint(upload_status_bp, url_prefix='/api/upload-status')
 # 启动应用
 if __name__ == '__main__':
     app.run(debug=True)

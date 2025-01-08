@@ -6,6 +6,31 @@ from openai import OpenAI
 import google.generativeai as genai
 from config import API_KEYS, API_BASE_URLS
 from flask_migrate import Migrate
+import random
+
+# 创建Gemini API实例池
+class GeminiAPIPool:
+    def __init__(self, api_keys):
+        self.api_keys = api_keys
+        self._initialize_clients()
+    
+    def _initialize_clients(self):
+        self.clients = []
+        for api_key in self.api_keys:
+            genai_instance = genai.GenerativeModel
+            genai.configure(api_key=api_key)
+            self.clients.append({
+                'genai': genai,
+                'instance': genai_instance,
+                'api_key': api_key
+            })
+    
+    def get_client(self):
+        # 随机选择一个客户端
+        client = random.choice(self.clients)
+        # 确保使用正确的API key
+        genai.configure(api_key=client['api_key'])
+        return client['genai'], client['instance']
 
 # 初始化 Flask 应用
 app = Flask(__name__)
@@ -44,10 +69,20 @@ app.config['MAIL_TIMEOUT'] = 30  # 设置超时时间为30秒
 db = SQLAlchemy(app)
 mail = Mail(app)
 
+# 初始化Gemini API池
+gemini_pool = GeminiAPIPool(API_KEYS['google'])
+
 # 初始化API客户端
-xai_client = OpenAI(api_key=API_KEYS['xai'], base_url=API_BASE_URLS['xai'])
-deepseek_client = OpenAI(api_key=API_KEYS['deepseek'], base_url=API_BASE_URLS['deepseek'])
-genai.configure(api_key=API_KEYS['google'])
+xai_client = OpenAI(api_key=API_KEYS['xai'][0], base_url=API_BASE_URLS['xai'])
+deepseek_client = OpenAI(api_key=API_KEYS['deepseek'][0], base_url=API_BASE_URLS['deepseek'])
+
+# # 导出gemini_pool以供其他模块使用
+# genai, GenerativeModel = gemini_pool.get_client()
 
 # 初始化数据库迁移
 migrate = Migrate(app, db)
+
+def init_app():
+    # 初始化数据库
+    with app.app_context():
+        db.create_all()

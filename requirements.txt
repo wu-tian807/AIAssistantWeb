@@ -14,3 +14,6 @@ python-magic==0.4.27  # 用于文件类型检测
 gevent==23.9.1    # 用于异步处理
 supervisor==4.2.5  # 用于进程管理
 psutil==5.9.6     # 用于系统资源监控
+jieba>=0.42.1     # 中文分词
+nltk>=3.8.1       # 英文分词
+tinysegmenter>=0.4  # 日文分词
