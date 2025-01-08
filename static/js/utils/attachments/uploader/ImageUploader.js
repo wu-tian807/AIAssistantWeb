@@ -91,33 +91,26 @@ export class ImageUploader {
      */
     async uploadImage(imageAttachment) {
         try {
-            const formData = imageAttachment.toFormData();
+            if (!imageAttachment || !imageAttachment.file) {
+                throw new Error('没有提供图片');
+            }
+
+            const formData = new FormData();
+            formData.append('image', imageAttachment.file);
             
             // 创建上传进度提示
-            const toast = showToast('图片上传中...', 'info', 0); // 0表示不自动关闭
+            const toast = showToast('图片上传中...', 'info', 0);
             const progressText = document.createElement('div');
             progressText.className = 'upload-progress';
             toast.appendChild(progressText);
 
             const response = await fetch(this.uploadUrl, {
                 method: 'POST',
-                body: formData,
-                // 添加上传进度监听
-                onUploadProgress: (progressEvent) => {
-                    if (progressEvent.lengthComputable) {
-                        const percentComplete = Math.round((progressEvent.loaded / progressEvent.total) * 100);
-                        progressText.textContent = `已上传 ${percentComplete}%`;
-                        
-                        // 更新文件大小信息
-                        const uploadedSize = AttachmentUtils.formatFileSize(progressEvent.loaded);
-                        const totalSize = AttachmentUtils.formatFileSize(progressEvent.total);
-                        progressText.textContent += ` (${uploadedSize}/${totalSize})`;
-                    }
-                }
+                body: formData
             });
-            
+
             if (!response.ok) {
-                toast.remove(); // 移除进度提示
+                toast.remove();
                 const errorData = await response.json();
                 throw new Error(errorData.error || '上传失败');
             }
@@ -127,10 +120,11 @@ export class ImageUploader {
             // 更新附件信息
             imageAttachment.update({
                 filePath: data.file_path,
+                base64Id: data.base64_id,
                 uploadTime: new Date()
             });
             
-            toast.remove(); // 成功后移除进度提示
+            toast.remove();
             showToast('图片上传成功', 'success');
             
             this.onSuccess(imageAttachment);
@@ -240,10 +234,10 @@ export class ImageUploader {
         try {
             // 创建新的 ImageAttachment 实例
             const imageAttachment = new ImageAttachment({
-                base64Data: attachment.base64,
                 fileName: attachment.fileName,
                 mimeType: attachment.mime_type,
                 filePath: attachment.file_path,
+                base64_id: attachment.base64_id,
                 type: AttachmentType.IMAGE
             });
 

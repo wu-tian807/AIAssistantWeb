@@ -1,5 +1,6 @@
 from initialization import db
 from werkzeug.security import generate_password_hash, check_password_hash
+from .price.usage_model import Usage
 
 # 默认用户设置
 DEFAULT_USER_SETTINGS = {
@@ -18,6 +19,17 @@ class User(db.Model):
     profile_icon = db.Column(db.String(256))
     display_name = db.Column(db.String(50))
     settings = db.Column(db.JSON, default=lambda: dict(DEFAULT_USER_SETTINGS))
+    
+    # 添加与Usage的关联
+    usages = db.relationship('Usage', backref='user', lazy=True)
+    
+    def get_total_cost(self, start_date=None, end_date=None):
+        """获取用户总消费"""
+        return Usage.get_user_total_cost(self.id, start_date, end_date)
+    
+    def get_usage_history(self, start_date=None, end_date=None):
+        """获取用户使用记录"""
+        return Usage.get_user_usage(self.id, start_date, end_date)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

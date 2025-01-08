@@ -3,24 +3,25 @@ import base64
 import time
 import PIL.Image
 from typing import Dict, Any
+from flask import session
 from utils.files.file_config import ATTACHMENT_TYPES, AttachmentType
 from routes.upload_status import send_status
+from initialization import gemini_pool
 
-def check_file_exists(file_path: str, genai, mime_type: str = None) -> tuple:
+def check_file_exists(file_path: str, mime_type: str = None) -> tuple:
     """
     检查文件是否已经存在于Gemini服务器
     
     Args:
         file_path: 本地文件路径
-        genai: Google AI 客户端实例
         mime_type: 文件的MIME类型（可选）
         
     Returns:
         tuple: (是否存在, 文件对象或None)
     """
-    if not genai:
-        return False, None
-        
+    # 获取新的genai实例
+    genai_instance, GenerativeModel = gemini_pool.get_client()
+    
     try:
         # 获取本地文件信息
         local_file_size = os.path.getsize(file_path)
@@ -64,7 +65,7 @@ def check_file_exists(file_path: str, genai, mime_type: str = None) -> tuple:
                                 if (os.path.normpath(cached_path) == os.path.normpath(file_path) and 
                                     (not mime_type or cached_mime == mime_type)):
                                     print(f"在缓存中找到匹配: {cached_uri}")
-                                    remote_file = genai.get_file(cached_uri.split('/')[-1])
+                                    remote_file = genai_instance.get_file(cached_uri.split('/')[-1])
                                     if remote_file and remote_file.state.name == "ACTIVE":
                                         print("远程文件状态正常")
                                         cached_file = remote_file
@@ -86,21 +87,48 @@ def check_file_exists(file_path: str, genai, mime_type: str = None) -> tuple:
         # 列出所有文件并查找匹配项
         print("\n开始检查服务器上的文件...")
         
-        # 将生成器转换为列表以便重用
-        files = list(genai.list_files())
-        if not files:
-            print("服务器上没有文件")
+        # 遍历所有API实例获取文件
+        all_files = []
+        for client in gemini_pool.clients:
+            genai_instance = client['genai']
+            # 配置当前实例的API key
+            genai_instance.configure(api_key=client['api_key'])
+            try:
+                # 获取当前实例的文件列表
+                instance_files = list(genai_instance.list_files())
+                if instance_files:
+                    print(f"从实例获取到 {len(instance_files)} 个文件")
+                    all_files.extend(instance_files)
+            except Exception as e:
+                print(f"从实例获取文件列表时出错: {str(e)}")
+                continue
+        
+        if not all_files:
+            print("所有服务器实例上都没有找到文件")
             return False, None
             
-        print(f"服务器上的文件数量: {len(files)}")
+        print(f"所有服务器实例上的文件总数: {len(all_files)}")
         
-        for file in files:
+        # 遍历所有找到的文件
+        for file in all_files:
             try:
                 print(f"\n检查文件: {file.name}")
-                # 获取远程文件信息
-                remote_file = genai.get_file(file.name)
+                # 遍历所有实例尝试获取文件信息
+                remote_file = None
+                for client in gemini_pool.clients:
+                    genai_instance = client['genai']
+                    genai_instance.configure(api_key=client['api_key'])
+                    try:
+                        remote_file = genai_instance.get_file(file.name)
+                        if remote_file:
+                            print(f"在实例中找到文件")
+                            break
+                    except Exception as e:
+                        print(f"尝试从实例获取文件时出错: {str(e)}")
+                        continue
+                
                 if not remote_file:
-                    print(f"无法获取远程文件: {file.name}")
+                    print(f"无法从任何实例获取远程文件: {file.name}")
                     continue
                 
                 # 获取远程文件状态
@@ -134,7 +162,6 @@ def upload_large_file_to_gemini(
     file_size: int,
     mime_type: str,
     attachment_type: AttachmentType,
-    genai,
     processed_message: Dict[str, Any]
 ) -> bool:
     """
@@ -146,13 +173,15 @@ def upload_large_file_to_gemini(
         file_size: 文件大小（字节）
         mime_type: MIME类型
         attachment_type: 附件类型（GEMINI_IMAGE 或 GEMINI_VIDEO）
-        genai: Gemini API客户端实例
         processed_message: 要处理的消息字典
         
     Returns:
         bool: 上传是否成功
     """
     try:
+        # 获取新的genai实例
+        genai_instance, GenerativeModel = gemini_pool.get_client()
+        
         # 检查文件大小限制
         if file_size > ATTACHMENT_TYPES[attachment_type]['max_size']:
             error_msg = f"文件大小超过限制: {file_size/(1024*1024*1024):.2f}GB > {ATTACHMENT_TYPES[attachment_type]['max_size']/(1024*1024*1024)}GB"
@@ -196,7 +225,7 @@ def upload_large_file_to_gemini(
             return False
             
         # 检查文件是否已存在
-        exists, existing_file = check_file_exists(file_path, genai, mime_type)
+        exists, existing_file = check_file_exists(file_path, mime_type)
         if exists and existing_file:
             print("文件已存在，直接使用")
             send_status({
@@ -215,7 +244,7 @@ def upload_large_file_to_gemini(
         
         # 上传文件
         print("开始上传文件...")
-        uploaded_file = genai.upload_file(path=file_path)
+        uploaded_file = genai_instance.upload_file(path=file_path)
         print(f"上传成功！URI: {uploaded_file.uri}")
         
         # 对于视频文件，需要等待处理完成
@@ -236,7 +265,7 @@ def upload_large_file_to_gemini(
                 print('.', end='', flush=True)
                 time.sleep(wait_interval)
                 total_waited += wait_interval
-                uploaded_file = genai.get_file(uploaded_file.name)
+                uploaded_file = genai_instance.get_file(uploaded_file.name)
                 
             print("\n处理完成")
             
@@ -318,12 +347,24 @@ def process_image_attachment(
             "type": "text",
             "text": attachment_text
         })
-        processed_message['content'].append({
-            "type": "image_url",
-            "image_url": {
-                "url": f"data:{mime_type};base64,{attachment['base64']}"
-            }
-        })
+        
+        # 获取 base64 数据
+        base64_data = None
+        if 'base64_id' in attachment:
+            try:
+                from utils.image_handler import get_base64_by_id
+                base64_data = get_base64_by_id(attachment['base64_id'], session.get('user_id'))
+            except Exception as e:
+                print(f"获取base64数据失败: {e}")
+                return
+            
+        if base64_data:
+            processed_message['content'].append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:{mime_type};base64,{base64_data}"
+                }
+            })
         
     elif model_type == 'google':
         # Google的图片处理
@@ -358,9 +399,18 @@ def process_image_attachment(
         else:
             print(f"本地文件{'不存在' if local_path else '路径为空'}")
         
+        # 获取 base64 数据
+        base64_data = None
+        if 'base64_id' in attachment:
+            try:
+                from utils.image_handler import get_base64_by_id
+                base64_data = get_base64_by_id(attachment['base64_id'], session.get('user_id'))
+            except Exception as e:
+                print(f"获取base64数据失败: {e}")
+        
         # 如果没有本地文件，使用base64估算大小
-        base64_size = len(attachment['base64']) * 3 / 4 if attachment.get('base64') else None
-        print(f"Base64数据长度: {len(attachment['base64']) if attachment.get('base64') else 0} 字符")
+        base64_size = len(base64_data) * 3 / 4 if base64_data else None
+        print(f"Base64数据长度: {len(base64_data) if base64_data else 0} 字符")
         print(f"Base64估算大小: {base64_size/(1024*1024):.2f}MB" if base64_size else "无Base64数据")
         
         # 使用实际文件大小或base64估算大小中的较大值
@@ -386,7 +436,7 @@ def process_image_attachment(
                     print(f"错误详情:\n{traceback.format_exc()}")
             
             # 如果本地文件处理失败但有base64数据，使用base64
-            if attachment.get('base64'):
+            if base64_data:
                 print("使用base64处理图片")
                 processed_message['parts'].append({
                     "text": attachment_text
@@ -394,7 +444,7 @@ def process_image_attachment(
                 processed_message['parts'].append({
                     "inline_data": {
                         "mime_type": mime_type,
-                        "data": attachment['base64']
+                        "data": base64_data
                     }
                 })
                 return
@@ -428,7 +478,6 @@ def process_image_attachment(
             file_size=actual_file_size,
             mime_type=mime_type,
             attachment_type=AttachmentType.IMAGE,
-            genai=genai,
             processed_message=processed_message
         )
         
@@ -508,7 +557,6 @@ def process_video_attachment(
             file_size=file_size,
             mime_type=mime_type,
             attachment_type=AttachmentType.GEMINI_VIDEO,
-            genai=genai,
             processed_message=processed_message
         )
         

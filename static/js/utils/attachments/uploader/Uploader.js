@@ -299,14 +299,13 @@ export class Uploader {
                 case AttachmentType.IMAGE:
                     return {
                         ...baseData,
-                        base64: attachment.getBase64Data()
+                        base64_id: attachment.getBase64Id()
                     };
                 case AttachmentType.VIDEO:
                     return {
                         ...baseData,
-                        base64: attachment.getBase64Data(),
-                        duration: attachment.duration,
-                        thumbnail: attachment.thumbnail
+                        duration: attachment.getDuration(),
+                        thumbnail_base64_id: attachment.getThumbnailBase64Id()
                     };
                 default:
                     console.warn(`未知的附件类型: ${attachment.type}`);

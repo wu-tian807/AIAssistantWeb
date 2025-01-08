@@ -46,7 +46,6 @@ export class VideoUploader {
             const videoAttachment = new VideoAttachment({
                 fileName: attachment.fileName,
                 mimeType: attachment.mime_type,
-                base64: attachment.base64,
                 filePath: attachment.file_path,
                 thumbnail: attachment.thumbnail,
                 duration: attachment.duration

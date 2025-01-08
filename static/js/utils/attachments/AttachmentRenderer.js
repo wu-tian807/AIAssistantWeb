@@ -36,24 +36,59 @@ export class AttachmentRenderer {
     /**
      * 渲染附件预览
      * @param {Object} attachment 附件对象
-     * @returns {HTMLElement} 渲染后的预览元素
+     * @returns {Promise<HTMLElement>} 渲染后的预览元素
      */
-    render(attachment) {
-        const renderer = this.renderers[attachment.type];
-        if (!renderer) {
-            console.warn(`未找到类型 ${attachment.type} 的渲染器`);
-            return null;
+    async render(attachment) {
+        try {
+            if (!attachment || !attachment.type) {
+                console.error('无效的附件对象:', attachment);
+                return this.createErrorElement('无效的附件');
+            }
+
+            const renderer = this.renderers[attachment.type];
+            if (!renderer) {
+                console.warn(`未找到类型 ${attachment.type} 的渲染器`);
+                return this.createErrorElement(`不支持的附件类型: ${attachment.type}`);
+            }
+            
+            // 确保传递 disableDelete 属性
+            const rendererAttachment = {
+                ...attachment,
+                disableDelete: attachment.disableDelete || false
+            };
+            
+            // 处理异步渲染
+            if (renderer.render) {
+                const element = await renderer.render(rendererAttachment);
+                if (!element || !(element instanceof HTMLElement)) {
+                    console.error('渲染器返回了无效的元素:', element);
+                    return this.createErrorElement('渲染失败');
+                }
+                return element;
+            } else {
+                const element = renderer(rendererAttachment);
+                if (!element || !(element instanceof HTMLElement)) {
+                    console.error('渲染器返回了无效的元素:', element);
+                    return this.createErrorElement('渲染失败');
+                }
+                return element;
+            }
+        } catch (error) {
+            console.error('渲染附件时发生错误:', error);
+            return this.createErrorElement('渲染时发生错误');
         }
-        
-        // 确保传递 disableDelete 属性
-        const rendererAttachment = {
-            ...attachment,
-            disableDelete: attachment.disableDelete || false
-        };
-        
-        return renderer.render ? 
-            renderer.render(rendererAttachment) : 
-            renderer(rendererAttachment);
+    }
+
+    /**
+     * 创建错误提示元素
+     * @param {string} message 错误信息
+     * @returns {HTMLElement} 错误提示元素
+     */
+    createErrorElement(message) {
+        const errorElement = document.createElement('div');
+        errorElement.className = 'preview-item error';
+        errorElement.textContent = message;
+        return errorElement;
     }
 
     /**
