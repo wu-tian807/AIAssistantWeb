@@ -336,9 +336,6 @@ def process_image_attachment(
     """
     处理图片类型的附件
     """
-    if not attachment.get('base64'):
-        return
-        
     attachment_text = f"[附件[{supported_type}]: {attachment.get('fileName', '未命名文件')}]"
     
     if model_type == 'openai':
