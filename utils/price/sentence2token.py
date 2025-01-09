@@ -7,8 +7,10 @@ import unicodedata
 # 下载必要的NLTK数据
 try:
     nltk.data.find('tokenizers/punkt')
+    nltk.data.find('tokenizers/punkt_tab')
 except LookupError:
     nltk.download('punkt')
+    nltk.download('punkt_tab')
 
 class TokenCounter:
     def __init__(self):
@@ -68,7 +70,7 @@ class TokenCounter:
             elif lang_code == 'ja':  # 日语
                 tokens = self.segmenter.tokenize(text)
             else:  # 英文和其他语言
-                tokens = nltk.word_tokenize(text)
+                tokens = word_tokenize_safe(text)
                 
             # 特殊字符和标点符号的处理
             processed_tokens = []
@@ -93,6 +95,52 @@ class TokenCounter:
             words = text.split()
             return len(words)
     
+    def calculate_image_tokens(self, image_data):
+        """
+        计算图片的token数量
+        根据OpenAI的规则和程序的压缩策略：
+        1. 小图片token消耗：
+           - 低于1MB（或压缩后）: 65 tokens
+           - 1MB-4MB: 85 tokens
+        2. 大图片token消耗：
+           - 4MB以上基础值: 129 tokens
+           - 每额外4MB增加129个tokens
+        """
+        if not image_data:
+            return 65  # 默认按最小值计算
+            
+        try:
+            # 从base64数据估算图片大小
+            if isinstance(image_data, str) and image_data.startswith('data:'):
+                # 移除MIME类型前缀
+                base64_data = image_data.split(',')[1]
+                # 估算原始大小（字节）
+                image_size = len(base64_data) * 3 / 4
+                size_mb = image_size / (1024 * 1024)
+                
+                # 根据大小分级计算tokens
+                if size_mb <= 1:
+                    tokens = 65  # 1MB以下（包括压缩后的图片）
+                elif size_mb <= 4:
+                    tokens = 85  # 1MB-4MB
+                else:
+                    # 4MB以上：基础129 tokens + 每4MB额外129 tokens
+                    additional_chunks = int((size_mb - 4) / 4)
+                    tokens = 129 + (additional_chunks * 129)
+                
+                print(f"图片大小: {size_mb:.2f}MB")
+                if size_mb > 4:
+                    print(f"额外块数: {additional_chunks}")
+                print(f"总token数: {tokens}")
+                
+                return tokens
+            else:
+                return 65  # 默认按最小值计算
+                
+        except Exception as e:
+            print(f"计算图片token出错: {str(e)}")
+            return 65  # 出错时按最小值计算
+
     def estimate_tokens(self, messages):
         """
         估算对话消息的token数量
@@ -112,9 +160,13 @@ class TokenCounter:
                         if item.get('type') == 'text':
                             text = item.get('text', '')
                             tokens = self.count_tokens(text)
+                        elif item.get('type') == 'image_url':
+                            # 处理图片token
+                            image_url = item.get('image_url', {}).get('url', '')
+                            tokens = self.calculate_image_tokens(image_url)
                         else:
-                            # 非文本内容（如图片）按固定token计算
-                            tokens = 50  # 假设每个非文本内容占50个token
+                            # 其他类型的内容
+                            tokens = 50
                     else:
                         tokens = self.count_tokens(str(item))
                         
@@ -129,7 +181,7 @@ class TokenCounter:
                     output_tokens += tokens
                 else:
                     input_tokens += tokens
-            
+                    
             # 处理parts字段（Google模型格式）
             if 'parts' in message:
                 for part in message['parts']:
@@ -148,3 +200,11 @@ class TokenCounter:
                         input_tokens += tokens
         
         return input_tokens, output_tokens
+
+# 添加错误处理，如果资源仍然无法加载，使用备用方案
+def word_tokenize_safe(text):
+    try:
+        return nltk.word_tokenize(text)
+    except LookupError:
+        # 备用方案：简单的空格分词
+        return text.split()
