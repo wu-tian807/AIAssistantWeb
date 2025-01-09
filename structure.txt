@@ -1,5 +1,6 @@
 . 
 .\routes 
+.\routes\image 
 .\routes\user 
 .\static 
 .\static\css 
@@ -9,6 +10,7 @@
 .\static\images 
 .\static\js 
 .\static\js\icons 
+.\static\js\model_setting_bar 
 .\static\js\user_profiles 
 .\static\js\utils 
 .\static\js\utils\attachments 
@@ -24,3 +26,4 @@
 .\utils\chat 
 .\utils\files 
 .\utils\ocr 
+.\utils\price 
