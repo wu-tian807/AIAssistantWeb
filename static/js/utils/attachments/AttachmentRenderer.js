@@ -1,6 +1,7 @@
 import { AttachmentType } from './types.js';
 import { ImageRenderer } from './renderer/ImageRenderer.js';
 import { VideoRenderer } from './renderer/VideoRenderer.js';
+import { TextRenderer } from './renderer/TextRenderer.js';
 
 export class AttachmentRenderer {
     constructor() {
@@ -8,6 +9,7 @@ export class AttachmentRenderer {
         this.renderers = {
             [AttachmentType.IMAGE]: new ImageRenderer(),
             [AttachmentType.VIDEO]: new VideoRenderer(),
+            [AttachmentType.TEXT]: new TextRenderer(),
             [AttachmentType.DOCUMENT]: this.renderDocumentPreview.bind(this),
             [AttachmentType.BINARY]: this.renderBinaryPreview.bind(this)
         };

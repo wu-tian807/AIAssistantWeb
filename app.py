@@ -32,12 +32,17 @@ from routes.user.settings import user_settings
 from routes.image import image_bp  # 添加这行
 from utils.price.sentence2token import TokenCounter
 from utils.price.usage_model import Usage
-from utils.image_handler import delete_base64_file, save_base64_locally
+from utils.attachment_handler.image_handler import delete_base64_file, save_base64_locally
+from routes.upload_attachment_types import upload_attachment_types_bp
+from routes.text.text_routes import text_bp  # 添加这行
+
 # 注册蓝图
 app.register_blueprint(user_profile)
 app.register_blueprint(user_settings)  # 注册用户设置蓝图
 app.register_blueprint(upload_status_bp, url_prefix='/api/upload-status')
 app.register_blueprint(image_bp, url_prefix='/api/image')  # 添加这行
+app.register_blueprint(upload_attachment_types_bp)  # 注册附件类型蓝图
+app.register_blueprint(text_bp, url_prefix='/api/text')  # 添加这行
 
 # 在每个请求之前生成CSRF Token
 @app.before_request
@@ -192,63 +197,90 @@ def home():
 @login_required
 def upload_image():
     try:
-        print("=== 开始处理图片上传请求 ===")
+        print("\n=== 开始处理图片上传请求 ===", flush=True)
+        print(f"请求方法: {request.method}", flush=True)
+        print(f"请求头: {dict(request.headers)}", flush=True)
+        print(f"请求文件: {request.files}", flush=True)
+        print(f"请求表单: {request.form}", flush=True)
         
         if 'image' not in request.files:
+            print("错误：请求中没有图片文件", flush=True)
             return jsonify({'error': '没有提供图片'}), 400
         
         image = request.files['image']
+        print(f"\n接收到的文件信息:", flush=True)
+        print(f"文件名: {image.filename}", flush=True)
+        print(f"Content-Type: {image.content_type}", flush=True)
+        print(f"文件头部: {image.stream.read(16)}", flush=True)  # 读取文件头部来确认文件类型
+        image.stream.seek(0)  # 重置文件指针
+        
         if image.filename == '':
+            print("错误：没有选择文件", flush=True)
             return jsonify({'error': '没有选择文件'}), 400
 
         # 基本验证
+        print("\n执行文件验证...")
         validation_result = validate_image_file(image)
         if validation_result:
+            print(f"验证失败: {validation_result[0].json}")
             return validation_result
 
         # 获取用户信息
         user = User.query.get(session.get('user_id'))
         if not user:
+            print("错误：用户未找到")
             return jsonify({'error': '用户未找到'}), 404
 
         # 准备文件路径
-        file_path = prepare_file_path(image.filename, user)
+        print("\n准备文件路径...")
+        file_path = prepare_file_path(image.filename, user, image.content_type)
         
         try:
             # 获取文件大小
             image.seek(0, 2)
             file_size = image.tell()
             image.seek(0)
+            print(f"\n文件大小: {file_size/(1024*1024):.2f}MB")
             
             # 检查是否需要特殊处理（比如大图片压缩）
             needs_processing = file_size > 5 * 1024 * 1024  # 5MB
+            print(f"是否需要处理: {'是' if needs_processing else '否'}")
             
             if needs_processing:
+                print("\n处理大文件...")
                 # 保存到临时目录
                 temp_path = os.path.join(app.config['TEMP_FOLDER'], 
                     secure_filename(f"temp_{datetime.now().timestamp()}_{image.filename}"))
+                print(f"临时文件路径: {temp_path}")
                 image.save(temp_path)
                 
                 # 处理图片（压缩等）
                 processed_path = process_image(temp_path, file_path)
+                print(f"处理后的文件路径: {processed_path}")
                 
                 # 读取处理后的图片并转为base64
                 with open(processed_path, 'rb') as img_file:
                     base64_image = base64.b64encode(img_file.read()).decode('utf-8')
+                    print("成功转换为base64")
                     
                 # 清理临时文件
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
+                    print("已清理临时文件")
                     
             else:
-                # 直接保存小文件
+                print("\n直接保存小文件...")
                 image.save(file_path)
+                print(f"文件已保存到: {file_path}")
                 # 转换为base64
                 with open(file_path, 'rb') as img_file:
                     base64_image = base64.b64encode(img_file.read()).decode('utf-8')
+                    print("成功转换为base64")
             
             # 保存 base64 数据到本地文件
+            print("\n保存base64数据...")
             base64_id = save_base64_locally(base64_image, session['user_id'])
+            print(f"base64_id: {base64_id}")
             
             return jsonify({
                 'message': '图片上传成功',
@@ -258,36 +290,51 @@ def upload_image():
             })
 
         except Exception as e:
-            print(f"保存文件时出错: {str(e)}")
+            print(f"\n保存文件时出错: {str(e)}")
+            print(f"错误详情:\n{traceback.format_exc()}")
             if os.path.exists(file_path):
                 os.remove(file_path)
             raise
 
     except Exception as e:
-        print(f"图片上传失败: {str(e)}")
-        print(f"错误详情: {traceback.format_exc()}")
+        print(f"\n图片上传失败: {str(e)}")
+        print(f"错误详情:\n{traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
 def validate_image_file(image):
     """验证图片文件"""
+    print("\n=== 验证图片文件 ===")
     # 检查文件扩展名
     file_ext = os.path.splitext(image.filename)[1].lower()
+    print(f"文件扩展名: {file_ext}")
+    print(f"支持的扩展名: {ATTACHMENT_TYPES[AttachmentType.IMAGE]['extensions']}")
+    
     if file_ext not in ATTACHMENT_TYPES[AttachmentType.IMAGE]['extensions']:
+        print(f"不支持的文件扩展名: {file_ext}")
         return jsonify({'error': f'不支持的图片格式: {file_ext}'}), 400
         
     # 检查MIME类型
+    print(f"文件MIME类型: {image.content_type}")
+    print(f"支持的MIME类型: {ATTACHMENT_TYPES[AttachmentType.IMAGE]['mime_types']}")
+    
     if image.content_type not in ATTACHMENT_TYPES[AttachmentType.IMAGE]['mime_types']:
+        print(f"不支持的MIME类型: {image.content_type}")
         return jsonify({'error': f'不支持的图片格式: {image.content_type}'}), 400
         
     # 检查文件大小
     image.seek(0, 2)
     file_size = image.tell()
     image.seek(0)
+    print(f"文件大小: {file_size/(1024*1024):.2f}MB")
     
     max_size = ATTACHMENT_TYPES[AttachmentType.IMAGE]['max_size']
+    print(f"最大允许大小: {max_size/(1024*1024)}MB")
+    
     if file_size > max_size:
+        print(f"文件大小超过限制: {file_size/(1024*1024):.2f}MB > {max_size/(1024*1024)}MB")
         return jsonify({'error': f'文件大小超过限制 ({max_size/(1024*1024)}MB)'}), 400
     
+    print("文件验证通过")
     return None
 
 def process_image(temp_path, output_path):
@@ -1247,13 +1294,22 @@ def process_large_file():
         print(f"错误详情: {traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
-def prepare_file_path(filename, user):
+def prepare_file_path(filename, user, mime_type=None):
     """准备文件保存路径"""
+    print("\n=== 文件路径准备 ===")
+    print(f"原始文件名: {filename}")
+    print(f"MIME类型: {mime_type}")
+    
+    # 先获取原始文件的扩展名
+    original_ext = os.path.splitext(filename)[1].lower()
+    print(f"原始扩展名: {original_ext}")
+    
     # 生成安全的文件名
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    original_filename = secure_filename(filename)
-    ext = os.path.splitext(original_filename)[1]
-    new_filename = f"{timestamp}{ext}"
+    print(f"时间戳: {timestamp}")
+    
+    new_filename = f"{timestamp}{original_ext}"
+    print(f"新文件名: {new_filename}")
     
     # 创建用户目录和 base64_store 子目录
     user_email = user.email.replace('@','_').replace('.','_')
@@ -1262,7 +1318,10 @@ def prepare_file_path(filename, user):
     os.makedirs(user_folder, exist_ok=True)
     os.makedirs(base64_store, exist_ok=True)
     
-    return os.path.join(user_folder, new_filename)
+    final_path = os.path.join(user_folder, new_filename)
+    print(f"最终路径: {final_path}")
+    
+    return final_path
 
 def process_video_file(temp_path, final_path):
     """处理大视频文件"""

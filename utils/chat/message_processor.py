@@ -349,7 +349,7 @@ def process_image_attachment(
         base64_data = None
         if 'base64_id' in attachment:
             try:
-                from utils.image_handler import get_base64_by_id
+                from utils.attachment_handler.image_handler import get_base64_by_id
                 base64_data = get_base64_by_id(attachment['base64_id'], session.get('user_id'))
             except Exception as e:
                 print(f"获取base64数据失败: {e}")
@@ -400,7 +400,7 @@ def process_image_attachment(
         base64_data = None
         if 'base64_id' in attachment:
             try:
-                from utils.image_handler import get_base64_by_id
+                from utils.attachment_handler.image_handler import get_base64_by_id
                 base64_data = get_base64_by_id(attachment['base64_id'], session.get('user_id'))
             except Exception as e:
                 print(f"获取base64数据失败: {e}")

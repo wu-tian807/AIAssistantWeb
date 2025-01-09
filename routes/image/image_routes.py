@@ -1,6 +1,6 @@
 import json
 from flask import Blueprint, jsonify, session, request
-from utils.image_handler import get_base64_by_id, save_base64_locally
+from utils.attachment_handler.image_handler import get_base64_by_id, save_base64_locally
 from utils.wrapper import login_required
 import os
 from pathlib import Path
@@ -19,7 +19,7 @@ def check_file(base64_id):
         
     try:
         # 使用normalize_user_id函数
-        from utils.image_handler import normalize_user_id
+        from utils.attachment_handler.image_handler import normalize_user_id
         normalized_user_id = normalize_user_id(user_id)
         base_dir = Path(app.config['UPLOAD_FOLDER']) / normalized_user_id / 'base64_store'
         file_path = base_dir / f"{base64_id}.json"
@@ -101,7 +101,7 @@ def debug_check_file(base64_id):
         
     try:
         # 使用normalize_user_id函数
-        from utils.image_handler import normalize_user_id
+        from utils.attachment_handler.image_handler import normalize_user_id
         normalized_user_id = normalize_user_id(user_id)
         base_dir = Path(app.config['UPLOAD_FOLDER']) / normalized_user_id / 'base64_store'
         file_path = base_dir / f"{base64_id}.json"
@@ -149,7 +149,7 @@ def debug_base64(base64_id):
     
     if user_id:
         try:
-            from utils.image_handler import normalize_user_id
+            from utils.attachment_handler.image_handler import normalize_user_id
             normalized_user_id = normalize_user_id(user_id)
             base_dir = Path(app.config['UPLOAD_FOLDER']) / normalized_user_id / 'base64_store'
             file_path = base_dir / f"{base64_id}.json"
@@ -207,7 +207,7 @@ def debug_file_check(base64_id):
         
     try:
         # 使用normalize_user_id函数
-        from utils.image_handler import normalize_user_id
+        from utils.attachment_handler.image_handler import normalize_user_id
         normalized_user_id = normalize_user_id(user_id)
         base_dir = Path(app.config['UPLOAD_FOLDER']) / normalized_user_id / 'base64_store'
         file_path = base_dir / f"{base64_id}.json"
@@ -255,7 +255,7 @@ def debug_paths():
         return jsonify({'error': '未登录'}), 401
         
     try:
-        from utils.image_handler import normalize_user_id
+        from utils.attachment_handler.image_handler import normalize_user_id
         normalized_user_id = normalize_user_id(user_id)
         
         # 收集路径信息

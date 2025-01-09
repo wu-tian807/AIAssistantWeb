@@ -5,7 +5,7 @@ from datetime import datetime
 from utils.wrapper import login_required
 from utils.user_model import User, db
 from utils.files.files_extension_helper import get_image_extension
-from utils.image_handler import encode_image
+from utils.attachment_handler.image_handler import encode_image
 
 # 创建蓝图
 user_profile = Blueprint('user_profile', __name__)
