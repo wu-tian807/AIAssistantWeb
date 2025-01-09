@@ -1,5 +1,6 @@
 import { ImageUploader } from './ImageUploader.js';
 import { VideoUploader } from './VideoUploader.js';
+import { TextUploader } from './TextUploader.js';
 import { AttachmentType, AttachmentConfig, MimeTypeMapping, AttachmentUtils } from '../types.js';
 import { FileSelector } from '../files/FileSelector.js';
 import { createImageModal } from '../modal/imageModal.js';
@@ -100,9 +101,16 @@ export class Uploader {
                 }
             }
         }));
-        
-        // TODO: 后续可以添加其他类型的上传器
-        // this.uploaders.set(AttachmentType.DOCUMENT, new DocumentUploader(this.options));
+
+        // 添加文本上传器
+        this.uploaders.set(AttachmentType.TEXT, new TextUploader({
+            ...this.options,
+            onDelete: (attachment) => {
+                if (this.options.onDelete) {
+                    this.options.onDelete(attachment);
+                }
+            }
+        }));
     }
 
     /**
@@ -215,9 +223,8 @@ export class Uploader {
                             previewImage.style.cursor = 'pointer';
                             previewImage.onclick = (e) => {
                                 e.stopPropagation();
-                                const imageUrl = attachment.getBase64Data() ? 
-                                    `data:${attachment.getMimeType()};base64,${attachment.getBase64Data()}` :
-                                    attachment.getFilePath();
+                                // 使用文件路径获取图片
+                                const imageUrl = `/get_image?path=${encodeURIComponent(attachment.getFilePath())}`;
                                 createImageModal(imageUrl);
                             };
                         }
@@ -306,6 +313,13 @@ export class Uploader {
                         ...baseData,
                         duration: attachment.getDuration(),
                         thumbnail_base64_id: attachment.getThumbnailBase64Id()
+                    };
+                case AttachmentType.TEXT:
+                    return {
+                        ...baseData,
+                        content_id: attachment.content_id,
+                        encoding: attachment.encoding,
+                        lineCount: attachment.lineCount
                     };
                 default:
                     console.warn(`未知的附件类型: ${attachment.type}`);

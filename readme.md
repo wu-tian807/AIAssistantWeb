@@ -7,30 +7,33 @@
 ```
 .
 ├── routes                                    # 路由目录,处理所有HTTP请求
-│   └── user                                  # 用户相关路由,如登录注册等
-├── static                                    # 静态资源目录
-│   ├── css                                   # CSS样式文件
-│   ├── icons                                 # 图标资源目录
-│   │   ├── models                           # AI模型图标
-│   │   └── users                            # 用户头像
-│   ├── images                               # 图片资源
-│   └── js                                   # JavaScript文件目录
-│       ├── icons                            # 图标相关JS
-│       ├── user_profiles                    # 用户资料相关JS
-│       └── utils                            # 工具类JS
-│           ├── attachments                  # 附件处理相关JS
-│           │   ├── attachment               # 附件基础类
-│           │   ├── files                    # 文件处理
-│           │   ├── interfaces               # 接口定义
-│           │   ├── modal                    # 附件模态框
-│           │   ├── renderer                 # 附件渲染器
-│           │   └── uploader                 # 文件上传
-│           └── model_selector               # AI模型选择器
-├── templates                                # HTML模板目录
-└── utils                                    # Python工具类目录
-    ├── chat                                 # 聊天相关工具
-    ├── files                                # 文件处理工具
-    └── ocr                                  # OCR文字识别工具
+│   ├── image                                # 图片处理相关路由
+│   └── user                                 # 用户相关路由,如登录注册等
+├── static                                   # 静态资源目录
+│   ├── css                                  # CSS样式文件
+│   ├── icons                               # 图标资源目录
+│   │   ├── models                          # AI模型图标
+│   │   └── users                           # 用户头像
+│   ├── images                              # 图片资源
+│   └── js                                  # JavaScript文件目录
+│       ├── icons                           # 图标相关JS
+│       ├── model_setting_bar               # 模型设置相关JS
+│       ├── user_profiles                   # 用户资料相关JS
+│       └── utils                           # 工具类JS
+│           ├── attachments                 # 附件处理相关JS
+│           │   ├── attachment              # 附件基础类
+│           │   ├── files                   # 文件处理
+│           │   ├── interfaces              # 接口定义
+│           │   ├── modal                   # 附件模态框
+│           │   ├── renderer                # 附件渲染器
+│           │   └── uploader                # 文件上传
+│           └── model_selector              # AI模型选择器
+├── templates                               # HTML模板目录
+└── utils                                   # Python工具类目录
+    ├── chat                                # 聊天相关工具
+    ├── files                               # 文件处理工具
+    ├── ocr                                 # OCR文字识别工具
+    └── price                               # 价格计算工具
 
 
 ```

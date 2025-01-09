@@ -7,12 +7,15 @@ class AttachmentType(Enum):
     TEXT = auto()
     BINARY = auto()
     GEMINI_VIDEO = auto()
+    CSV_TABLE = auto()      # 新增：CSV格式表格
+    EXCEL_TABLE = auto()    # 新增：Excel格式表格
 
 ATTACHMENT_TYPES = {
     AttachmentType.IMAGE: {
         'extensions': ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic', '.heif'],
         'mime_types': ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/heic', 'image/heif'],
-        'max_size': 1 * 1024 * 1024 * 1024  # 1GB
+        'max_size': 1 * 1024 * 1024 * 1024,  # 1GB
+        'description': '图片文件'
     },
     AttachmentType.VIDEO: {
         'extensions': ['.mp4', '.webm', '.ogg', '.mkv', '.m4v', '.ts', '.mts', '.vob', '.divx', '.rm', '.rmvb', '.asf'],
@@ -26,43 +29,31 @@ ATTACHMENT_TYPES = {
             'video/vnd.rn-realvideo', # .rm, .rmvb
             'video/x-ms-asf'       # .asf
         ],
-        'max_size': 2 * 1024 * 1024 * 1024  # 2GB (与Gemini限制一致)
+        'max_size': 2 * 1024 * 1024 * 1024,  # 2GB (与Gemini限制一致)
+        'description': '视频文件'
     },
     AttachmentType.DOCUMENT: {
         'extensions': [
-            # 文档格式
             '.pdf', '.doc', '.docx', '.rtf', '.odt',
-            # 演示文稿
             '.ppt', '.pptx', '.odp', '.key',
-            # 电子书
-            '.epub', '.mobi', '.azw', '.azw3',
-            # 压缩文档
-            '.zip', '.rar', '.7z', '.tar', '.gz'
+            '.epub', '.mobi', '.azw', '.azw3'
         ],
         'mime_types': [
-            # 文档格式
             'application/pdf',
             'application/msword',
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             'application/rtf',
             'application/vnd.oasis.opendocument.text',
-            # 演示文稿
             'application/vnd.ms-powerpoint',
             'application/vnd.openxmlformats-officedocument.presentationml.presentation',
             'application/vnd.oasis.opendocument.presentation',
             'application/x-iwork-keynote-sffkey',
-            # 电子书
             'application/epub+zip',
             'application/x-mobipocket-ebook',
-            'application/vnd.amazon.ebook',
-            # 压缩文档
-            'application/zip',
-            'application/x-rar-compressed',
-            'application/x-7z-compressed',
-            'application/x-tar',
-            'application/gzip'
+            'application/vnd.amazon.ebook'
         ],
-        'max_size': 50 * 1024 * 1024  # 50MB
+        'max_size': 50 * 1024 * 1024,  # 50MB
+        'description': '文档文件'
     },
     AttachmentType.TEXT: {
         'extensions': [
@@ -75,9 +66,7 @@ ATTACHMENT_TYPES = {
             # 配置文件
             '.json', '.yaml', '.yml', '.toml', '.ini', '.conf',
             # 网页相关
-            '.html', '.htm', '.css', '.xml', '.svg',
-            # 数据文件
-            '.csv', '.tsv'
+            '.html', '.htm', '.css', '.xml', '.svg'
         ],
         'mime_types': [
             # 纯文本
@@ -105,21 +94,38 @@ ATTACHMENT_TYPES = {
             'text/html',
             'text/css',
             'application/xml',
-            'image/svg+xml',
-            # 数据文件
-            'text/csv'
+            'image/svg+xml'
         ],
-        'max_size': 10 * 1024 * 1024  # 10MB
+        'max_size': 10 * 1024 * 1024,  # 10MB
+        'description': '文本文件'
+    },
+    AttachmentType.CSV_TABLE: {
+        'extensions': ['.csv', '.tsv'],
+        'mime_types': ['text/csv', 'text/tab-separated-values'],
+        'max_size': 50 * 1024 * 1024,  # 50MB
+        'description': '文本表格文件'
+    },
+    AttachmentType.EXCEL_TABLE: {
+        'extensions': ['.xlsx', '.xls', '.ods'],
+        'mime_types': [
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-excel',
+            'application/vnd.oasis.opendocument.spreadsheet'
+        ],
+        'max_size': 50 * 1024 * 1024,  # 50MB
+        'description': '二进制表格文件'
     },
     AttachmentType.BINARY: {
         'extensions': ['*'],
         'mime_types': ['application/octet-stream'],
-        'max_size': 10 * 1024 * 1024  # 10MB
+        'max_size': 10 * 1024 * 1024,  # 10MB
+        'description': '二进制文件'
     },
     AttachmentType.GEMINI_VIDEO: {
         'extensions': ['.mp4', '.mpeg', '.mov', '.avi', '.flv', '.mpg', '.webm', '.wmv', '.3gpp'],
         'mime_types': ['video/mp4', 'video/mpeg', 'video/mov', 'video/avi', 'video/x-flv', 'video/mpg', 'video/webm', 'video/wmv', 'video/3gpp'],
-        'max_size': 2 * 1024 * 1024 * 1024  # 2GB (Gemini限制)
+        'max_size': 2 * 1024 * 1024 * 1024,  # 2GB
+        'description': 'Gemini支持的视频格式'
     }
 }
 

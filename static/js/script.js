@@ -8,6 +8,7 @@ import {IconRenderer} from './iconRenderer.js';
 import { getLastAssistantModel,updateModelSelect } from './utils/model_selector/modelSelect.js';
 import { initializeUserProfile ,initializeTheme} from './user_profiles/userDropdownHandler.js';
 import { ModelSettingRenderer } from './model_setting_bar/modelSettingRenderer.js';
+import { AttachmentTypeLoader } from "./utils/attachments/types.js";
 const md = initMarkdownit();
 // 存储聊天消息历史
 let messages = [];
@@ -1142,6 +1143,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // 初始化各种功能
     document.getElementById('new-chat-btn').addEventListener('click', createNewConversation);
+    const attachmentTypeLoader = new AttachmentTypeLoader();
+    attachmentTypeLoader.loadConfig();
     initializeDragAndDrop();
     initializePasteHandler();
     initializeTheme(); // 添加主题初始化

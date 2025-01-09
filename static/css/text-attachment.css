@@ -1,0 +1,250 @@
+/* 文本预览模态框样式 */
+.text-preview-modal .modal-dialog {
+    max-width: 80%;
+    margin: 1.75rem auto;
+}
+
+.text-preview-modal .modal-content {
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.text-preview-modal .modal-header {
+    border-bottom: 1px solid #e9ecef;
+    padding: 1rem 1.5rem;
+}
+
+.text-preview-modal .modal-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.text-preview-modal .modal-body {
+    padding: 1.5rem;
+}
+
+/* 文件信息区域样式 */
+.text-preview-modal .text-info {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 6px;
+    margin-bottom: 1.5rem;
+}
+
+.text-preview-modal .text-info p {
+    margin-bottom: 0.5rem;
+    color: #495057;
+}
+
+.text-preview-modal .text-info strong {
+    color: #212529;
+    margin-right: 0.5rem;
+}
+
+/* 文本内容区域样式 */
+.text-preview-modal .text-content {
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    overflow: auto;
+}
+
+.text-preview-modal .text-content pre {
+    margin: 0;
+    padding: 1rem;
+    max-height: 60vh;
+    overflow: auto;
+}
+
+.text-preview-modal .text-content code {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: #212529;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* 加载状态和错误提示样式 */
+.text-preview-modal .text-content.loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+    color: #6c757d;
+}
+
+.text-preview-modal .text-content.error {
+    color: #dc3545;
+    padding: 1rem;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .text-preview-modal .modal-dialog {
+        max-width: 95%;
+        margin: 1rem auto;
+    }
+
+    .text-preview-modal .text-content pre {
+        max-height: 50vh;
+    }
+}
+
+/* 滚动条美化 */
+.text-preview-modal .text-content pre::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.text-preview-modal .text-content pre::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.text-preview-modal .text-content pre::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.text-preview-modal .text-content pre::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* 模态框过渡动画 */
+.text-preview-modal.fade .modal-dialog {
+    transform: scale(0.95);
+    transition: transform 0.2s ease-out;
+}
+
+.text-preview-modal.show .modal-dialog {
+    transform: scale(1);
+}
+
+/* 文本预览项样式 */
+.text-preview-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem;
+    background-color: #fff;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.text-preview-item:hover {
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+}
+
+.text-preview-item .text-icon {
+    font-size: 1.5rem;
+    margin-right: 1rem;
+    color: #6c757d;
+}
+
+.text-preview-item .file-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.text-preview-item .file-name {
+    font-weight: 500;
+    color: #212529;
+    margin-bottom: 0.25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.text-preview-item .preview-info {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.text-preview-item .actions {
+    display: flex;
+    align-items: center;
+    margin-left: 1rem;
+}
+
+.text-preview-item .preview-button,
+.text-preview-item .delete-button {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+.text-preview-item .preview-button:hover {
+    background-color: #0d6efd;
+    color: #fff;
+}
+
+.text-preview-item .delete-button:hover {
+    background-color: #dc3545;
+    color: #fff;
+}
+
+/* 文本附件预览样式 */
+.text-attachment-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    width: 200px;
+    transition: all 0.2s ease;
+}
+
+.text-attachment-preview:hover {
+    background-color: #f1f3f5;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.text-attachment-preview .text-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    background-color: #e9ecef;
+    border-radius: 8px;
+    color: #495057;
+}
+
+.text-attachment-preview .text-icon i {
+    font-size: 24px;
+}
+
+.text-attachment-preview .text-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.text-attachment-preview .file-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.text-attachment-preview .file-details {
+    font-size: 12px;
+    color: #868e96;
+}
+
+/* 消息中的文本附件样式 */
+.message-attachments-container .text-attachment-preview {
+    flex: 0 0 200px;
+    margin: 0;
+    height: auto;
+    min-height: 80px;
+}

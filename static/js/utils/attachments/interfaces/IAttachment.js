@@ -34,6 +34,16 @@
  */
 
 /**
+ * 文本附件接口
+ * @typedef {Object} ITextAttachment
+ * @extends {IAttachmentBase}
+ * @property {'text'} type - 固定为 'text'
+ * @property {string} content_id - 文本内容的唯一标识符
+ * @property {string} [encoding] - 文本编码（如 'UTF-8'）
+ * @property {number} [lineCount] - 文本行数
+ */
+
+/**
  * 附件渲染器接口
  * @typedef {Object} IAttachmentRenderer
  * @property {function(IAttachmentBase): HTMLElement} render - 渲染附件

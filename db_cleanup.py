@@ -3,7 +3,7 @@ import json
 import time
 from pathlib import Path
 from initialization import app, db
-from utils.image_handler import save_base64_locally, normalize_user_id
+from utils.attachment_handler.image_handler import save_base64_locally, normalize_user_id
 from utils.conversation_model import Conversation
 
 def add_new_columns():
