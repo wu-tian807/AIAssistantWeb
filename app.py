@@ -322,6 +322,8 @@ def chat():
     conversation_id = data.get('conversation_id')
     model_id = data.get('model_id', 'gemini-1.5-pro')
     user_id = session.get('user_id')
+    temperature = data.get('temperature', 0.7)
+    max_tokens = data.get('max_tokens', 4096)
     
     # 创建token计数器实例
     token_counter = TokenCounter()
@@ -586,7 +588,8 @@ def chat():
                         model=model_id,
                         messages=formatted_messages,
                         stream=True,
-                        temperature=0.7
+                        temperature=temperature,
+                        max_tokens=max_tokens
                     )
                 else:
                     client = xai_client
@@ -594,7 +597,8 @@ def chat():
                         model=model_id,
                         messages=processed_messages,
                         stream=True,
-                        temperature=0.7
+                        temperature=temperature,
+                        max_tokens=max_tokens
                     )
 
                 for chunk in stream:
@@ -699,8 +703,8 @@ def chat():
                             stream=True,
                             safety_settings=safety_settings,
                             generation_config=genai_instance.GenerationConfig(
-                                max_output_tokens=2048,
-                                temperature=0.7,
+                                max_output_tokens=max_tokens,
+                                temperature=temperature,
                             )
                         )
                         print("成功获取响应流")
@@ -886,6 +890,9 @@ def save_conversations():
     data = request.json
     conversation_data = data.get('conversation')  # 改为单个对话
     operation = data.get('operation', 'update')  # 添加操作类型
+    temperature = data.get('temperature')  # 移除默认值，使用数据库的默认值
+    max_tokens = data.get('max_tokens')  # 移除默认值，使用数据库的默认值
+    model_id = data.get('model_id')
     
     try:
         if operation == 'create':
@@ -895,7 +902,9 @@ def save_conversations():
                 title=conversation_data['title'],
                 messages=conversation_data['messages'],
                 system_prompt=conversation_data.get('systemPrompt'),
-                user_id=session['user_id']
+                user_id=session['user_id'],
+                temperature=temperature,
+                max_tokens=max_tokens
             )
             db.session.add(conversation)
             
@@ -910,6 +919,11 @@ def save_conversations():
                 conversation.title = conversation_data['title']
                 conversation.messages = conversation_data['messages']
                 conversation.system_prompt = conversation_data.get('systemPrompt')
+                # 只在提供了新值时更新
+                if temperature is not None:
+                    conversation.temperature = temperature
+                if max_tokens is not None:
+                    conversation.max_tokens = max_tokens
             
         elif operation == 'delete':
             # 删除对话
@@ -984,7 +998,8 @@ def get_models():
                     'id': model['id'],
                     'name': model['name'],
                     'description': model['description'],
-                    'available_attachments': available_attachments
+                    'available_attachments': available_attachments,
+                    'max_output_tokens': model['max_output_tokens']
                 }
                 provider_config['models'].append(serializable_model)
                 

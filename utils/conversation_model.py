@@ -9,6 +9,9 @@ class Conversation(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    temperature = db.Column(db.Float, default=0.7)
+    max_tokens = db.Column(db.Integer, default=4096)
+
 
     def to_dict(self):
         return {
@@ -17,5 +20,7 @@ class Conversation(db.Model):
             'messages': self.messages,
             'systemPrompt': self.system_prompt,  # 添加系统提示词到返回的字典中
             'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat()
+            'updated_at': self.updated_at.isoformat(),
+            'temperature': self.temperature,
+            'max_tokens': self.max_tokens
         }
