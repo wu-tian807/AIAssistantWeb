@@ -1,36 +1,167 @@
-/* 文本预览模态框样式 */
+/* 文本预览项样式 */
+.text-attachment-preview {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 200px;
+    margin: 5px;
+    border-radius: 8px;
+    overflow: visible;
+    background-color: #f5f5f5;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.text-attachment-preview:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 文本图标容器 */
+.text-icon-container {
+    position: relative;
+    width: 100%;
+    height: 120px;
+    background-color: #f8f9fa;
+    cursor: pointer;
+    overflow: hidden;
+    border-radius: 8px 8px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.3s ease;
+}
+
+.text-icon-container:hover {
+    background-color: #e9ecef;
+}
+
+/* 文本图标 */
+.text-icon {
+    font-size: 48px;
+    color: #6c757d;
+    transition: transform 0.3s ease;
+}
+
+.text-attachment-preview:hover .text-icon {
+    transform: scale(1.1);
+}
+
+/* 文件信息容器 */
+.text-info {
+    width: 100%;
+    padding: 8px;
+    background-color: white;
+    border-radius: 0 0 8px 8px;
+}
+
+/* 文件名 */
+.text-info .file-name {
+    font-size: 12px;
+    color: #495057;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 文件详情 */
+.text-info .file-details {
+    font-size: 11px;
+    color: #6c757d;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 删除按钮 */
+.text-attachment-preview .delete-button {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    z-index: 100;
+}
+
+.text-attachment-preview:hover .delete-button {
+    opacity: 1;
+}
+
+.text-attachment-preview .delete-button:hover {
+    background-color: #c82333;
+    transform: scale(1.1);
+}
+
+/* 文本预览模态框 */
+.text-preview-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1050;
+    overflow-x: hidden;
+    overflow-y: auto;
+    animation: modalFadeIn 0.3s ease;
+}
+
+.text-preview-modal.show {
+    display: block;
+}
+
 .text-preview-modal .modal-dialog {
-    max-width: 80%;
-    margin: 1.75rem auto;
+    max-width: 800px;
+    margin: 30px auto;
+    animation: modalSlideIn 0.3s ease;
 }
 
 .text-preview-modal .modal-content {
     background-color: #fff;
     border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border: none;
 }
 
 .text-preview-modal .modal-header {
-    border-bottom: 1px solid #e9ecef;
     padding: 1rem 1.5rem;
+    border-bottom: 1px solid #dee2e6;
+    background-color: #f8f9fa;
+    border-radius: 8px 8px 0 0;
 }
 
 .text-preview-modal .modal-title {
     font-size: 1.25rem;
     font-weight: 600;
-    color: #333;
+    color: #212529;
+    margin: 0;
 }
 
 .text-preview-modal .modal-body {
     padding: 1.5rem;
 }
 
-/* 文件信息区域样式 */
+/* 文件信息区域 */
 .text-preview-modal .text-info {
     background-color: #f8f9fa;
     padding: 1rem;
     border-radius: 6px;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
 }
 
 .text-preview-modal .text-info p {
@@ -40,14 +171,14 @@
 
 .text-preview-modal .text-info strong {
     color: #212529;
-    margin-right: 0.5rem;
+    font-weight: 600;
 }
 
-/* 文本内容区域样式 */
+/* 文本内容区域 */
 .text-preview-modal .text-content {
     background-color: #f8f9fa;
     border-radius: 6px;
-    overflow: auto;
+    overflow: hidden;
 }
 
 .text-preview-modal .text-content pre {
@@ -64,32 +195,6 @@
     color: #212529;
     white-space: pre-wrap;
     word-wrap: break-word;
-}
-
-/* 加载状态和错误提示样式 */
-.text-preview-modal .text-content.loading {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 200px;
-    color: #6c757d;
-}
-
-.text-preview-modal .text-content.error {
-    color: #dc3545;
-    padding: 1rem;
-}
-
-/* 响应式调整 */
-@media (max-width: 768px) {
-    .text-preview-modal .modal-dialog {
-        max-width: 95%;
-        margin: 1rem auto;
-    }
-
-    .text-preview-modal .text-content pre {
-        max-height: 50vh;
-    }
 }
 
 /* 滚动条美化 */
@@ -112,139 +217,68 @@
     background: #a8a8a8;
 }
 
-/* 模态框过渡动画 */
-.text-preview-modal.fade .modal-dialog {
-    transform: scale(0.95);
-    transition: transform 0.2s ease-out;
+/* 动画效果 */
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
 }
 
-.text-preview-modal.show .modal-dialog {
-    transform: scale(1);
+@keyframes modalSlideIn {
+    from {
+        transform: translateY(-10%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
 }
 
-/* 文本预览项样式 */
-.text-preview-item {
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .text-attachment-preview {
+        width: 100%;
+        margin: 10px 0;
+    }
+
+    .text-preview-modal .modal-dialog {
+        margin: 10px;
+        max-width: calc(100% - 20px);
+    }
+
+    .text-preview-modal .text-content pre {
+        max-height: 50vh;
+    }
+}
+
+/* 错误状态样式 */
+.text-attachment-preview.error {
+    border-color: #dc3545;
+}
+
+.text-attachment-preview.error .text-icon-container {
+    background-color: #fff5f5;
+}
+
+.text-attachment-preview.error .text-icon {
+    color: #dc3545;
+}
+
+/* 加载状态 */
+.text-content.loading {
     display: flex;
-    align-items: center;
-    padding: 0.75rem;
-    background-color: #fff;
-    border: 1px solid #e9ecef;
-    border-radius: 6px;
-    margin-bottom: 0.5rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.text-preview-item:hover {
-    background-color: #f8f9fa;
-    border-color: #dee2e6;
-}
-
-.text-preview-item .text-icon {
-    font-size: 1.5rem;
-    margin-right: 1rem;
-    color: #6c757d;
-}
-
-.text-preview-item .file-info {
-    flex: 1;
-    min-width: 0;
-}
-
-.text-preview-item .file-name {
-    font-weight: 500;
-    color: #212529;
-    margin-bottom: 0.25rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.text-preview-item .preview-info {
-    font-size: 0.875rem;
-    color: #6c757d;
-}
-
-.text-preview-item .actions {
-    display: flex;
-    align-items: center;
-    margin-left: 1rem;
-}
-
-.text-preview-item .preview-button,
-.text-preview-item .delete-button {
-    padding: 0.25rem 0.75rem;
-    font-size: 0.875rem;
-}
-
-.text-preview-item .preview-button:hover {
-    background-color: #0d6efd;
-    color: #fff;
-}
-
-.text-preview-item .delete-button:hover {
-    background-color: #dc3545;
-    color: #fff;
-}
-
-/* 文本附件预览样式 */
-.text-attachment-preview {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px;
-    background-color: #f8f9fa;
-    border: 1px solid #e9ecef;
-    border-radius: 8px;
-    width: 200px;
-    transition: all 0.2s ease;
-}
-
-.text-attachment-preview:hover {
-    background-color: #f1f3f5;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-}
-
-.text-attachment-preview .text-icon {
-    display: flex;
-    align-items: center;
     justify-content: center;
-    width: 48px;
-    height: 48px;
-    background-color: #e9ecef;
-    border-radius: 8px;
-    color: #495057;
+    align-items: center;
+    min-height: 200px;
+    color: #6c757d;
 }
 
-.text-attachment-preview .text-icon i {
-    font-size: 24px;
-}
-
-.text-attachment-preview .text-info {
-    flex: 1;
-    min-width: 0;
-}
-
-.text-attachment-preview .file-name {
-    font-size: 14px;
-    font-weight: 500;
-    color: #495057;
-    margin-bottom: 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.text-attachment-preview .file-details {
-    font-size: 12px;
-    color: #868e96;
-}
-
-/* 消息中的文本附件样式 */
+/* 消息中的文本预览 */
 .message-attachments-container .text-attachment-preview {
-    flex: 0 0 200px;
-    margin: 0;
-    height: auto;
-    min-height: 80px;
+    margin: 5px 0;
+    width: 200px;
 }

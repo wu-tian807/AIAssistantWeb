@@ -1,0 +1,166 @@
+Accelerated failure time model
+Actuarial science
+Adrien-Marie Legendre
+Al-Khalil ibn Ahmad al-Farahidi
+Al-Kindi
+Algebra
+Algorithms
+Alternative hypothesis
+An experimental study
+Analysis of variance
+Analytic geometry
+Analytic number theory
+Ancillary statistic
+Areas of mathematics
+Arithmetic
+Arithmetic geometry
+Ars Conjectandi
+Assembly line
+Astrostatistics
+Auditing
+Autocorrelation
+Average treatment effect
+Bar chart
+Baseball statistics
+Bayes estimator
+Bayesian information criterion
+Bayesian model
+Bayesian probability
+Bayesian statistics
+Bias
+Binomial distribution
+Binomial regression
+Bioinformatics
+Biology
+Blaise Pascal
+Box plot
+Business mathematics
+Canonical correlation
+Carl Friedrich Gauss
+Cartography
+Case-control study
+Categorical variable
+Celsius
+Census
+Central limit theorem
+Chaos theory
+Chemometrics
+Chi-squared distribution
+Chi-squared test
+Christiaan Huygens
+Clinical study design
+Clinical trial
+Cluster sampling
+Many of these errors
+Populations can be di
+Rejecting or disprovi
+Representative sampli
+Statistics
+Statistik
+The presence of missi
+Type I errors
+When census data cann
+Working from a null h
+a leading to a test o
+adequate null hypothe
+al relationship betwe
+all people living in
+an alternative to an
+an or standard deviat
+analysis of random ph
+and each other
+and inferential stati
+and presentation of d
+and then taking addit
+ards to the data that
+begin with a statisti
+bias
+but other types of er
+c techniques have bee
+cal population or a s
+can also occur
+can reasonably extend
+data by developing sp
+data sets
+description of a stat
+descriptive statistic
+dom
+e measurements
+e or objects such as
+e population as a who
+ecific experiment des
+ed with this framewor
+en the two data sets
+ences and conclusions
+ent to which members
+esis of no relationsh
+every aspect of data
+every atom composing
+f properties of a dis
+f the relationship be
+false negative
+from German
+from the sample to th
+g of data collection
+giving a
+iation
+ich the null can be p
+igns and survey sampl
+in terms of the desig
+including the plannin
+industrial
+ing the same procedur
+ion
+ional measurements us
+le
+m an idealized model
+mathematical statisti
+methods are used in d
+n developed to addres
+n of surveys and expe
+ndexes such as the me
+ng data or censoring
+ng the null hypothesi
+noise
+ntify the sense in wh
+null hypothesis fails
+null hypothesis is re
+of the distribution d
+on
+or
+or location
+or systematic
+or variability
+organization
+orig
+ory
+ot be collected
+re used in the test
+rements of the system
+riments
+roven false
+s from data that are
+s these problems
+s to a scientific
+sample or population
+seeks to characterize
+sis
+size to specifying an
+st reports incorrect
+stical tests that qua
+stics
+such as when an analy
+t is in fact false
+the collection of dat
+the distribution
+they generate
+tion
+tribution
+tween two statistical
+two basic forms of er
+under study
+units
+verse groups of peopl
+which summarize data
+while dispersion
+ypothesis

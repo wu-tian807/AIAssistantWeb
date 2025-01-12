@@ -1,4 +1,5 @@
 import { TextAttachment } from '../attachment/TextAttachment.js';
+import { showToast } from '../../toast.js';
 
 /**
  * 文本文件上传器
@@ -19,11 +20,18 @@ export class TextUploader {
             // 读取文件内容
             const content = await this.readFileContent(file);
             
+            // 创建上传进度提示
+            const toast = showToast('文本文件上传中...', 'info', 0);
+            const progressText = document.createElement('div');
+            progressText.className = 'upload-progress';
+            toast.appendChild(progressText);
+            
             // 发送到服务器
             const response = await fetch('/api/text/save', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''
                 },
                 body: JSON.stringify({
                     content: content,
@@ -33,13 +41,15 @@ export class TextUploader {
             });
 
             if (!response.ok) {
-                throw new Error('上传失败');
+                const errorData = await response.json().catch(() => ({ error: '服务器响应错误' }));
+                toast.remove();
+                throw new Error(errorData.error || `上传失败: ${response.status}`);
             }
 
             const data = await response.json();
             
             // 创建文本附件实例
-            return new TextAttachment({
+            const textAttachment = new TextAttachment({
                 fileName: file.name,
                 mime_type: file.type || 'text/plain',
                 content_id: data.metadata.content_id,
@@ -48,8 +58,24 @@ export class TextUploader {
                 size: data.metadata.size,
                 lastModified: file.lastModified
             });
+
+            // 移除上传提示并显示成功消息
+            toast.remove();
+            showToast('文本文件上传成功', 'success');
+
+            // 调用成功回调
+            if (this.options.onSuccess) {
+                this.options.onSuccess(textAttachment);
+            }
+
+            return textAttachment;
+            
         } catch (error) {
             console.error('文本文件处理失败:', error);
+            showToast(error.message || '文本文件上传失败', 'error');
+            if (this.options.onError) {
+                this.options.onError(error);
+            }
             throw error;
         }
     }

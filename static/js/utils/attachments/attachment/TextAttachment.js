@@ -114,16 +114,20 @@ export class TextAttachment {
 
     /**
      * 创建上传预览元素
+     * @param {Function} onDelete - 删除回调函数
      * @returns {HTMLElement}
      */
-    createUploadPreviewElement() {
+    createUploadPreviewElement(onDelete) {
         const previewContainer = document.createElement('div');
-        previewContainer.className = 'text-attachment-preview upload-preview';
+        previewContainer.className = 'text-attachment-preview';
 
-        // 创建文本图标
+        // 创建图标容器
         const iconContainer = document.createElement('div');
-        iconContainer.className = 'text-icon';
-        iconContainer.innerHTML = '<i class="fas fa-file-alt"></i>';
+        iconContainer.className = 'text-icon-container';
+        const iconText = document.createElement('div');
+        iconText.className = 'text-icon';
+        iconText.innerHTML = '📝';
+        iconContainer.appendChild(iconText);
 
         // 创建文件信息容器
         const infoContainer = document.createElement('div');
@@ -137,13 +141,39 @@ export class TextAttachment {
         // 添加文件大小和行数信息
         const detailsElement = document.createElement('div');
         detailsElement.className = 'file-details';
-        detailsElement.textContent = `${this.formatSize(this.size)} | ${this.lineCount} 行`;
+        detailsElement.textContent = `${this.formatSize(this.size)} | ${this.lineCount || 0} 行`;
+
+        // 添加删除按钮
+        if (onDelete) {
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'delete-button';
+            deleteButton.textContent = '×';
+            deleteButton.onclick = (e) => {
+                e.stopPropagation();
+                onDelete();
+            };
+            previewContainer.appendChild(deleteButton);
+        }
 
         // 组装元素
         infoContainer.appendChild(fileNameElement);
         infoContainer.appendChild(detailsElement);
         previewContainer.appendChild(iconContainer);
         previewContainer.appendChild(infoContainer);
+
+        // 添加点击事件，打开预览模态框
+        previewContainer.onclick = () => {
+            // 导入并创建模态框
+            import('../modal/TextModal.js').then(({ TextModal }) => {
+                const modal = new TextModal();
+                modal.show(this);
+            }).catch(error => {
+                console.error('加载预览模态框失败:', error);
+                previewContainer.classList.add('error');
+                detailsElement.textContent = '加载预览失败';
+                detailsElement.classList.add('error');
+            });
+        };
 
         return previewContainer;
     }

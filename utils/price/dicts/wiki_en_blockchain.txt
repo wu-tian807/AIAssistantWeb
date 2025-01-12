@@ -1,0 +1,150 @@
+2018 Bitcoin bomb threats
+50 Things That Made the Modern Economy
+A blockchain is a dis
+A blockchain was crea
+ACID
+ASCAP
+Accenture
+Access control
+Ad hoc
+Adam Back
+Alex Tapscott
+Algorand
+Although blockchain r
+AmbaCoin
+American Institute of Certified Public Accountants
+Andreas Antonopoulos
+Ars Technica
+Authentication
+Automation
+Aventus Protocol
+Axie Infinity
+BBC World Service
+Back office
+Bank
+Bank for International Settlements
+Battery cell
+BitGo
+Bitcoin ATM
+Bitcoin Cash
+Bitcoin Foundation
+Bitcoin Magazine
+Bitcoin Unlimited
+Bitcoin buried in Newport landfill
+Bitcoin in El Salvador
+Bitcoin scalability problem
+Bitconnect
+Bitmain
+Blockchain analysis
+Byzantine fault tolerance
+CAP theorem
+CNBC
+CNN
+COVID-19 pandemic
+Cameron Winklevoss
+Canaan Creative
+Candidate key
+Chamber of Digital Commerce
+Changelog
+Charlie Shrem
+Checklist
+Chief information officer
+Christian Catalini
+Cloud computing
+Coinye
+Collective
+Column-oriented DBMS
+Comparison of multi-model databases
+Comparison of object database management systems
+Comparison of relational database management systems
+Complementary currency
+Computerworld called
+Consequently
+Each block contains a
+Private blockchains h
+Satoshi Nakamoto in
+Since each block cont
+The blockchain may be
+This protects blockch
+a chain
+a timestamp
+ains against nefariou
+ains information abou
+ally managed by a pee
+and Dave Bayer
+and theft
+and transaction data
+as a Merkle tree
+at permissioned block
+ata structure
+ave been proposed for
+based on previous wor
+bitcoin made it the f
+block cannot be chang
+blockchain transactio
+blockchains may be co
+blocks
+chains
+cks
+compare linked list d
+computer network for
+considered a type of
+counterfeiting
+creating assets
+cryptographic hash of
+curity model
+currencies
+distributed computing
+ecords are not unalte
+ely adhere to a conse
+for bitcoin cryptocur
+fraud
+generally represented
+hanges
+ibuted ledger
+ications and blockcha
+ins that are readable
+irst digital currency
+ized and therefore mo
+k by Stuart Haber
+ked together via cryp
+lteration because
+nes
+ns are resistant to a
+nsus algorithm protoc
+once recorded
+ones before it
+or group of people
+others have argued th
+out altering all subs
+out of thin air
+pending problem witho
+privatized blockchain
+r-to-peer
+rable
+rency transactions
+represented by leaves
+s are possible
+s inspired other appl
+s without a proper se
+since blockchain fork
+snake oil
+sted authority or cen
+sus to accept these c
+ted by a person
+than permissionless o
+that are securely lin
+the data in any given
+the marketing of such
+the previous block
+they effectively form
+to serve as the publi
+to solve the double-s
+tographic hashes
+tral server
+tributed ledger with
+use as a public distr
+using the name
+ut the need for a tru
+widely used by crypto
+with each additional

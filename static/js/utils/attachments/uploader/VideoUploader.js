@@ -29,6 +29,12 @@ export class VideoUploader {
             // 生成视频缩略图
             await videoAttachment.generateThumbnail();
 
+            // 上传视频文件
+            await this.uploadVideo(videoAttachment);
+
+            // 添加到附件集合
+            this.attachments.add(videoAttachment);
+
             return videoAttachment;
         } catch (error) {
             console.error('视频处理失败:', error);
@@ -88,6 +94,14 @@ export class VideoUploader {
         try {
             const formData = new FormData();
             formData.append('video', videoAttachment.file);
+            
+            // 如果有缩略图，也一起发送
+            if (videoAttachment.thumbnail_base64_id) {
+                formData.append('thumbnail_base64_id', videoAttachment.thumbnail_base64_id);
+            }
+            if (videoAttachment.duration) {
+                formData.append('duration', videoAttachment.duration);
+            }
 
             // 创建上传进度提示
             const toast = showToast('视频上传中...', 'info', 0);
@@ -97,17 +111,7 @@ export class VideoUploader {
 
             const response = await fetch(this.uploadUrl, {
                 method: 'POST',
-                body: formData,
-                onUploadProgress: (progressEvent) => {
-                    if (progressEvent.lengthComputable) {
-                        const percentComplete = Math.round((progressEvent.loaded / progressEvent.total) * 100);
-                        progressText.textContent = `已上传 ${percentComplete}%`;
-                        
-                        const uploadedSize = AttachmentUtils.formatFileSize(progressEvent.loaded);
-                        const totalSize = AttachmentUtils.formatFileSize(progressEvent.total);
-                        progressText.textContent += ` (${uploadedSize}/${totalSize})`;
-                    }
-                }
+                body: formData
             });
 
             if (!response.ok) {
@@ -128,7 +132,6 @@ export class VideoUploader {
             toast.remove();
             showToast('视频上传成功', 'success');
 
-            this.attachments.add(videoAttachment);
             return videoAttachment;
 
         } catch (error) {

@@ -1,0 +1,2404 @@
+import os
+import json
+import time
+import numpy as np
+import google.generativeai as genai
+from pathlib import Path
+from typing import Dict, Any, List, Optional, Tuple, Set
+from utils.price.sentence2token import TokenCounter
+import jieba
+import math
+import logging
+import re
+import nltk
+import yaml
+import string
+
+logger = logging.getLogger(__name__)
+
+class TextEmbedding:
+    def __init__(self, base_size: int = 400):
+        # 加载语言配置
+        config_path = os.path.join(os.path.dirname(__file__), 'config', 'language_config.yaml')
+        with open(config_path, 'r', encoding='utf-8') as f:
+            self.lang_config = yaml.safe_load(f)
+        
+        # 从配置文件中获取各种配置
+        self.language_code_map = self.lang_config['language_code_map']
+        self.language_patterns = self.lang_config['language_patterns']
+        self.semantic_features = self.lang_config['semantic_features']
+        self.length_limits = self.lang_config['length_limits']
+        self.title_max_length = self.lang_config['title_max_length']
+        self.paragraph_separators = self.lang_config['paragraph_separators']
+        self.language_weights = self.lang_config['language_weights']
+
+        # 其他初始化代码保持不变
+        self.base_size = base_size
+        self.min_chunk_size = 200
+        self.max_chunk_size = 800
+        self.token_counter = TokenCounter()
+        self.embedding_model = "models/embedding-001"
+        self.max_bytes_per_chunk = 8192  # 每个文本块的最大字节数
+        
+        # 初始化NLTK
+        try:
+            # 首先确保下载基本的英语资源
+            basic_resources = [
+                'punkt',
+                'averaged_perceptron_tagger',
+                'averaged_perceptron_tagger_eng',
+                'stopwords',                
+                'maxent_ne_chunker',
+                'words',
+                'tagsets',
+                'universal_tagset',
+                'wordnet'
+            ]
+            
+            for resource in basic_resources:
+                try:
+                    nltk.download(resource, quiet=True)
+                    logger.info(f"NLTK资源 {resource} 下载成功")
+                except Exception as e:
+                    logger.error(f"NLTK资源 {resource} 下载失败: {str(e)}")
+            
+            # 验证词性标注器是否可用
+            self.pos_tagger_available = False
+            try:
+                from nltk.tag import pos_tag
+                from nltk.tokenize import word_tokenize
+                nltk.data.find('taggers/averaged_perceptron_tagger_eng')  # 确保eng版本存在
+                test_text = "This is a test sentence."
+                tokens = word_tokenize(test_text)
+                tagged = pos_tag(tokens, lang='eng')  # 指定使用英语标注器
+                self.pos_tagger_available = True
+                logger.info("NLTK英语词性标注器测试成功")
+            except Exception as e:
+                logger.warning(f"NLTK英语词性标注器不可用，将使用基本分词: {str(e)}")
+            
+            # 加载停用词
+            try:
+                from nltk.corpus import stopwords
+                self.stop_words = set(stopwords.words('english'))
+                logger.info("英语停用词加载成功")
+            except Exception as e:
+                logger.warning("无法加载英语停用词，使用空集合")
+                self.stop_words = set()
+            
+            logger.info("NLTK初始化完成")
+                
+        except Exception as e:
+            logger.error(f"NLTK初始化失败: {str(e)}")
+            self.pos_tagger_available = False
+            self.stop_words = set()
+                
+        # 初始化泰语分词器
+        try:
+            from pythainlp import word_tokenize as thai_tokenize
+            self.thai_tokenizer = thai_tokenize
+            logger.info("泰语分词器初始化成功")
+        except ImportError:
+            logger.warning("pythainlp未安装，泰语分词功能将不可用")
+            self.thai_tokenizer = None
+        
+    def get_optimal_chunk_size(self, text: str) -> int:
+        """
+        根据文本特征动态确定最优分块大小，支持多语言
+        """
+        try:
+            # 1. 获取语言类型
+            lang_code, confidence = self.token_counter.detect_language(text)
+            logger.info(f"计算最优分块大小 - 语言: {lang_code}, 置信度: {confidence:.2f}")
+            
+            # 2. 计算平均句子长度
+            boundaries = self.token_counter.get_sentence_boundaries(text)
+            if not boundaries:
+                avg_sentence_len = len(text) / 10  # 默认假设每10个字符一个句子
+            else:
+                sentences = []
+                start = 0
+                for end in boundaries:
+                    sentence = text[start:end].strip()
+                    if sentence:
+                        sentences.append(sentence)
+                    start = end
+                if start < len(text):
+                    last_sentence = text[start:].strip()
+                    if last_sentence:
+                        sentences.append(last_sentence)
+                        
+                avg_sentence_len = sum(len(s) for s in sentences) / len(sentences) if sentences else 0
+            
+            # 3. 计算标点符号密度
+            punctuation_density = self.token_counter.calculate_punctuation_density(text)
+            
+            # 4. 计算语义密度
+            semantic_density = self.token_counter.calculate_semantic_density(text)
+            
+            # 5. 根据语言特点调整基础大小
+            lang_factors = {
+                'zh': 1.2,  # 中文需要更大的chunk size因为每个字符都有意义
+                'ja': 1.1,  # 日语类似中文
+                'ko': 1.1,  # 韩语类似中文
+                'default': 1.0  # 其他语言使用默认值
+            }
+            base_factor = lang_factors.get(lang_code, lang_factors['default'])
+            adjusted_base_size = self.base_size * base_factor
+            
+            # 6. 计算各个调整因子
+            # 句子越长，分块越大，避免破坏语义
+            length_factor = min(2.0, max(0.5, avg_sentence_len / 50))
+            # 标点密度越高，分块越小，表示语义单元较小
+            punct_factor = min(1.5, max(0.5, 1 - punctuation_density * 2))
+            # 语义密度越高，分块越小，确保语义完整
+            semantic_factor = min(1.5, max(0.5, 1 - semantic_density))
+            
+            # 7. 综合计算最终大小
+            # 调整权重：句长因子更重要，因为我们不想打断长句
+            adjustment_factor = (
+                length_factor * 0.4 +    # 句长权重增加
+                punct_factor * 0.3 +     # 标点符号权重
+                semantic_factor * 0.3     # 语义密度权重
+            )
+            chunk_size = int(adjusted_base_size * adjustment_factor)
+            
+            # 8. 确保在合理范围内
+            chunk_size = max(self.min_chunk_size, min(chunk_size, self.max_chunk_size))
+            
+            logger.debug(f"分块大小计算 - 基础大小: {adjusted_base_size}, "
+                        f"句长因子: {length_factor:.2f}, "
+                        f"标点因子: {punct_factor:.2f}, "
+                        f"语义因子: {semantic_factor:.2f}, "
+                        f"最终大小: {chunk_size}")
+            
+            return chunk_size
+            
+        except Exception as e:
+            logger.error(f"计算最优分块大小时出错: {str(e)}")
+            return self.base_size  # 出错时返回基础大小
+        
+    def _is_title(self, line: str) -> bool:
+        """
+        判断一行文本是否为标题，支持多语言
+        """
+        try:
+            # 检测语言
+            lang_code, _ = self.token_counter.detect_language(line)
+            
+            # 1. 长度特征（根据语言调整）
+            length_limits = {
+                'zh': (2, 40),   # 中文标题一般较短
+                'ja': (2, 50),   # 日语标题可能较长
+                'ko': (2, 45),   # 韩语标题长度适中
+                'default': (3, 60)  # 英语等其他语言标题可能较长
+            }
+            min_len, max_len = length_limits.get(lang_code, length_limits['default'])
+            if not (min_len <= len(line) <= max_len):
+                return False
+                
+            # 2. 标点符号特征（多语言支持）
+            title_markers = {
+                'zh': ['：', ':', '》', '】', '）', ')', '｝', '』', '〉'],  # 中文标题结束符
+                'ja': ['：', ':', '」', '』', '）', '】', '〉', '》'],  # 日语标题结束符
+                'ko': [':', '：', '》', '】', '）', '>', ')'],  # 韩语标题结束符
+                'default': [':', '-', ')', '>', ']', '}']  # 英语等标题结束符
+            }
+            current_markers = title_markers.get(lang_code, title_markers['default'])
+            if any(marker in line for marker in current_markers):
+                return True
+                
+            # 3. 结构特征（多语言支持）
+            structure_markers = {
+                'zh': ['第', '章', '节', '部分', '卷', '篇', '辑', '集'],
+                'ja': ['第', '章', '節', '部', '編', '巻', '項'],
+                'ko': ['제', '장', '절', '부', '권', '편', '항'],
+                'en': ['Chapter', 'Section', 'Part', 'Volume', 'Book'],
+                'default': ['Chapter', 'Section', 'Part']
+            }
+            current_struct_markers = structure_markers.get(lang_code, structure_markers['default'])
+            if any(marker in line for marker in current_struct_markers):
+                return True
+                
+            # 4. 数字开头特征（通用）
+            if re.match(r'^[0-9一二三四五六七八九十百千万零１２３４５６７８９０]+[\.、]', line):
+                return True
+                
+            # 5. 句式特征（多语言支持）
+            sentence_endings = {
+                'zh': list('。，；！？'),
+                'ja': ['。', '、', '！', '？', '．', '，'],
+                'ko': ['.', '。', '，', '！', '？', ';'],
+                'default': ['.', ',', ';', '!', '?']
+            }
+            current_endings = sentence_endings.get(lang_code, sentence_endings['default'])
+            
+            # 如果没有句子结束符号，且长度合适，可能是标题
+            if not any(end in line for end in current_endings):
+                # 根据语言调整长度限制
+                title_max_len = {
+                    'zh': 25,  # 中文标题
+                    'ja': 30,  # 日语标题
+                    'ko': 28,  # 韩语标题
+                    'default': 35  # 其他语言
+                }
+                max_len = title_max_len.get(lang_code, title_max_len['default'])
+                if len(line) <= max_len:
+                    return True
+                    
+            # 6. 特殊格式特征（多语言支持）
+            format_patterns = {
+                'zh': [
+                    r'^【.*】',
+                    r'^［.*］',
+                    r'^《.*》',
+                    r'^第[一二三四五六七八九十百千万\d]+[章节篇]',
+                ],
+                'ja': [
+                    r'^【.*】',
+                    r'^［.*］',
+                    r'^「.*」',
+                    r'^第[一二三四五六七八九十百千万\d]+[章節]',
+                ],
+                'ko': [
+                    r'^【.*】',
+                    r'^\[.*\]',
+                    r'^제[0-9０-９]+',
+                ],
+                'default': [
+                    r'^[IVX]+\.',  # 罗马数字
+                    r'^\d+\.',     # 数字编号
+                    r'^\[.*\]',    # 方括号
+                    r'^Chapter \d+',
+                    r'^Section \d+'
+                ]
+            }
+            current_patterns = format_patterns.get(lang_code, format_patterns['default'])
+            if any(re.match(pattern, line) for pattern in current_patterns):
+                return True
+                
+            return False
+            
+        except Exception as e:
+            logger.error(f"标题判断时出错: {str(e)}")
+            # 出错时使用保守的判断方式
+            return bool(re.match(r'^[A-Za-z0-9\u4e00-\u9fff]{3,50}$', line))
+        
+    def _split_text_into_chunks(self, text: str, max_tokens: int = 500) -> List[str]:
+        """
+        将文本分割成适当大小的块，考虑语义完整性
+        
+        Args:
+            text: 要分割的文本
+            max_tokens: 每个块的最大token数量
+            
+        Returns:
+            List[str]: 分割后的文本块列表
+        """
+        try:
+            # 检测语言
+            lang_code, _ = self.token_counter.detect_language(text)
+            
+            # 首先按段落分割
+            paragraphs = text.split('\n\n')
+            chunks = []
+            current_chunk = []
+            current_tokens = 0
+            
+            for para in paragraphs:
+                # 跳过空段落
+                if not para.strip():
+                    continue
+                    
+                # 计算当前段落的token数
+                para_tokens = self.token_counter.count_tokens(para)
+                
+                # 如果单个段落超过最大token数，需要进一步分割
+                if para_tokens > max_tokens:
+                    # 按句子分割段落
+                    if lang_code == 'zh':
+                        sentences = re.split(r'([。！？])', para)
+                    else:
+                        sentences = nltk.sent_tokenize(para)
+                    
+                    temp_chunk = []
+                    temp_tokens = 0
+                    
+                    for sent in sentences:
+                        sent = sent.strip()
+                        if not sent:
+                            continue
+                            
+                        sent_tokens = self.token_counter.count_tokens(sent)
+                        
+                        # 如果加入当前句子后超过限制
+                        if temp_tokens + sent_tokens > max_tokens:
+                            if temp_chunk:
+                                chunks.append(' '.join(temp_chunk))
+                            temp_chunk = [sent]
+                            temp_tokens = sent_tokens
+                        else:
+                            temp_chunk.append(sent)
+                            temp_tokens += sent_tokens
+                    
+                    if temp_chunk:
+                        chunks.append(' '.join(temp_chunk))
+                        
+                # 如果当前段落加入后会超过限制
+                elif current_tokens + para_tokens > max_tokens:
+                    if current_chunk:
+                        chunks.append(' '.join(current_chunk))
+                    current_chunk = [para]
+                    current_tokens = para_tokens
+                else:
+                    current_chunk.append(para)
+                    current_tokens += para_tokens
+            
+            # 处理最后一个块
+            if current_chunk:
+                chunks.append(' '.join(current_chunk))
+            
+            # 确保每个块都有足够的上下文
+            final_chunks = []
+            for i, chunk in enumerate(chunks):
+                # 添加前文上下文
+                if i > 0:
+                    prev_sentences = nltk.sent_tokenize(chunks[i-1])[-2:]  # 取前一块的最后两句
+                    chunk = ' '.join(prev_sentences) + ' ' + chunk
+                
+                # 添加后文上下文
+                if i < len(chunks) - 1:
+                    next_sentences = nltk.sent_tokenize(chunks[i+1])[:2]  # 取后一块的前两句
+                    chunk = chunk + ' ' + ' '.join(next_sentences)
+                
+                final_chunks.append(chunk)
+            
+            return final_chunks
+            
+        except Exception as e:
+            logger.error(f"文本分块失败: {str(e)}")
+            # 如果分块失败，使用简单的分割方法
+            return [text[i:i+1000] for i in range(0, len(text), 1000)]
+        
+    def split_text(self, text: str, overlap: int = 50) -> List[Dict[str, Any]]:
+        """
+        将文本分割成更小的块，保持语义完整性，支持多语言
+        返回包含文本内容和上下文信息的字典列表
+        
+        Args:
+            text: 要分割的文本
+            overlap: 块之间的重叠字符数，默认50
+        """
+        try:
+            # 检测语言
+            lang_code, _ = self.token_counter.detect_language(text)
+            logger.info(f"文本分割 - 语言: {lang_code}")
+            
+            # 动态确定分块大小
+            chunk_size = self.get_optimal_chunk_size(text)
+            
+            # 1. 首先按段落分割（考虑不同的段落分隔符）
+            paragraph_separators = {
+                'zh': ['\n\n', '\r\n\r\n', '\n    \n', '\n　　\n'],  # 中文常见段落分隔
+                'ja': ['\n\n', '\r\n\r\n', '\n　\n'],  # 日语常见段落分隔（包括全角空格）
+                'ko': ['\n\n', '\r\n\r\n', '\n\t\n'],  # 韩语常见段落分隔
+                'default': ['\n\n', '\r\n\r\n', '\n    \n']  # 默认分隔符
+            }
+            
+            # 获取当前语言的段落分隔符
+            current_separators = paragraph_separators.get(lang_code, paragraph_separators['default'])
+            
+            # 统一处理所有可能的分隔符
+            for sep in current_separators[1:]:
+                text = text.replace(sep, current_separators[0])
+            paragraphs = text.split(current_separators[0])
+            
+            raw_chunks = []  # 存储未处理overlap的块
+            current_section = ""  # 当前所在章节
+            current_subsection = ""  # 当前所在小节
+            
+            # 2. 定义章节标记（多语言支持）
+            section_markers = {
+                'zh': ['章', '节', '部分', '卷'],
+                'ja': ['章', '節', '部', '編'],
+                'ko': ['장', '절', '부분', '편'],
+                'en': ['Chapter', 'Section', 'Part', 'Volume'],
+                'default': ['Chapter', 'Section', 'Part']
+            }
+            
+            current_markers = section_markers.get(lang_code, section_markers['default'])
+            
+            for i, para in enumerate(paragraphs):
+                # 跳过空段落
+                if not para.strip():
+                    continue
+                
+                # 获取段落的所有行
+                lines = [line for line in para.split('\n') if line.strip()]
+                if not lines:
+                    continue
+                    
+                # 获取段落标题
+                title = lines[0] if self._is_title(lines[0]) else ""
+                
+                # 更新章节信息
+                if title:
+                    # 检查是否是章节标题
+                    if any(marker in title for marker in current_markers):
+                        if any(major_marker in title for major_marker in current_markers[:2]):  # 主要章节
+                            current_section = title
+                            current_subsection = ""
+                        else:  # 子章节
+                            current_subsection = title
+                
+                # 如果段落较长，进一步分割
+                if len(para) > chunk_size:
+                    # 获取句子边界
+                    boundaries = self.token_counter.get_sentence_boundaries(para)
+                    current_chunk = []
+                    current_length = 0
+                    last_boundary = 0
+                    
+                    # 按句子边界分割
+                    for boundary in boundaries:
+                        sentence = para[last_boundary:boundary].strip()
+                        if not sentence:
+                            last_boundary = boundary
+                            continue
+                            
+                        sentence_length = len(sentence)
+                        
+                        # 如果当前块加上新句子不超过限制，就添加进去
+                        if current_length + sentence_length <= chunk_size:
+                            current_chunk.append(sentence)
+                            current_length += sentence_length
+                        else:
+                            # 保存当前块
+                            if current_chunk:
+                                chunk_text = ' '.join(current_chunk)
+                                raw_chunks.append(self._create_chunk_dict(
+                                    chunk_text=chunk_text,
+                                    title=title,
+                                    current_section=current_section,
+                                    current_subsection=current_subsection,
+                                    prev_title=paragraphs[i-1].split('\n')[0] if i > 0 else "",
+                                    next_title=paragraphs[i+1].split('\n')[0] if i < len(paragraphs)-1 else ""
+                                ))
+                            # 开始新的块
+                            current_chunk = [sentence]
+                            current_length = sentence_length
+                            
+                        last_boundary = boundary
+                    
+                    # 处理最后一个句子（如果有）
+                    if last_boundary < len(para):
+                        final_sentence = para[last_boundary:].strip()
+                        if final_sentence:
+                            current_chunk.append(final_sentence)
+                    
+                    # 保存最后一个块
+                    if current_chunk:
+                        chunk_text = ' '.join(current_chunk)
+                        raw_chunks.append(self._create_chunk_dict(
+                            chunk_text=chunk_text,
+                            title=title,
+                            current_section=current_section,
+                            current_subsection=current_subsection,
+                            prev_title=paragraphs[i-1].split('\n')[0] if i > 0 else "",
+                            next_title=paragraphs[i+1].split('\n')[0] if i < len(paragraphs)-1 else ""
+                        ))
+                else:
+                    # 段落较短，直接作为一个块
+                    raw_chunks.append(self._create_chunk_dict(
+                        chunk_text=para,
+                        title=title,
+                        current_section=current_section,
+                        current_subsection=current_subsection,
+                        prev_title=paragraphs[i-1].split('\n')[0] if i > 0 else "",
+                        next_title=paragraphs[i+1].split('\n')[0] if i < len(paragraphs)-1 else ""
+                    ))
+            
+            # 处理overlap
+            if overlap > 0 and len(raw_chunks) > 1:
+                final_chunks = []
+                for i in range(len(raw_chunks)):
+                    if i == 0:
+                        final_chunks.append(raw_chunks[i])
+                    else:
+                        # 从前一个chunk的末尾取overlap大小的内容
+                        prev_chunk = raw_chunks[i-1]['text']
+                        current_chunk = raw_chunks[i]
+                        overlap_text = prev_chunk[-overlap:] if len(prev_chunk) > overlap else prev_chunk
+                        
+                        # 创建新的chunk，包含overlap内容
+                        new_chunk = dict(current_chunk)
+                        new_chunk['text'] = overlap_text + current_chunk['text']
+                        # 更新语义密度（考虑overlap后的完整文本）
+                        new_chunk['context']['semantic_density'] = self.token_counter.calculate_semantic_density(new_chunk['text'])
+                        final_chunks.append(new_chunk)
+                
+                logger.info(f"文本分割完成 - 共{len(final_chunks)}个块（包含overlap）")
+                return final_chunks
+            
+            logger.info(f"文本分割完成 - 共{len(raw_chunks)}个块")
+            return raw_chunks
+            
+        except Exception as e:
+            logger.error(f"文本分割时出错: {str(e)}")
+            # 降级处理：简单按大小分割，并保持基本的chunk结构
+            simple_chunks = []
+            for i in range(0, len(text), self.base_size-overlap):
+                chunk_text = text[i:i+self.base_size]
+                if chunk_text.strip():
+                    simple_chunks.append(self._create_chunk_dict(
+                        chunk_text=chunk_text,
+                        title="",
+                        current_section="",
+                        current_subsection="",
+                        prev_title="",
+                        next_title=""
+                    ))
+            return simple_chunks
+        
+    def _create_chunk_dict(self, chunk_text: str, title: str, current_section: str,
+                          current_subsection: str, prev_title: str, next_title: str) -> Dict[str, Any]:
+        """创建块信息字典"""
+        return {
+            'text': chunk_text,
+            'title': title or (chunk_text[:20] + "..." if chunk_text else ""),
+            'context': {
+                'prev_title': prev_title,
+                'next_title': next_title,
+                'section': current_section,
+                'subsection': current_subsection,
+                'semantic_density': self.token_counter.calculate_semantic_density(chunk_text)
+            }
+        }
+        
+    def _get_semantic_unit(self, text: str) -> str:
+        """
+        识别文本的主要语义单元类型，支持多语言
+        """
+        try:
+            # 检测文本语言
+            lang_code, _ = self.token_counter.detect_language(text)
+            
+            # 如果检测到的是英语或未知语言，统一使用英语处理
+            if lang_code not in ['zh', 'ja', 'ko', 'fr', 'de', 'es', 'it']:
+                lang_code = 'en'
+            
+            # 不同语言的语义特征关键词映射表
+            semantic_features = self.lang_config['semantic_features']
+            
+            # 使用更复杂的特征匹配逻辑
+            type_scores = {}
+            for feature_type, keywords in semantic_features.items():
+                score = 0
+                # 基于词频的打分
+                for kw in keywords:
+                    kw_lower = kw.lower()
+                    text_lower = text.lower()
+                    if kw_lower in text_lower:
+                        # 计算词频
+                        freq = text_lower.count(kw_lower)
+                        # 根据位置给予额外权重
+                        if text_lower.startswith(kw_lower):
+                            score += freq * 1.5
+                        elif text_lower.endswith(kw_lower):
+                            score += freq * 1.2
+                        else:
+                            score += freq
+                
+                # 考虑文本长度的归一化
+                score = score / (len(text.split()) + 1)
+                type_scores[feature_type] = score
+            
+            # 获取得分最高的语义类型
+            max_type = max(type_scores.items(), key=lambda x: x[1])
+            
+            # 使用更低的阈值，但增加更多判断逻辑
+            if max_type[1] < 0.1:  # 降低阈值
+                # 多语言问句特征检测
+                question_marks = {
+                    'zh': ['？', '?', '吗', '呢', '如何', '怎么'],
+                    'ja': ['？', '?', 'か', 'どう', 'なぜ'],
+                    'ko': ['？', '?', '까', '어떻게', '왜'],
+                    'fr': ['?', '！', 'comment', 'pourquoi'],
+                    'de': ['?', '!', 'wie', 'warum'],
+                    'es': ['?', '¿', '!', '¡', 'cómo', 'por qué'],
+                    'it': ['?', '!', 'come', 'perché'],
+                    'en': ['?', '!', 'how', 'why', 'what', 'when', 'where', 'which']
+                }
+                
+                # 扩展特征词列表
+                feature_words = {
+                    'definition': {
+                        'zh': ['是', '指', '定义', '概念'],
+                        'en': ['is', 'refers to', 'defined as', 'means']
+                    },
+                    'example': {
+                        'zh': ['例如', '比如', '举例'],
+                        'en': ['for example', 'such as', 'like', 'instance']
+                    },
+                    'conclusion': {
+                        'zh': ['总之', '因此', '所以', '总结'],
+                        'en': ['therefore', 'thus', 'conclusion', 'summary']
+                    }
+                }
+                
+                current_marks = question_marks.get(lang_code, question_marks['en'])
+                
+                # 增强的特征检测
+                if any(mark in text for mark in current_marks):
+                    return 'question'
+                
+                # 检查其他特征
+                for feature_type, lang_words in feature_words.items():
+                    words = lang_words.get(lang_code, lang_words['en'])
+                    if any(word in text.lower() for word in words):
+                        return feature_type
+                
+                # 使用更细致的句式分析
+                if lang_code == 'en':
+                    # 英语句式分析
+                    if text.lower().startswith(('if', 'when', 'while')):
+                        return 'condition'
+                    elif text.lower().startswith(('first', 'second', 'then', 'next')):
+                        return 'sequence'
+                    elif 'because' in text.lower() or 'since' in text.lower():
+                        return 'cause_effect'
+                elif lang_code == 'zh':
+                    # 中文句式分析
+                    if any(w in text for w in ['如果', '当', '若']):
+                        return 'condition'
+                    elif any(w in text for w in ['首先', '其次', '然后']):
+                        return 'sequence'
+                    elif any(w in text for w in ['因为', '由于']):
+                        return 'cause_effect'
+                
+                return 'general'
+            
+            return max_type[0]
+            
+        except Exception as e:
+            logger.error(f"语义单元识别时出错: {str(e)}")
+            return 'general'
+
+    def _calculate_word_importance(self, word: str, text: str = "", lang_code: str = "en") -> float:
+        """
+        计算词语的重要性权重
+        """
+        try:
+            # 基础权重
+            base_weight = 1.0
+            
+            # 1. 停用词检查（扩展停用词列表）
+            if word.lower() in self.stop_words:
+                return 0.3  # 降低停用词的权重但不完全忽略
+            
+            # 2. 词长度权重（使用对数函数使权重更合理）
+            length_factor = math.log(len(word) + 1) / math.log(10)
+            base_weight *= (1 + length_factor * 0.5)
+            
+            # 3. 位置权重（考虑多个出现位置）
+            if text:
+                positions = [m.start() for m in re.finditer(re.escape(word), text)]
+                if positions:
+                    # 计算平均位置权重
+                    position_weights = []
+                    text_length = len(text)
+                    for pos in positions:
+                        # 开头位置权重
+                        start_weight = max(0, 1 - (pos / text_length))
+                        # 结尾位置权重
+                        end_weight = max(0, 1 - ((text_length - pos) / text_length))
+                        position_weights.append(max(start_weight, end_weight))
+                    position_score = sum(position_weights) / len(position_weights)
+                    base_weight *= (1 + position_score * 0.3)
+            
+            # 4. 词频权重
+            if text:
+                freq = text.lower().count(word.lower())
+                freq_weight = math.log(freq + 1) / math.log(10)
+                base_weight *= (1 + freq_weight * 0.2)
+            
+            # 5. 专业术语权重
+            if self._is_domain_term(word):
+                base_weight *= 1.5
+            
+            # 6. 词性权重
+            if lang_code == 'en':
+                pos_tag = nltk.pos_tag([word])[0][1]
+                pos_weights = {
+                    'NN': 1.3,  # 名词
+                    'NNP': 1.4,  # 专有名词
+                    'VB': 1.2,  # 动词
+                    'JJ': 1.1,  # 形容词
+                    'RB': 0.9   # 副词
+                }
+                base_weight *= pos_weights.get(pos_tag[:2], 1.0)
+            
+            # 7. 大小写权重（对英文）
+            if lang_code == 'en' and any(c.isupper() for c in word[1:]):
+                base_weight *= 1.2  # 可能是专有名词或重要术语
+            
+            # 8. 数字权重
+            if any(c.isdigit() for c in word):
+                base_weight *= 1.1  # 包含数字的词可能更重要
+            
+            # 归一化权重到合理范围
+            return min(2.0, max(0.1, base_weight))
+            
+        except Exception as e:
+            logger.error(f"词语重要性计算失败: {str(e)}")
+            return 1.0
+
+    def _calculate_structure_similarity(self, query: str, text: str) -> float:
+        """
+        计算查询和文本的结构相似度
+        """
+        try:
+            # 获取语言代码
+            query_lang, _ = self.token_counter.detect_language(query)
+            text_lang, _ = self.token_counter.detect_language(text)
+            
+            # 结构特征提取
+            def get_structure_features(text, lang_code):
+                features = {
+                    'length': len(text),
+                    'sentence_count': len(nltk.sent_tokenize(text)),
+                    'word_count': len(text.split()),
+                    'question_mark': '?' in text or '？' in text,
+                    'exclamation_mark': '!' in text or '！' in text,
+                    'has_numbers': bool(re.search(r'\d', text)),
+                    'capitalized_ratio': sum(1 for c in text if c.isupper()) / len(text) if text else 0,
+                    'punctuation_ratio': sum(1 for c in text if c in string.punctuation) / len(text) if text else 0
+                }
+                
+                # 语言特定特征
+                if lang_code == 'en':
+                    words = nltk.word_tokenize(text)
+                    pos_tags = nltk.pos_tag(words)
+                    features.update({
+                        'noun_ratio': sum(1 for _, tag in pos_tags if tag.startswith('NN')) / len(pos_tags) if pos_tags else 0,
+                        'verb_ratio': sum(1 for _, tag in pos_tags if tag.startswith('VB')) / len(pos_tags) if pos_tags else 0,
+                        'adj_ratio': sum(1 for _, tag in pos_tags if tag.startswith('JJ')) / len(pos_tags) if pos_tags else 0
+                    })
+                
+                return features
+            
+            # 获取特征
+            query_features = get_structure_features(query, query_lang)
+            text_features = get_structure_features(text, text_lang)
+            
+            # 计算相似度
+            similarity_scores = []
+            
+            # 长度比例相似度
+            length_ratio = min(query_features['length'], text_features['length']) / max(query_features['length'], text_features['length'])
+            similarity_scores.append(length_ratio)
+            
+            # 句子数量比例相似度
+            sentence_ratio = min(query_features['sentence_count'], text_features['sentence_count']) / max(query_features['sentence_count'], text_features['sentence_count'])
+            similarity_scores.append(sentence_ratio)
+            
+            # 问句特征匹配
+            question_match = 1.0 if query_features['question_mark'] == text_features['question_mark'] else 0.5
+            similarity_scores.append(question_match)
+            
+            # 数字特征匹配
+            number_match = 1.0 if query_features['has_numbers'] == text_features['has_numbers'] else 0.7
+            similarity_scores.append(number_match)
+            
+            # 如果都是英语，比较更多特征
+            if query_lang == 'en' and text_lang == 'en':
+                for feature in ['noun_ratio', 'verb_ratio', 'adj_ratio']:
+                    if feature in query_features and feature in text_features:
+                        ratio = min(query_features[feature], text_features[feature]) / max(query_features[feature], text_features[feature]) if max(query_features[feature], text_features[feature]) > 0 else 1.0
+                        similarity_scores.append(ratio)
+            
+            # 计算加权平均
+            weights = [0.3, 0.2, 0.2, 0.1] + [0.066] * 3  # 权重和为1
+            final_similarity = sum(score * weight for score, weight in zip(similarity_scores, weights[:len(similarity_scores)]))
+            
+            return final_similarity
+            
+        except Exception as e:
+            logger.error(f"计算结构相似度时出错: {str(e)}")
+            return 0.5
+
+    def _calculate_semantic_relevance(self, query: str, text: str, semantic_unit: str) -> float:
+        """
+        计算查询与文本块的语义相关性，支持多语言
+        """
+        try:
+            # 检测语言
+            lang_code, _ = self.token_counter.detect_language(text)
+            
+            # 基于语义单元类型调整相关性计算（多语言支持）
+            relevance_weights = {
+                'definition': 1.2,    # 定义类型权重最高
+                'example': 1.1,       # 示例权重较高
+                'conclusion': 1.15,   # 结论权重适中偏高
+                'sequence': 1.0,      # 序列性内容标准权重
+                'characteristics': 1.1,
+                'comparison': 1.05,
+                'cause_effect': 1.15,
+                'method': 1.1,
+                'question': 1.0,
+                'how_to': 1.05,
+                'reason': 1.1,
+                'general': 1.0
+            }
+            
+            # 获取语义单元的权重
+            unit_weight = relevance_weights.get(semantic_unit, 1.0)
+            
+            # 分析查询的语义特征
+            query_unit = self._get_semantic_unit(query)
+            
+            # 如果查询和文本的语义单元类型匹配，提升相关性
+            if query_unit == semantic_unit:
+                unit_weight *= 1.2
+            
+            # 根据语言特点调整权重
+            lang_weights = {
+                'zh': 1.1,  # 中文需要更高权重因为分词准确度高
+                'ja': 1.1,  # 日语类似中文
+                'ko': 1.1,  # 韩语类似中文
+                'default': 1.0
+            }
+            lang_weight = lang_weights.get(lang_code, lang_weights['default'])
+            unit_weight *= lang_weight
+            
+            # 提取文本的关键短语
+            text_phrases = self._extract_key_phrases(text)
+            query_phrases = self._extract_key_phrases(query)
+            
+            # 计算短语级别的匹配度（考虑部分匹配）
+            phrase_matches = 0
+            for q_phrase in query_phrases:
+                best_match = 0
+                for t_phrase in text_phrases:
+                    # 计算短语间的相似度
+                    if lang_code in ['zh', 'ja', 'ko']:
+                        # 对于中日韩语言，使用字符重叠度
+                        overlap = len(set(q_phrase) & set(t_phrase))
+                        similarity = overlap / max(len(q_phrase), len(t_phrase))
+                    else:
+                        # 对于其他语言，使用词级别的重叠度
+                        q_words = set(q_phrase.lower().split())
+                        t_words = set(t_phrase.lower().split())
+                        overlap = len(q_words & t_words)
+                        similarity = overlap / max(len(q_words), len(t_words))
+                    best_match = max(best_match, similarity)
+                phrase_matches += best_match
+            
+            phrase_match_score = phrase_matches / max(len(query_phrases), 1)
+            
+            # 返回加权的相关性分数
+            return unit_weight * (1 + phrase_match_score)
+            
+        except Exception as e:
+            logger.error(f"计算语义相关性时出错: {str(e)}")
+            return 1.0  # 出错时返回默认权重
+        
+    def _extract_key_phrases(self, text: str) -> List[str]:
+        """
+        提取文本中的关键短语，支持多语言
+        """
+        try:
+            # 检测语言
+            lang_code, _ = self.token_counter.detect_language(text)
+            
+            # 不同语言的词性标注映射
+            post_tags = self.lang_config['pos_tags']
+            
+            # 获取当前语言的词性标注集
+            current_pos = post_tags.get(lang_code, post_tags['default'])
+            
+            # 根据语言选择分词方式
+            if lang_code == 'zh':
+                # 使用jieba进行中文分词和词性标注
+                import jieba.posseg as pseg
+                words = pseg.cut(text)
+                
+                # 收集可能的关键短语
+                phrases = []
+                current_phrase = []
+                
+                for word, flag in words:
+                    # 判断词性是否属于目标类别
+                    is_target = any(flag in pos_list for pos_list in current_pos.values())
+                    if is_target:
+                        current_phrase.append(word)
+                    else:
+                        if current_phrase:
+                            phrases.append(''.join(current_phrase))
+                            current_phrase = []
+                
+                # 处理最后一个短语
+                if current_phrase:
+                    phrases.append(''.join(current_phrase))
+                    
+            elif lang_code == 'ja':
+                # 使用fugashi进行日语分词
+                try:
+                    import fugashi
+                    tagger = fugashi.Tagger()
+                    words = tagger(text)
+                    
+                    phrases = []
+                    current_phrase = []
+                    
+                    for word in words:
+                        # 获取词性信息
+                        pos = word.feature.pos1
+                        if pos in ['名詞', '動詞', '形容詞']:  # 主要词性
+                            current_phrase.append(word.surface)
+                        else:
+                            if current_phrase:
+                                phrases.append(''.join(current_phrase))
+                                current_phrase = []
+                    
+                    # 处理最后一个短语
+                    if current_phrase:
+                        phrases.append(''.join(current_phrase))
+                except ImportError:
+                    # 如果没有安装fugashi，使用简单的空格分词
+                    logger.warning("未安装fugashi，使用简单分词")
+                    phrases = text.split()
+                    
+            elif lang_code == 'ko':
+                # 使用Kkma进行韩语分词
+                try:
+                    from konlpy.tag import Kkma
+                    kkma = Kkma()
+                    tagged = kkma.pos(text)
+                    
+                    phrases = []
+                    current_phrase = []
+                    
+                    for word, pos in tagged:
+                        is_target = any(pos in pos_list for pos_list in current_pos.values())
+                        if is_target:
+                            current_phrase.append(word)
+                        else:
+                            if current_phrase:
+                                phrases.append(''.join(current_phrase))
+                                current_phrase = []
+                                
+                    if current_phrase:
+                        phrases.append(''.join(current_phrase))
+                except ImportError:
+                    # 如果没有安装konlpy，使用简单的空格分词
+                    phrases = text.split()
+            else:
+                # 对于其他语言，使用NLTK进行分词
+                try:
+                    from nltk.tokenize import word_tokenize
+                    
+                    # 分词
+                    try:
+                        tokens = word_tokenize(text.lower())
+                    except:
+                        logger.warning("NLTK分词失败，使用基本分词")
+                        tokens = text.lower().split()
+                    
+                    # 过滤停用词
+                    tokens = [token for token in tokens if token not in self.stop_words]
+                    
+                    # 如果词性标注器可用，使用词性标注
+                    if self.pos_tagger_available:
+                        try:
+                            from nltk.tag import pos_tag
+                            tagged = pos_tag(tokens, lang='eng')  # 指定使用英语标注器
+                            
+                            phrases = []
+                            current_phrase = []
+                            
+                            for word, pos in tagged:
+                                # 只保留名词、动词、形容词等主要词性
+                                if pos.startswith(('NN', 'VB', 'JJ', 'RB')):
+                                    current_phrase.append(word)
+                                else:
+                                    if current_phrase:
+                                        phrases.append(' '.join(current_phrase))
+                                        current_phrase = []
+                            
+                            if current_phrase:
+                                phrases.append(' '.join(current_phrase))
+                                
+                        except Exception as e:
+                            logger.warning(f"英语词性标注处理失败，使用基本分词: {str(e)}")
+                            phrases = [token for token in tokens]
+                    else:
+                        # 如果词性标注器不可用，直接使用分词结果
+                        phrases = [token for token in tokens]
+                    
+                except Exception as e:
+                    logger.warning(f"NLTK处理失败，使用基本分词: {str(e)}")
+                    # 使用简单的分词作为后备方案
+                    phrases = [word for word in text.lower().split() if word not in self.stop_words]
+            
+            # 过滤空短语和过短的短语
+            min_phrase_length = 2 if lang_code in ['zh', 'ja', 'ko'] else 1
+            phrases = [p for p in phrases if len(p) >= min_phrase_length]
+            
+            return phrases
+            
+        except Exception as e:
+            logger.error(f"提取关键短语时出错: {str(e)}")
+            # 出错时使用简单的分词
+            return text.split()
+        
+    async def get_embedding(self, text: str) -> np.ndarray:
+        """获取单个文本的embedding"""
+        try:
+            # 检查文本字节大小
+            text_bytes = len(text.encode('utf-8'))
+            if text_bytes > self.max_bytes_per_chunk:
+                raise ValueError(f"文本大小({text_bytes}字节)超过限制({self.max_bytes_per_chunk}字节)")
+                
+            result = genai.embed_content(
+                model=self.embedding_model,
+                content=text
+            )
+            return np.array(result['embedding'])
+        except Exception as e:
+            print(f"获取embedding失败: {str(e)}")
+            raise
+            
+    async def batch_get_embeddings(self, chunks: List[Dict[str, Any]]) -> List[np.ndarray]:
+        """批量获取embeddings"""
+        embeddings = []
+        for chunk in chunks:
+            embedding = await self.get_embedding(chunk['text'])
+            embeddings.append(embedding)
+        return embeddings
+        
+    def save_embeddings(self, base_path: str, file_id: str, embedding_data: Dict[str, Any]):
+        """保存embedding数据到文件系统"""
+        try:
+            # 创建embedding存储目录
+            save_dir = Path(base_path) / 'embeddings' / file_id
+            save_dir.mkdir(parents=True, exist_ok=True)
+            
+            # 保存文本块信息
+            chunks_path = save_dir / 'chunks.json'
+            with open(str(chunks_path), 'w', encoding='utf-8') as f:
+                json.dump({'chunks': embedding_data['chunks']}, f, ensure_ascii=False, indent=2)
+            
+            # 保存embedding向量
+            embeddings_path = save_dir / 'embeddings.npy'
+            np.save(str(embeddings_path), np.array(embedding_data['embeddings']))
+            
+            # 保存元数据
+            metadata_path = save_dir / 'metadata.json'
+            with open(str(metadata_path), 'w', encoding='utf-8') as f:
+                json.dump(embedding_data['metadata'], f, ensure_ascii=False, indent=2)
+                
+        except Exception as e:
+            print(f"保存embeddings失败: {str(e)}")
+            raise
+            
+    def load_embeddings(self, base_path: str, file_id: str) -> Optional[Dict[str, Any]]:
+        """从文件系统加载embedding数据"""
+        try:
+            load_dir = Path(base_path) / 'embeddings' / file_id
+            
+            # 检查所需文件是否存在
+            chunks_path = load_dir / 'chunks.json'
+            embeddings_path = load_dir / 'embeddings.npy'
+            metadata_path = load_dir / 'metadata.json'
+            
+            if not all(p.exists() for p in [chunks_path, embeddings_path, metadata_path]):
+                return None
+            
+            # 读取数据
+            with open(str(chunks_path), 'r', encoding='utf-8') as f:
+                chunks_data = json.load(f)
+            chunks = chunks_data.get('chunks', [])  # 直接获取chunks列表
+            
+            embeddings = np.load(str(embeddings_path))
+            
+            with open(str(metadata_path), 'r', encoding='utf-8') as f:
+                metadata = json.load(f)
+            
+            return {
+                'chunks': chunks,  # 直接使用chunks列表
+                'embeddings': embeddings,
+                'metadata': metadata
+            }
+            
+        except Exception as e:
+            print(f"加载embeddings失败: {str(e)}")
+            return None
+            
+    async def process_text(self, text: str, file_id: str, base_path: str) -> Dict[str, Any]:
+        """处理文本并生成embeddings，支持多语言和语义处理"""
+        try:
+            # 1. 使用增强的语言检测
+            lang_code, confidence = self.enhance_language_detection(text)
+            logger.info(f"处理文本 - 检测到语言: {lang_code}, 置信度: {confidence:.2f}")
+            
+            # 2. 文本分块（现在包含更多语义信息）
+            chunks = self.split_text(text)
+            logger.info(f"文本分块完成 - 共{len(chunks)}个块")
+            
+            # 3. 批量生成embeddings
+            embeddings = []
+            total_tokens = 0
+            
+            for chunk in chunks:
+                try:
+                    # 获取embedding
+                    embedding = await self.get_embedding(chunk['text'])
+                    embeddings.append(embedding)
+                    
+                    # 计算token数
+                    chunk_tokens = self.token_counter.count_tokens(chunk['text'])
+                    total_tokens += chunk_tokens
+                    
+                    # 获取语义单元类型
+                    semantic_unit = self._get_semantic_unit(chunk['text'])
+                    # 添加语义信息到chunk中
+                    chunk['semantic_info'] = {
+                        'unit_type': semantic_unit,
+                        'token_count': chunk_tokens,
+                        'key_phrases': self._extract_key_phrases(chunk['text']),
+                        'language': {
+                            'code': lang_code,
+                            'confidence': confidence
+                        }
+                    }
+                    
+                except Exception as e:
+                    logger.error(f"处理单个文本块时出错: {str(e)}")
+                    continue
+            
+            # 4. 准备存储数据
+            embedding_data = {
+                'chunks': chunks,
+                'embeddings': embeddings,
+                'metadata': {
+                    'model': self.embedding_model,
+                    'created_at': time.time(),
+                    'total_chunks': len(chunks),
+                    'file_id': file_id,
+                    'language': {
+                        'code': lang_code,
+                        'confidence': confidence
+                    },
+                    'processing_stats': {
+                        'total_tokens': total_tokens,
+                        'average_chunk_size': sum(len(chunk['text']) for chunk in chunks) / len(chunks),
+                        'semantic_units_distribution': {
+                            unit_type: len([c for c in chunks 
+                                          if c.get('semantic_info', {}).get('unit_type') == unit_type])
+                            for unit_type in set(c.get('semantic_info', {}).get('unit_type') 
+                                               for c in chunks if 'semantic_info' in c)
+                        }
+                    }
+                }
+            }
+            
+            # 5. 保存数据
+            self.save_embeddings(base_path, file_id, embedding_data)
+            
+            # 6. 返回处理结果
+            return {
+                'success': True,
+                'chunk_count': len(chunks),
+                'total_tokens': total_tokens,
+                'language': {
+                    'code': lang_code,
+                    'confidence': confidence
+                },
+                'semantic_analysis': {
+                    'unit_types': list(embedding_data['metadata']['processing_stats']['semantic_units_distribution'].keys()),
+                    'average_chunk_size': embedding_data['metadata']['processing_stats']['average_chunk_size']
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"处理文本embedding失败: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def delete_embeddings(self, base_path: str, file_id: str) -> bool:
+        """删除embedding数据"""
+        try:
+            delete_dir = Path(base_path) / 'embeddings' / file_id
+            
+            if not delete_dir.exists():
+                print(f"Embeddings目录不存在: {delete_dir}")
+                return True
+            
+            # 删除所有相关文件
+            for file_path in delete_dir.glob('*'):
+                try:
+                    os.remove(str(file_path))
+                except Exception as e:
+                    print(f"删除文件失败 {file_path}: {str(e)}")
+                    return False
+            
+            # 删除空目录
+            try:
+                os.rmdir(str(delete_dir))
+            except Exception as e:
+                print(f"删除目录失败 {delete_dir}: {str(e)}")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"删除embeddings失败: {str(e)}")
+            return False
+
+    async def semantic_search(self, query: str, base_path: str, file_id: str, top_k: int = 3, similarity_threshold: float = 0.4) -> List[Dict[str, Any]]:
+        """
+        语义搜索功能，优化语义相关性和关键词匹配的平衡
+        """
+        try:
+            # 加载存储的embeddings
+            stored_data = self.load_embeddings(base_path, file_id)
+            if not stored_data:
+                return []
+            
+            # 获取查询的embedding
+            query_embedding = await self.get_embedding(query)
+            if query_embedding is None:
+                return []
+            
+            # 使用增强的语言检测
+            query_lang, confidence = self.enhance_language_detection(query)
+            logger.info(f"查询语言: {query_lang}, 置信度: {confidence:.2f}")
+            
+            # 标准化语言代码
+            query_lang = self.normalize_language_code(query_lang)
+            
+            # 提取查询关键词和核心语义
+            query_words = self._get_words_by_language(query, query_lang)
+            query_semantic_unit = self._get_semantic_unit(query)
+            
+            # 分析查询的语义特征
+            query_features = self._analyze_semantic_features(query)
+            
+            # 计算相似度并排序
+            similarities = []
+            
+            # 第一轮：计算每个块的基础得分
+            for i, chunk_embedding in enumerate(stored_data['embeddings']):
+                # 计算语义相似度（余弦相似度）
+                semantic_similarity = self.cosine_similarity(query_embedding, chunk_embedding)
+                
+                # 获取当前块的文本和语言
+                chunk_text = stored_data['chunks'][i]['text']
+                chunk_lang = stored_data['chunks'][i].get('semantic_info', {}).get('language', {}).get('code', '')
+                chunk_lang = self.normalize_language_code(chunk_lang)
+                
+                # 分析文本块的语义特征
+                chunk_features = self._analyze_semantic_features(chunk_text)
+                
+                # 计算特征相似度
+                feature_similarity = self._calculate_feature_similarity(query_features, chunk_features)
+                
+                # 计算语义单元相似度
+                chunk_semantic_unit = self._get_semantic_unit(chunk_text)
+                semantic_unit_similarity = 1.0 if query_semantic_unit == chunk_semantic_unit else 0.5
+                
+                # 提取文本块的关键词
+                chunk_words = self._get_words_by_language(chunk_text, chunk_lang)
+                
+                # 计算关键词匹配得分
+                keyword_scores = {}
+                for word in query_words:
+                    if word in chunk_words:
+                        # 计算词在文本块中的重要性
+                        importance = self._calculate_word_importance(word, chunk_text, chunk_lang)
+                        keyword_scores[word] = importance
+                
+                # 计算数值要求匹配度
+                number_match_score = self._calculate_number_match(query, chunk_text)
+                
+                # 计算结构相似度
+                structure_similarity = self._calculate_structure_similarity(query, chunk_text)
+                
+                # 计算综合得分
+                base_score = (
+                    semantic_similarity * 0.35 +          # 基础语义相似度
+                    feature_similarity * 0.25 +           # 特征相似度
+                    semantic_unit_similarity * 0.15 +     # 语义单元相似度
+                    number_match_score * 0.15 +          # 数值匹配得分
+                    structure_similarity * 0.1            # 结构相似度
+                )
+                
+                # 应用关键词匹配加权
+                keyword_weight = sum(keyword_scores.values()) / len(keyword_scores) if keyword_scores else 0
+                final_score = base_score * (1 + keyword_weight * 0.3)  # 关键词匹配作为加成
+                
+                # 应用动态阈值
+                dynamic_threshold = similarity_threshold * (
+                    0.8 if semantic_similarity > 0.7 or 
+                    keyword_weight > 0.6 or 
+                    feature_similarity > 0.7
+                    else 1.0
+                )
+                
+                if final_score >= dynamic_threshold:
+                    result = {
+                        'index': i,
+                        'similarity': final_score,
+                        'text': chunk_text,
+                        'semantic_similarity': semantic_similarity,
+                        'feature_similarity': feature_similarity,
+                        'keyword_scores': keyword_scores,
+                        'semantic_unit_similarity': semantic_unit_similarity,
+                        'number_match_score': number_match_score,
+                        'structure_similarity': structure_similarity,
+                        'language': {
+                            'query': query_lang,
+                            'chunk': chunk_lang,
+                            'confidence': confidence
+                        }
+                    }
+                    similarities.append(result)
+            
+            # 优化排序策略
+            similarities.sort(key=lambda x: (
+                x['similarity'] * 0.4 +                     # 综合得分
+                x['semantic_similarity'] * 0.2 +            # 语义相似度
+                x['feature_similarity'] * 0.2 +             # 特征相似度
+                x['number_match_score'] * 0.1 +            # 数值匹配得分
+                x['structure_similarity'] * 0.1             # 结构相似度
+            ), reverse=True)
+            
+            # 返回前top_k个结果
+            return similarities[:top_k]
+            
+        except Exception as e:
+            logger.error(f"语义搜索失败: {str(e)}")
+            return []
+
+    def _calculate_number_match(self, query: str, text: str) -> float:
+        """计算数值要求匹配度"""
+        try:
+            # 提取查询中的数字（包括中文数字）
+            query_numbers = re.findall(r'\d+|[一二三四五六七八九十百千万亿]+', query)
+            if not query_numbers:
+                return 1.0  # 如果查询中没有数字要求，返回满分
+            
+            # 提取文本中的数字
+            text_numbers = re.findall(r'\d+|[一二三四五六七八九十百千万亿]+', text)
+            if not text_numbers:
+                return 0.0  # 如果文本中没有数字，返回0分
+            
+            # 计算匹配度
+            matched = sum(1 for q in query_numbers if q in text_numbers)
+            return matched / len(query_numbers)
+        except Exception:
+            return 0.5  # 出错时返回中等分数
+
+    def _calculate_feature_similarity(self, query_features: Dict[str, Any], chunk_features: Dict[str, Any]) -> float:
+        """
+        计算两个文本的语义特征相似度
+        """
+        try:
+            if not query_features or not chunk_features:
+                return 0.0
+                
+            scores = []
+            
+            # 1. 计算关键短语相似度
+            if 'key_phrases' in query_features and 'key_phrases' in chunk_features:
+                phrase_sim = self._calculate_phrase_similarity(
+                    query_features['key_phrases'],
+                    chunk_features['key_phrases']
+                )
+                scores.append(('phrase', phrase_sim, 0.25))  # 权重0.25
+            
+            # 2. 计算句式特征相似度
+            if 'sentence_features' in query_features and 'sentence_features' in chunk_features:
+                sent_sim = sum(1 for k, v in query_features['sentence_features'].items()
+                             if chunk_features['sentence_features'].get(k) == v)
+                sent_sim = sent_sim / len(query_features['sentence_features'])
+                scores.append(('sentence', sent_sim, 0.15))  # 权重0.15
+            
+            # 3. 计算语义角色相似度
+            if 'semantic_roles' in query_features and 'semantic_roles' in chunk_features:
+                role_sim = self._calculate_role_similarity(
+                    query_features['semantic_roles'],
+                    chunk_features['semantic_roles']
+                )
+                scores.append(('role', role_sim, 0.2))  # 权重0.2
+            
+            # 4. 计算语气特征相似度
+            if 'mood_features' in query_features and 'mood_features' in chunk_features:
+                mood_sim = sum(1 for k, v in query_features['mood_features'].items()
+                             if chunk_features['mood_features'].get(k) == v)
+                mood_sim = mood_sim / len(query_features['mood_features'])
+                scores.append(('mood', mood_sim, 0.1))  # 权重0.1
+            
+            # 5. 计算语义场相似度
+            if 'semantic_fields' in query_features and 'semantic_fields' in chunk_features:
+                field_sim = self._calculate_field_similarity(
+                    query_features['semantic_fields'],
+                    chunk_features['semantic_fields']
+                )
+                scores.append(('field', field_sim, 0.15))  # 权重0.15
+            
+            # 6. 计算语篇特征相似度
+            if 'discourse_features' in query_features and 'discourse_features' in chunk_features:
+                disc_sim = self._calculate_discourse_similarity(
+                    query_features['discourse_features'],
+                    chunk_features['discourse_features']
+                )
+                scores.append(('discourse', disc_sim, 0.1))  # 权重0.1
+            
+            # 7. 计算连贯性特征相似度
+            if 'coherence_features' in query_features and 'coherence_features' in chunk_features:
+                coh_sim = self._calculate_coherence_similarity(
+                    query_features['coherence_features'],
+                    chunk_features['coherence_features']
+                )
+                scores.append(('coherence', coh_sim, 0.05))  # 权重0.05
+            
+            # 计算加权平均分数
+            if not scores:
+                return 0.0
+                
+            weighted_sum = sum(score * weight for _, score, weight in scores)
+            total_weight = sum(weight for _, _, weight in scores)
+            
+            return weighted_sum / total_weight if total_weight > 0 else 0.0
+            
+        except Exception as e:
+            logger.error(f"特征相似度计算失败: {str(e)}")
+            return 0.0
+            
+    def _calculate_keyword_scores(self, query_words: Set[str], chunk_words: Set[str]) -> Dict[str, float]:
+        """
+        计算关键词匹配得分，考虑同义词和词语重要性
+        """
+        try:
+            scores = {}
+            
+            # 对每个查询词计算得分
+            for query_word in query_words:
+                max_score = 0.0
+                
+                # 直接匹配
+                if query_word in chunk_words:
+                    max_score = 1.0
+                else:
+                    # 检查同义词
+                    synonyms = self._get_synonyms(query_word)
+                    if synonyms:
+                        for synonym in synonyms:
+                            if synonym in chunk_words:
+                                max_score = max(max_score, 0.9)  # 同义词匹配得分略低
+                    
+                    # 检查词形变化
+                    variations = self._get_word_variations(query_word)
+                    if variations:
+                        for variation in variations:
+                            if variation in chunk_words:
+                                max_score = max(max_score, 0.95)  # 词形变化匹配得分稍低
+                    
+                    # 检查部分匹配
+                    if not max_score:
+                        for chunk_word in chunk_words:
+                            similarity = self._calculate_word_similarity(query_word, chunk_word)
+                            max_score = max(max_score, similarity * 0.8)  # 部分匹配得分更低
+                
+                # 应用词语重要性权重
+                importance_weight = self._calculate_word_importance(query_word)
+                scores[query_word] = max_score * importance_weight
+            
+            return scores
+            
+        except Exception as e:
+            logger.error(f"关键词得分计算失败: {str(e)}")
+            return {}
+            
+    def _calculate_semantic_unit_similarity(
+        self,
+        query_unit: str,
+        chunk_unit: str,
+        query_features: Dict[str, Any],
+        chunk_features: Dict[str, Any]
+    ) -> float:
+        """
+        计算语义单元相似度，考虑更多上下文特征
+        """
+        try:
+            # 基础单元匹配
+            base_score = 1.0 if query_unit == chunk_unit else 0.8
+            
+            # 考虑语义场的匹配度
+            if 'semantic_fields' in query_features and 'semantic_fields' in chunk_features:
+                field_similarity = self._calculate_field_similarity(
+                    query_features['semantic_fields'],
+                    chunk_features['semantic_fields']
+                )
+                base_score *= (1 + field_similarity * 0.2)
+            
+            # 考虑语篇结构的匹配度
+            if 'discourse_features' in query_features and 'discourse_features' in chunk_features:
+                discourse_similarity = self._calculate_discourse_similarity(
+                    query_features['discourse_features'],
+                    chunk_features['discourse_features']
+                )
+                base_score *= (1 + discourse_similarity * 0.1)
+            
+            # 考虑语义角色的匹配度
+            if 'semantic_roles' in query_features and 'semantic_roles' in chunk_features:
+                role_similarity = self._calculate_role_similarity(
+                    query_features['semantic_roles'],
+                    chunk_features['semantic_roles']
+                )
+                base_score *= (1 + role_similarity * 0.15)
+            
+            return min(base_score, 1.0)  # 确保得分不超过1.0
+            
+        except Exception as e:
+            logger.error(f"语义单元相似度计算失败: {str(e)}")
+            return 0.8  # 出错时返回默认相似度
+            
+    def _calculate_word_similarity(self, word1: str, word2: str) -> float:
+        """
+        计算两个词的相似度
+        """
+        try:
+            # 如果完全相同
+            if word1 == word2:
+                return 1.0
+                
+            # 计算编辑距离
+            edit_distance = self._levenshtein_distance(word1, word2)
+            max_length = max(len(word1), len(word2))
+            if max_length == 0:
+                return 0.0
+                
+            similarity = 1 - (edit_distance / max_length)
+            return max(0.0, similarity)
+            
+        except Exception as e:
+            logger.error(f"词语相似度计算失败: {str(e)}")
+            return 0.0
+            
+    def _levenshtein_distance(self, s1: str, s2: str) -> int:
+        """
+        计算两个字符串的编辑距离
+        """
+        if len(s1) < len(s2):
+            return self._levenshtein_distance(s2, s1)
+        
+        if len(s2) == 0:
+            return len(s1)
+        
+        previous_row = range(len(s2) + 1)
+        for i, c1 in enumerate(s1):
+            current_row = [i + 1]
+            for j, c2 in enumerate(s2):
+                insertions = previous_row[j + 1] + 1
+                deletions = current_row[j] + 1
+                substitutions = previous_row[j] + (c1 != c2)
+                current_row.append(min(insertions, deletions, substitutions))
+            previous_row = current_row
+        
+        return previous_row[-1]
+        
+    def _contains_question_pattern(self, text: str, lang_code: str) -> bool:
+        """
+        检测是否包含疑问句模式，支持多语言
+        
+        Args:
+            text: 要检查的文本
+            lang_code: 语言代码
+            
+        Returns:
+            bool: 是否包含疑问句模式
+        """
+        try:
+            # 获取当前语言的问句模式，如果没有则使用英语模式
+            patterns = self.lang_config['question_patterns'].get(
+                lang_code, 
+                self.lang_config['question_patterns']['en']
+            )
+            
+            # 检查问句结尾
+            if patterns['endings'] and re.search(patterns['endings'], text, re.IGNORECASE):
+                return True
+                
+            # 检查问句开头词
+            if patterns['starters'] and re.search(patterns['starters'], text, re.IGNORECASE):
+                return True
+                
+            # 检查疑问助词（如果有）
+            if patterns['particles'] and re.search(patterns['particles'], text, re.IGNORECASE):
+                return True
+                
+            return False
+            
+        except Exception as e:
+            logger.error(f"检测问句模式时出错: {str(e)}")
+            return False  # 出错时返回False
+
+    def _contains_command_pattern(self, text: str, lang_code: str) -> bool:
+        """
+        检测是否包含祈使句/命令句模式，支持多语言
+        
+        Args:
+            text: 要检查的文本
+            lang_code: 语言代码
+            
+        Returns:
+            bool: 是否包含命令句模式
+        """
+        try:
+            # 获取当前语言的命令句模式，如果没有则使用英语模式
+            patterns = self.lang_config['command_patterns'].get(
+                lang_code, 
+                self.lang_config['command_patterns']['en']
+            )
+            
+            # 检查命令句结尾（感叹号等）
+            if patterns['endings'] and re.search(patterns['endings'], text, re.IGNORECASE):
+                return True
+                
+            # 检查命令句开头词（请、必须等）
+            if patterns['starters'] and re.search(patterns['starters'], text, re.IGNORECASE):
+                return True
+                
+            # 检查语气词（如果有）
+            if patterns['modals'] and re.search(patterns['modals'], text, re.IGNORECASE):
+                return True
+                
+            # 检查助动词
+            if patterns['auxiliaries'] and re.search(patterns['auxiliaries'], text, re.IGNORECASE):
+                return True
+                
+            return False
+            
+        except Exception as e:
+            logger.error(f"检测命令句模式时出错: {str(e)}")
+            return False  # 出错时返回False
+
+    def _contains_description_pattern(self, text: str, lang_code: str) -> bool:
+        """
+        检测是否包含描述句模式，支持多语言
+        
+        Args:
+            text: 要检查的文本
+            lang_code: 语言代码
+            
+        Returns:
+            bool: 是否包含描述句模式
+        """
+        try:
+            # 获取当前语言的描述句模式，如果没有则使用英语模式
+            patterns = self.lang_config['description_patterns'].get(
+                lang_code, 
+                self.lang_config['description_patterns']['en']
+            )
+            
+            # 获取权重配置
+            weights = self.lang_config['description_weights']
+            
+            # 计算加权得分
+            total_score = 0
+            for pattern_type, pattern in patterns.items():
+                if pattern and re.search(pattern, text, re.IGNORECASE):
+                    total_score += weights.get(pattern_type, 0)
+            
+            # 如果总分超过阈值，则认为是描述句
+            threshold = 0.2  # 可以根据需要调整阈值
+            return total_score >= threshold
+            
+        except Exception as e:
+            logger.error(f"检测描述句模式时出错: {str(e)}")
+            return False  # 出错时返回False
+
+    def _contains_comparison_pattern(self, text: str, lang_code: str) -> bool:
+        """
+        检测是否包含比较句模式，支持多语言
+        
+        Args:
+            text: 要检查的文本
+            lang_code: 语言代码
+            
+        Returns:
+            bool: 是否包含比较句模式
+        """
+        try:
+            # 获取当前语言的比较句模式，如果没有则使用英语模式
+            patterns = self.lang_config['comparison_patterns'].get(
+                lang_code, 
+                self.lang_config['comparison_patterns']['en']
+            )
+            
+            # 获取权重配置
+            weights = self.lang_config['comparison_weights']
+            
+            # 计算加权得分
+            total_score = 0
+            for pattern_type, pattern in patterns.items():
+                if pattern and re.search(pattern, text, re.IGNORECASE):
+                    total_score += weights.get(pattern_type, 0)
+            
+            # 如果总分超过阈值，则认为是比较句
+            threshold = 0.2  # 可以根据需要调整阈值
+            return total_score >= threshold
+            
+        except Exception as e:
+            logger.error(f"检测比较句模式时出错: {str(e)}")
+            return False  # 出错时返回False
+
+    def _contains_causal_pattern(self, text: str, lang_code: str) -> bool:
+        """
+        检测是否包含因果句模式，支持多语言
+        
+        Args:
+            text: 要检查的文本
+            lang_code: 语言代码
+            
+        Returns:
+            bool: 是否包含因果句模式
+        """
+        try:
+            # 获取当前语言的因果句模式，如果没有则使用英语模式
+            patterns = self.lang_config['causal_patterns'].get(
+                lang_code, 
+                self.lang_config['causal_patterns']['en']
+            )
+            
+            # 获取权重配置
+            weights = self.lang_config['causal_weights']
+            
+            # 计算加权得分
+            total_score = 0
+            for pattern_type, pattern in patterns.items():
+                if pattern and re.search(pattern, text, re.IGNORECASE):
+                    total_score += weights.get(pattern_type, 0)
+            
+            # 如果总分超过阈值，则认为是因果句
+            threshold = 0.2  # 可以根据需要调整阈值
+            return total_score >= threshold
+            
+        except Exception as e:
+            logger.error(f"检测因果句模式时出错: {str(e)}")
+            return False  # 出错时返回False
+
+    def _extract_semantic_role(self, text: str, role_type: str, lang_code: str) -> List[str]:
+        """提取语义角色"""
+        try:
+            # 使用NLTK进行词性标注
+            if self.pos_tagger_available:
+                tokens = nltk.word_tokenize(text)
+                tagged = nltk.pos_tag(tokens)
+                
+                # 根据角色类型和词性提取相关词语
+                if role_type == 'agent':
+                    return [word for word, pos in tagged if pos.startswith(('NN', 'PRP'))]
+                elif role_type == 'patient':
+                    return [word for word, pos in tagged if pos.startswith('NN')]
+                elif role_type == 'location':
+                    return [word for word, pos in tagged if pos == 'IN']
+                elif role_type == 'time':
+                    return [word for word, pos in tagged if pos == 'CD']
+                elif role_type == 'manner':
+                    return [word for word, pos in tagged if pos.startswith('RB')]
+            
+            # 如果NLTK不可用，使用简单的规则
+            return []
+            
+        except Exception as e:
+            logger.error(f"语义角色提取失败: {str(e)}")
+            return []
+
+    def _detect_mood(self, text: str, mood_type: str, lang_code: str) -> bool:
+        """检测语气类型"""
+        # 从配置中获取语气模式
+        mood_patterns = self.lang_config['mood_patterns'].get(lang_code, {}).get(mood_type, self.lang_config['mood_patterns']['en'].get(mood_type, []))
+        
+        # 如果找不到对应的模式，返回False
+        if not mood_patterns:
+            return False
+            
+        # 将列表中的模式字符串合并成一个正则表达式
+        pattern = '|'.join(mood_patterns)
+        return bool(re.search(pattern, text, re.IGNORECASE))
+
+    def _analyze_semantic_fields(self, text: str, lang_code: str) -> Dict[str, float]:
+        """分析语义场"""
+        try:
+            # 提取文本的关键词
+            keywords = self._extract_key_phrases(text)
+            
+            # 从配置中获取语义场定义
+            semantic_fields = self.lang_config['semantic_fields'].get(
+                lang_code, 
+                self.lang_config['semantic_fields']['en']  # 如果没有对应语言的定义，使用英语
+            )
+            
+            # 获取权重配置
+            weights = self.lang_config['semantic_field_weights']
+            
+            # 计算每个语义场的得分
+            field_scores = {}
+            for field, terms in semantic_fields.items():
+                # 计算匹配的关键词数量
+                matches = sum(1 for keyword in keywords if any(term.lower() in keyword.lower() for term in terms))
+                # 应用权重
+                field_scores[field] = (matches / len(keywords) if keywords else 0) * weights.get(field, 0.1)
+                
+            return field_scores
+            
+        except Exception as e:
+            logger.error(f"语义场分析失败: {str(e)}")
+            return {}
+
+    def _identify_topic_sentence(self, text: str, lang_code: str) -> Optional[str]:
+        """识别主题句"""
+        try:
+            sentences = text.split('。' if lang_code in ['zh', 'ja'] else '.')
+            if not sentences:
+                return None
+                
+            # 通常第一句是主题句
+            return sentences[0].strip()
+            
+        except Exception as e:
+            logger.error(f"主题句识别失败: {str(e)}")
+            return None
+
+    def _identify_supporting_details(self, text: str, lang_code: str) -> List[str]:
+        """识别支持性细节"""
+        try:
+            sentences = text.split('。' if lang_code in ['zh', 'ja'] else '.')
+            if len(sentences) <= 1:
+                return []
+                
+            # 除了第一句和最后一句的其他句子通常是支持性细节
+            return [s.strip() for s in sentences[1:-1] if s.strip()]
+            
+        except Exception as e:
+            logger.error(f"支持性细节识别失败: {str(e)}")
+            return []
+
+    def _identify_conclusion(self, text: str, lang_code: str) -> Optional[str]:
+        """识别结论句"""
+        try:
+            sentences = text.split('。' if lang_code in ['zh', 'ja'] else '.')
+            if not sentences:
+                return None
+                
+            # 通常最后一句是结论
+            return sentences[-1].strip()
+            
+        except Exception as e:
+            logger.error(f"结论句识别失败: {str(e)}")
+            return None
+
+    def _analyze_reference_chains(self, text: str, lang_code: str) -> List[List[str]]:
+        """分析指代链"""
+        try:
+            # 使用简单的规则识别代词和其指代对象
+            pronouns = {
+                'zh': ['他', '她', '它', '这', '那', '其'],
+                'ja': ['彼', '彼女', 'それ', 'この', 'その', 'あの'],
+                'ko': ['그', '그녀', '그것', '이', '그', '저'],
+                'en': ['he', 'she', 'it', 'this', 'that', 'they']
+            }
+            
+            current_pronouns = pronouns.get(lang_code, pronouns['en'])
+            reference_chains = []
+            
+            # 简单实现：找到代词和最近的名词
+            words = text.split()
+            current_chain = []
+            
+            for word in words:
+                if word in current_pronouns:
+                    if current_chain:
+                        reference_chains.append(current_chain)
+                    current_chain = [word]
+                elif current_chain:
+                    current_chain.append(word)
+                    
+            if current_chain:
+                reference_chains.append(current_chain)
+                
+            return reference_chains
+            
+        except Exception as e:
+            logger.error(f"指代链分析失败: {str(e)}")
+            return []
+
+    def _analyze_lexical_chains(self, text: str, lang_code: str) -> List[List[str]]:
+        """分析词汇链"""
+        try:
+            # 提取关键词
+            keywords = self._extract_key_phrases(text)
+            
+            # 按语义相关性分组
+            chains = []
+            current_chain = []
+            
+            for word in keywords:
+                if not current_chain:
+                    current_chain = [word]
+                else:
+                    # 检查与当前链的相关性
+                    similarity = max(self._calculate_word_similarity(word, w) for w in current_chain)
+                    if similarity > 0.7:  # 相似度阈值
+                        current_chain.append(word)
+                    else:
+                        if current_chain:
+                            chains.append(current_chain)
+                        current_chain = [word]
+                        
+            if current_chain:
+                chains.append(current_chain)
+                
+            return chains
+            
+        except Exception as e:
+            logger.error(f"词汇链分析失败: {str(e)}")
+            return []
+
+    def _identify_discourse_markers(self, text: str, lang_code: str) -> List[str]:
+        """识别话语标记"""
+        markers = {
+            'zh': ['首先', '其次', '然后', '最后', '因此', '但是', '不过', '总之'],
+            'ja': ['まず', 'つぎに', 'それから', '最後に', 'したがって', 'しかし', 'ところが', 'つまり'],
+            'ko': ['먼저', '다음', '그리고', '마지막으로', '따라서', '하지만', '그러나', '결국'],
+            'en': ['first', 'second', 'then', 'finally', 'therefore', 'but', 'however', 'in conclusion']
+        }
+        
+        current_markers = markers.get(lang_code, markers['en'])
+        found_markers = []
+        
+        for marker in current_markers:
+            if marker in text:
+                found_markers.append(marker)
+                
+        return found_markers
+
+    def _calculate_phrase_similarity(self, phrases1: List[str], phrases2: List[str]) -> float:
+        """计算短语相似度"""
+        try:
+            if not phrases1 or not phrases2:
+                return 0.0
+                
+            # 计算每个短语对之间的最大相似度
+            max_similarities = []
+            for p1 in phrases1:
+                similarities = [self._calculate_word_similarity(p1, p2) for p2 in phrases2]
+                max_similarities.append(max(similarities))
+                
+            # 返回平均最大相似度
+            return sum(max_similarities) / len(max_similarities)
+            
+        except Exception as e:
+            logger.error(f"短语相似度计算失败: {str(e)}")
+            return 0.0
+
+    def _calculate_role_similarity(self, roles1: Dict[str, List[str]], roles2: Dict[str, List[str]]) -> float:
+        """计算语义角色相似度"""
+        try:
+            if not roles1 or not roles2:
+                return 0.0
+                
+            role_scores = []
+            for role_type in roles1:
+                if role_type in roles2:
+                    # 计算两个角色列表的重叠度
+                    common = set(roles1[role_type]) & set(roles2[role_type])
+                    total = set(roles1[role_type]) | set(roles2[role_type])
+                    if total:
+                        role_scores.append(len(common) / len(total))
+                        
+            return sum(role_scores) / len(role_scores) if role_scores else 0.0
+            
+        except Exception as e:
+            logger.error(f"语义角色相似度计算失败: {str(e)}")
+            return 0.0
+
+    def _calculate_field_similarity(self, fields1: Dict[str, float], fields2: Dict[str, float]) -> float:
+        """计算语义场相似度"""
+        try:
+            if not fields1 or not fields2:
+                return 0.0
+                
+            # 计算余弦相似度
+            common_fields = set(fields1.keys()) & set(fields2.keys())
+            if not common_fields:
+                return 0.0
+                
+            dot_product = sum(fields1[field] * fields2[field] for field in common_fields)
+            norm1 = math.sqrt(sum(v * v for v in fields1.values()))
+            norm2 = math.sqrt(sum(v * v for v in fields2.values()))
+            
+            if norm1 == 0 or norm2 == 0:
+                return 0.0
+                
+            return dot_product / (norm1 * norm2)
+            
+        except Exception as e:
+            logger.error(f"语义场相似度计算失败: {str(e)}")
+            return 0.0
+
+    def _calculate_discourse_similarity(self, disc1: Dict[str, Any], disc2: Dict[str, Any]) -> float:
+        """计算语篇特征相似度"""
+        try:
+            if not disc1 or not disc2:
+                return 0.0
+                
+            scores = []
+            
+            # 比较主题句
+            if disc1.get('topic_sentence') and disc2.get('topic_sentence'):
+                topic_sim = self._calculate_word_similarity(
+                    disc1['topic_sentence'],
+                    disc2['topic_sentence']
+                )
+                scores.append(topic_sim)
+            
+            # 比较支持性细节
+            if disc1.get('supporting_details') and disc2.get('supporting_details'):
+                details_sim = self._calculate_phrase_similarity(
+                    disc1['supporting_details'],
+                    disc2['supporting_details']
+                )
+                scores.append(details_sim)
+            
+            # 比较结论
+            if disc1.get('conclusion') and disc2.get('conclusion'):
+                conclusion_sim = self._calculate_word_similarity(
+                    disc1['conclusion'],
+                    disc2['conclusion']
+                )
+                scores.append(conclusion_sim)
+            
+            return sum(scores) / len(scores) if scores else 0.0
+            
+        except Exception as e:
+            logger.error(f"语篇特征相似度计算失败: {str(e)}")
+            return 0.0
+
+    def _calculate_coherence_similarity(self, coh1: Dict[str, Any], coh2: Dict[str, Any]) -> float:
+        """计算连贯性特征相似度"""
+        try:
+            if not coh1 or not coh2:
+                return 0.0
+                
+            scores = []
+            
+            # 比较指代链
+            if coh1.get('reference_chains') and coh2.get('reference_chains'):
+                ref_sim = self._calculate_chain_similarity(
+                    coh1['reference_chains'],
+                    coh2['reference_chains']
+                )
+                scores.append(ref_sim)
+            
+            # 比较词汇链
+            if coh1.get('lexical_chains') and coh2.get('lexical_chains'):
+                lex_sim = self._calculate_chain_similarity(
+                    coh1['lexical_chains'],
+                    coh2['lexical_chains']
+                )
+                scores.append(lex_sim)
+            
+            # 比较话语标记
+            if coh1.get('discourse_markers') and coh2.get('discourse_markers'):
+                marker_sim = len(set(coh1['discourse_markers']) & set(coh2['discourse_markers'])) / \
+                            len(set(coh1['discourse_markers']) | set(coh2['discourse_markers']))
+                scores.append(marker_sim)
+            
+            return sum(scores) / len(scores) if scores else 0.0
+            
+        except Exception as e:
+            logger.error(f"连贯性特征相似度计算失败: {str(e)}")
+            return 0.0
+
+    def _calculate_chain_similarity(self, chains1: List[List[str]], chains2: List[List[str]]) -> float:
+        """计算链相似度"""
+        try:
+            if not chains1 or not chains2:
+                return 0.0
+                
+            # 计算每对链之间的最大相似度
+            max_similarities = []
+            for chain1 in chains1:
+                chain_sims = []
+                for chain2 in chains2:
+                    # 计算两个链的重叠度
+                    common = set(chain1) & set(chain2)
+                    total = set(chain1) | set(chain2)
+                    if total:
+                        chain_sims.append(len(common) / len(total))
+                if chain_sims:
+                    max_similarities.append(max(chain_sims))
+                    
+            return sum(max_similarities) / len(max_similarities) if max_similarities else 0.0
+            
+        except Exception as e:
+            logger.error(f"链相似度计算失败: {str(e)}")
+            return 0.0
+    def _get_synonyms(self, word: str) -> Set[str]:
+        """获取同义词"""
+        try:
+            # 如果是英文单词，使用WordNet
+            if all(ord(c) < 128 for c in word):
+                synonyms = set()
+                for syn in nltk.corpus.wordnet.synsets(word):
+                    for lemma in syn.lemmas():
+                        synonyms.add(lemma.name())
+                return synonyms
+            return set()
+        except Exception as e:
+            logger.error(f"同义词获取失败: {str(e)}")
+            return set()
+
+    def _get_word_variations(self, word: str) -> Set[str]:
+        """获取词形变化"""
+        try:
+            variations = set()
+            # 如果是英文单词，使用WordNet
+            if all(ord(c) < 128 for c in word):
+                for syn in nltk.corpus.wordnet.synsets(word):
+                    for lemma in syn.lemmas():
+                        variations.add(lemma.name())
+                        if lemma.derivationally_related_forms():
+                            variations.update(l.name() for l in lemma.derivationally_related_forms())
+            return variations
+        except Exception as e:
+            logger.error(f"词形变化获取失败: {str(e)}")
+            return set()
+
+    def _is_domain_term(self, word: str) -> bool:
+        """判断是否是领域术语"""
+        # 这里可以添加领域术语词典的检查
+        return False  # 暂时返回False
+
+    def enhance_language_detection(self, text: str) -> Tuple[str, float]:
+        """
+        增强的语言检测方法，结合多种特征进行更准确的语言识别
+        
+        Returns:
+            Tuple[str, float]: (语言代码, 置信度)
+        """
+        try:
+            # 1. 基础语言检测
+            base_lang, base_confidence = self.token_counter.detect_language(text)
+            base_lang = self.normalize_language_code(base_lang)
+            
+            # 2. 统计各种语言的特征得分
+            lang_scores = {}
+            text_len = len(text)
+            
+            for lang, patterns in self.language_patterns.items():
+                scores = {}
+                
+                # 计算脚本字符匹配度
+                script_matches = len(re.findall(patterns['script'], text))
+                scores['script'] = script_matches / text_len if text_len > 0 else 0
+                
+                # 计算标点符号匹配度
+                punct_matches = len(re.findall(patterns['punctuation'], text))
+                scores['punctuation'] = punct_matches / (text_len * 0.1) if text_len > 0 else 0
+                
+                # 计算特殊字符/词汇匹配度
+                special_pattern = patterns.get('special_chars') or patterns.get('particles') or patterns.get('articles')
+                if special_pattern:
+                    special_matches = len(re.findall(special_pattern, text))
+                    scores['special'] = special_matches / (text_len * 0.2) if text_len > 0 else 0
+                
+                # 计算数字系统匹配度（如果有）
+                if 'numbers' in patterns:
+                    number_matches = len(re.findall(patterns['numbers'], text))
+                    scores['numbers'] = number_matches / (text_len * 0.05) if text_len > 0 else 0
+                
+                # 计算加权总分
+                total_score = 0
+                for feature, score in scores.items():
+                    total_score += score * self.language_weights.get(feature, 0)
+                
+                # 如果是基础检测结果的语言，加入基础检测的权重
+                if lang == base_lang:
+                    total_score += base_confidence * self.language_weights['base_detect']
+                
+                lang_scores[lang] = min(total_score, 1.0)  # 确保分数不超过1
+            
+            # 3. 获取得分最高的语言
+            max_score_lang = max(lang_scores.items(), key=lambda x: x[1])
+            
+            # 4. 计算置信度
+            confidence = max_score_lang[1]
+            second_best = sorted(lang_scores.items(), key=lambda x: x[1], reverse=True)[1][1]
+            # 根据最高分和第二高分的差距调整置信度
+            confidence_margin = (confidence - second_best) / confidence if confidence > 0 else 0
+            final_confidence = confidence * (0.7 + 0.3 * confidence_margin)
+            
+            return max_score_lang[0], final_confidence
+            
+        except Exception as e:
+            logger.error(f"增强语言检测失败: {str(e)}")
+            return self.token_counter.detect_language(text)
+
+    def normalize_language_code(self, lang_code: str) -> str:
+        """
+        标准化语言代码，将各种格式的语言代码转换为统一的ISO 639-1格式
+        """
+        # 转换为小写并去除空格
+        lang_code = lang_code.lower().strip()
+        
+        # 处理带地区的语言代码
+        if '-' in lang_code:
+            base_lang = lang_code.split('-')[0]
+            if base_lang in self.language_code_map:
+                return self.language_code_map[base_lang]
+        
+        # 直接映射
+        if lang_code in self.language_code_map:
+            return self.language_code_map[lang_code]
+            
+        return lang_code
+
+    def _get_words_by_language(self, text: str, lang_code: str) -> Set[str]:
+        """根据语言选择合适的分词方式"""
+        try:
+            if lang_code == 'zh':
+                return set(jieba.lcut(text))
+            elif lang_code == 'ja':
+                return set(self.token_counter.segmenter.tokenize(text))
+            elif lang_code == 'ko' and self.token_counter.korean_tokenizer:
+                return set(token[0] for token in self.token_counter.korean_tokenizer.pos(text))
+            elif lang_code == 'th' and self.thai_tokenizer:
+                return set(self.thai_tokenizer(text))
+            elif lang_code in self.token_counter.nlp:
+                doc = self.token_counter.nlp[lang_code](text)
+                return set(token.text.lower() for token in doc if not token.is_stop)
+            else:
+                try:
+                    return set(nltk.word_tokenize(text.lower()))
+                except Exception as e:
+                    logger.warning(f"NLTK分词失败，使用基本分词: {str(e)}")
+                    return set(text.lower().split())
+        except Exception as e:
+            logger.error(f"分词失败: {str(e)}")
+            return set(text.lower().split())
+
+    def _analyze_semantic_features(self, text: str) -> Dict[str, Any]:
+        """
+        分析文本的语义特征，提取更细粒度的语义信息
+        """
+        try:
+            # 检测语言
+            lang_code, _ = self.enhance_language_detection(text)
+            lang_code = self.normalize_language_code(lang_code)
+            
+            # 1. 提取主题词和关键概念
+            key_phrases = self._extract_key_phrases(text)
+            
+            # 2. 分析句式特征
+            sentence_features = {
+                'interrogative': self._contains_question_pattern(text, lang_code),  # 疑问句
+                'imperative': self._contains_command_pattern(text, lang_code),     # 祈使句
+                'descriptive': self._contains_description_pattern(text, lang_code), # 描述句
+                'comparative': self._contains_comparison_pattern(text, lang_code),  # 比较句
+                'causal': self._contains_causal_pattern(text, lang_code)           # 因果句
+            }
+            
+            # 3. 分析语义角色
+            semantic_roles = {
+                'agent': self._extract_semantic_role(text, 'agent', lang_code),      # 施事
+                'patient': self._extract_semantic_role(text, 'patient', lang_code),  # 受事
+                'location': self._extract_semantic_role(text, 'location', lang_code),# 处所
+                'time': self._extract_semantic_role(text, 'time', lang_code),        # 时间
+                'manner': self._extract_semantic_role(text, 'manner', lang_code)     # 方式
+            }
+            
+            # 4. 分析语气语态
+            mood_features = {
+                'assertive': self._detect_mood(text, 'assertive', lang_code),    # 陈述语气
+                'subjunctive': self._detect_mood(text, 'subjunctive', lang_code),# 虚拟语气
+                'conditional': self._detect_mood(text, 'conditional', lang_code), # 条件语气
+                'imperative': self._detect_mood(text, 'imperative', lang_code)   # 祈使语气
+            }
+            
+            # 5. 分析语义场
+            semantic_fields = self._analyze_semantic_fields(text, lang_code)
+            
+            # 6. 分析语篇结构
+            discourse_features = {
+                'topic_sentence': self._identify_topic_sentence(text, lang_code),
+                'supporting_details': self._identify_supporting_details(text, lang_code),
+                'conclusion': self._identify_conclusion(text, lang_code)
+            }
+            
+            # 7. 分析语义连贯性
+            coherence_features = {
+                'reference_chains': self._analyze_reference_chains(text, lang_code),
+                'lexical_chains': self._analyze_lexical_chains(text, lang_code),
+                'discourse_markers': self._identify_discourse_markers(text, lang_code)
+            }
+            
+            return {
+                'key_phrases': key_phrases,
+                'sentence_features': sentence_features,
+                'semantic_roles': semantic_roles,
+                'mood_features': mood_features,
+                'semantic_fields': semantic_fields,
+                'discourse_features': discourse_features,
+                'coherence_features': coherence_features
+            }
+            
+        except Exception as e:
+            logger.error(f"语义特征分析失败: {str(e)}")
+            return {}
+
+    def cosine_similarity(self, vec1: np.ndarray, vec2: np.ndarray) -> float:
+        """
+        计算两个向量的余弦相似度
+        
+        Args:
+            vec1: 第一个向量
+            vec2: 第二个向量
+            
+        Returns:
+            float: 余弦相似度值
+        """
+        try:
+            # 确保输入是numpy数组
+            if not isinstance(vec1, np.ndarray):
+                vec1 = np.array(vec1)
+            if not isinstance(vec2, np.ndarray):
+                vec2 = np.array(vec2)
+            
+            # 计算点积
+            dot_product = np.dot(vec1, vec2)
+            
+            # 计算范数
+            norm1 = np.linalg.norm(vec1)
+            norm2 = np.linalg.norm(vec2)
+            
+            # 避免除零错误
+            if norm1 == 0 or norm2 == 0:
+                return 0.0
+            
+            # 计算余弦相似度
+            similarity = dot_product / (norm1 * norm2)
+            
+            # 确保结果在[-1, 1]范围内
+            return float(np.clip(similarity, -1.0, 1.0))
+            
+        except Exception as e:
+            logger.error(f"计算余弦相似度时出错: {str(e)}")
+            return 0.0
+

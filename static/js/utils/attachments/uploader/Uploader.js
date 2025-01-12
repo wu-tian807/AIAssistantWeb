@@ -189,17 +189,9 @@ export class Uploader {
             const attachment = await uploader.handleFileSelect(file);
             console.log('文件上传成功，创建预览元素');
             
-            // 添加到上传器的附件集合中
-            uploader.attachments.add(attachment);
-            
-            // 调用上传成功的回调
-            if (this.options.onUploadSuccess) {
-                this.options.onUploadSuccess(attachment);
-            }
-            
             // 如果有容器选项，创建并添加预览元素
             if (this.options.container) {
-                const previewElement = attachment.createUploadPreviewElement(
+                const previewElement = await attachment.createUploadPreviewElement(
                     // 删除回调
                     () => {
                         // 从容器中移除预览元素
@@ -214,7 +206,7 @@ export class Uploader {
                         }
                     }
                 );
-                
+
                 if (previewElement) {
                     // 为预览添加点击事件
                     if (fileType === AttachmentType.IMAGE) {
@@ -233,6 +225,11 @@ export class Uploader {
                     console.log('添加预览元素到容器');
                     this.options.container.appendChild(previewElement);
                 }
+            }
+
+            // 调用上传成功的回调
+            if (this.options.onUploadSuccess) {
+                this.options.onUploadSuccess(attachment);
             }
 
             return attachment;

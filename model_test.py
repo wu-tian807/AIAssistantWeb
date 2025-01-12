@@ -81,6 +81,98 @@ class TextProcessor:
                         "required": ["file_id", "target_lines"]
                     }
                 }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_text_with_keyword",
+                    "description": "使用单个关键词搜索文本内容。支持智能上下文分析或固定上下文行数。当用户想要搜索特定内容时使用此函数。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "file_id": {
+                                "type": "string",
+                                "description": "文件ID，固定值：1736427661431"
+                            },
+                            "keyword": {
+                                "type": "string",
+                                "description": "要搜索的关键词"
+                            },
+                            "max_matches": {
+                                "type": "integer",
+                                "description": "最大匹配数量",
+                                "default": 10
+                            },
+                            "auto_context": {
+                                "type": "boolean",
+                                "description": "是否使用智能上下文分析",
+                                "default": True
+                            },
+                            "up_line_count": {
+                                "type": "integer",
+                                "description": "向上获取的行数（仅在auto_context=false时使用）",
+                                "default": 5
+                            },
+                            "down_line_count": {
+                                "type": "integer",
+                                "description": "向下获取的行数（仅在auto_context=false时使用）",
+                                "default": 5
+                            }
+                        },
+                        "required": ["file_id", "keyword"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_text_with_keywords",
+                    "description": "使用多个关键词搜索文本内容。每个关键词可以独立配置匹配数量和上下文范围。支持智能上下文分析。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "file_id": {
+                                "type": "string",
+                                "description": "文件ID，固定值：1736427661431"
+                            },
+                            "keyword_configs": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "keyword": {
+                                            "type": "string",
+                                            "description": "要搜索的关键词"
+                                        },
+                                        "max_matches": {
+                                            "type": "integer",
+                                            "description": "最大匹配数量",
+                                            "default": 10
+                                        },
+                                        "up_line_count": {
+                                            "type": "integer",
+                                            "description": "向上获取的行数（仅在auto_context=false时使用）",
+                                            "default": 5
+                                        },
+                                        "down_line_count": {
+                                            "type": "integer",
+                                            "description": "向下获取的行数（仅在auto_context=false时使用）",
+                                            "default": 5
+                                        }
+                                    },
+                                    "required": ["keyword"]
+                                },
+                                "description": "关键词配置列表"
+                            },
+                            "auto_context": {
+                                "type": "boolean",
+                                "description": "是否使用智能上下文分析",
+                                "default": True
+                            }
+                        },
+                        "required": ["file_id", "keyword_configs"]
+                    }
+                }
             }
         ]
 
@@ -154,6 +246,126 @@ class TextProcessor:
             return '\n'.join(output)
         return str(result.get('error', '读取失败'))
 
+    def search_text_with_keyword(
+        self,
+        file_id: str,
+        keyword: str,
+        max_matches: int = 10,
+        auto_context: bool = True,
+        up_line_count: int = 5,
+        down_line_count: int = 5
+    ) -> str:
+        """使用关键词搜索文本内容"""
+        result = self.reader.search_text_with_keyword(
+            file_id=file_id,
+            user_id="2212929908_qq_com",
+            keyword=keyword,
+            max_matches=max_matches,
+            up_line_count=up_line_count,
+            down_line_count=down_line_count,
+            auto_context=auto_context
+        )
+        
+        if isinstance(result, dict) and result.get('success'):
+            # 格式化输出搜索结果
+            output = []
+            
+            # 添加搜索统计信息
+            stats = result.get('metadata', {}).get('search_stats', {})
+            output.append(f"搜索关键词: {stats.get('keyword')}")
+            output.append(f"找到匹配: {stats.get('matches_found')} 处")
+            output.append(f"上下文分析: {'智能' if stats.get('auto_context') else '固定'}")
+            output.append("")
+            
+            # 添加匹配结果
+            for i, match in enumerate(result.get('matches', []), 1):
+                output.append(f"=== 匹配 #{i} (第{match.get('line_number')}行) ===")
+                # 添加上文
+                if match.get('context_before'):
+                    output.extend(match['context_before'])
+                # 添加匹配行（带有位置标记）
+                content = match.get('content', '')
+                positions = match.get('keyword_positions', [])
+                if positions:
+                    marked_content = content
+                    for pos in reversed(positions):
+                        marked_content = (
+                            marked_content[:pos] +
+                            "【" +
+                            marked_content[pos:pos + len(keyword)] +
+                            "】" +
+                            marked_content[pos + len(keyword):]
+                        )
+                    output.append(f">>> {marked_content}")
+                else:
+                    output.append(f">>> {content}")
+                # 添加下文
+                if match.get('context_after'):
+                    output.extend(match['context_after'])
+                output.append("")
+            
+            return '\n'.join(output)
+        return str(result.get('error', '搜索失败'))
+
+    def search_text_with_keywords(
+        self,
+        file_id: str,
+        keyword_configs: List[Dict[str, Any]],
+        auto_context: bool = True
+    ) -> str:
+        """使用多个关键词搜索文本内容"""
+        result = self.reader.search_text_with_keywords(
+            file_id=file_id,
+            user_id="2212929908_qq_com",
+            keyword_configs=keyword_configs,
+            auto_context=auto_context
+        )
+        
+        if isinstance(result, dict) and result.get('success'):
+            # 格式化输出搜索结果
+            output = []
+            
+            # 添加搜索统计信息
+            stats = result.get('metadata', {}).get('search_stats', {})
+            output.append(f"搜索关键词: {', '.join(stats.get('keywords', []))}")
+            output.append(f"找到匹配: {stats.get('matches_found')} 处")
+            output.append(f"上下文分析: {'智能' if stats.get('auto_context') else '固定'}")
+            output.append("")
+            
+            # 添加匹配结果
+            for i, match in enumerate(result.get('matches', []), 1):
+                output.append(f"=== 匹配 #{i} (第{match.get('line_number')}行) ===")
+                # 添加上文
+                if match.get('context_before'):
+                    output.extend(match['context_before'])
+                # 添加匹配行（带有位置标记）
+                content = match.get('content', '')
+                matched_keywords = match.get('matched_keywords', [])
+                if matched_keywords:
+                    marked_content = content
+                    # 从后向前处理每个关键词的位置，避免位置偏移
+                    for keyword_info in matched_keywords:
+                        keyword = keyword_info['keyword']
+                        positions = sorted(keyword_info['positions'], reverse=True)
+                        for pos in positions:
+                            marked_content = (
+                                marked_content[:pos] +
+                                "【" +
+                                marked_content[pos:pos + len(keyword)] +
+                                "】" +
+                                marked_content[pos + len(keyword):]
+                            )
+                    output.append(f">>> {marked_content}")
+                else:
+                    output.append(f">>> {content}")
+                # 添加下文
+                if match.get('context_after'):
+                    output.extend(match['context_after'])
+                output.append("")
+            
+            return '\n'.join(output)
+        return str(result.get('error', '搜索失败'))
+
 def process_tool_call(processor, tool_call):
     """处理工具调用，包含参数验证和默认值处理"""
     print(f"\n调试 - 工具调用参数: {tool_call}")
@@ -191,6 +403,25 @@ def process_tool_call(processor, tool_call):
             result = processor.read_lines_with_auto_context(
                 file_id=arguments["file_id"],
                 target_lines=arguments["target_lines"]
+            )
+        elif function_name == "search_text_with_keyword":
+            if "keyword" not in arguments:
+                raise ValueError("必须指定搜索关键词")
+            result = processor.search_text_with_keyword(
+                file_id=arguments["file_id"],
+                keyword=arguments["keyword"],
+                max_matches=arguments.get("max_matches", 10),
+                auto_context=arguments.get("auto_context", True),
+                up_line_count=arguments.get("up_line_count", 5),
+                down_line_count=arguments.get("down_line_count", 5)
+            )
+        elif function_name == "search_text_with_keywords":
+            if "keyword_configs" not in arguments:
+                raise ValueError("必须指定关键词配置")
+            result = processor.search_text_with_keywords(
+                file_id=arguments["file_id"],
+                keyword_configs=arguments["keyword_configs"],
+                auto_context=arguments.get("auto_context", True)
             )
         else:
             raise ValueError(f"未知的工具名称: {function_name}")
@@ -313,6 +544,38 @@ def simulate_conversation():
             print(f"\n对话出错: {str(e)}")
             print("请重试或输入 'quit' 退出")
 
+def test_auto_context():
+    """测试自动上下文分析功能"""
+    processor = TextProcessor()
+    file_id = "1736427661431"
+    
+    print("\n=== 测试自动上下文分析 ===")
+    
+    # 测试用例1：单行分析
+    print("\n[测试1] 单行分析")
+    result = processor.read_lines_with_auto_context(file_id, [10])
+    print("\n单行分析结果:")
+    print(result)
+    
+    # 测试用例2：多行分析（相邻行）
+    print("\n[测试2] 多行分析（相邻行）")
+    result = processor.read_lines_with_auto_context(file_id, [10, 11, 12])
+    print("\n相邻行分析结果:")
+    print(result)
+    
+    # 测试用例3：多行分析（间隔行）
+    print("\n[测试3] 多行分析（间隔行）")
+    result = processor.read_lines_with_auto_context(file_id, [10, 20, 30])
+    print("\n间隔行分析结果:")
+    print(result)
+    
+    # 测试用例4：边界情况
+    print("\n[测试4] 边界情况测试")
+    result = processor.read_lines_with_auto_context(file_id, [1, 999999])  # 测试文件开头和一个可能不存在的行号
+    print("\n边界情况分析结果:")
+    print(result)
+
 if __name__ == "__main__":
-    simulate_conversation()
+    simulate_conversation()  # 启用对话模拟
+    # test_auto_context()  # 注释掉测试
     
