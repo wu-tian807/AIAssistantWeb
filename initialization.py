@@ -36,14 +36,20 @@ class GeminiAPIPool:
 app = Flask(__name__)
 app.secret_key = 'wutianrandomkey1432532534632'  # 用于session加密，请更改为随机字符串
 
-#路径用于存储上传的图片
-UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+# 基础配置
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB
+app.config['REQUEST_TIMEOUT'] = 60  # 60秒超时
 
-# 创建上传相关的文件夹结构
+# 文件上传相关配置
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+TEMP_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'temp')
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['TEMP_FOLDER'] = TEMP_FOLDER
+
+# 创建必要的目录
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)  # 主上传文件夹
+os.makedirs(TEMP_FOLDER, exist_ok=True)  # 临时文件夹
 os.makedirs(os.path.join(UPLOAD_FOLDER, 'temp'), exist_ok=True)  # 临时处理文件夹
-app.config['TEMP_FOLDER'] = os.path.join(UPLOAD_FOLDER, 'temp')
 
 # 设置文件上传相关的配置
 app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1GB
@@ -75,9 +81,6 @@ gemini_pool = GeminiAPIPool(API_KEYS['google'])
 # 初始化API客户端
 xai_client = OpenAI(api_key=API_KEYS['xai'][0], base_url=API_BASE_URLS['xai'])
 deepseek_client = OpenAI(api_key=API_KEYS['deepseek'][0], base_url=API_BASE_URLS['deepseek'])
-
-# # 导出gemini_pool以供其他模块使用
-# genai, GenerativeModel = gemini_pool.get_client()
 
 # 初始化数据库迁移
 migrate = Migrate(app, db)

@@ -1,0 +1,108 @@
+Algoritmo
+AlphaZero
+Aprendizaje automático
+Aprendizaje automático antagónico
+Aprendizaje no supervisado
+Aprendizaje por conjuntos
+Aprendizaje profundo
+Aprendizaje supervisado
+Biblioteca Nacional de Israel
+Biblioteca Nacional de la República Checa
+Control de autoridades
+Digital object identifier
+El aprendizaje profun
+Espacio vectorial
+GPGPU
+GPU
+ISBN
+ISSN
+Infraestructura como servicio
+Isolation forest
+Library of Congress Control Number
+Medical Subject Headings
+PLoS ONE
+PaaS
+Pixel
+Procesador de aprendizaje profundo
+PubMed Identifier
+Reconocimiento de patrones
+Reconocimiento del habla
+Red de estado de eco
+Red neuronal residual
+Reservoir computing
+Semantic Scholar
+Transformador de visión
+Una observación
+Varias arquitecturas
+Visión por computador
+Wikidata
+Wikimedia Commons
+a en algunas
+a en algunas 
+formas
+adores
+arquitecturas computa
+as
+asimilar representaci
+automático basados en
+bstracciones de alto
+campos como visión po
+cil aprender tareas d
+cionales que admiten
+como redes neuronales
+de aprendizaje profun
+deep learning
+do
+do es parte de un con
+e automático
+e interés
+en especial transform
+en inglés
+es esta imagen una ca
+es un conjunto de alg
+este área intenta def
+eñales de audio y mús
+formas
+han sido aplicadas a
+ica
+ineales múltiples e i
+inir qué representaci
+ir resultados de vang
+junto más amplio de m
+machine learning
+mo crear modelos para
+nivel en datos usando
+ones de datos
+ones son mejores y có
+oritmos de aprendizaj
+pero algunas represen
+plos
+por ejemplo
+presados en forma mat
+profundas
+puede ser representad
+que intenta modelar a
+r computador
+ra humana
+reconocer estas repre
+reconocimiento automá
+redes neuronales prof
+ricial o tensorial
+rofundas
+sentaciones
+sión
+sobre la base de ejem
+taciones hacen más fá
+terativas de datos ex
+tico del habla
+transformaciones no l
+transformadores de vi
+uardia en varias tare
+un vector de píxeles
+una imagen
+undas convolucionales
+y han mostrado produc
+y la investigación en
+y reconocimiento de s
+y redes de creencia p
+étodos de aprendizaje

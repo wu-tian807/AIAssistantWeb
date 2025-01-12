@@ -1,0 +1,121 @@
+1 the Road
+3D model
+ACT-R
+AI winter
+AI-complete
+ALPAC
+Abbreviation
+Abstract Meaning Representation
+Adjective
+Agglutination
+Alan Turing
+Ambiguous
+Analog signal
+Anaphora resolution
+Ancient language
+Apertium
+Arabic language
+Argument scheme
+Artificial general intelligence
+Artificial intelligence
+Artificial intelligence detection software
+Artificial intelligence in healthcare
+Artificial neural network
+Association for Computational Linguistics
+Atomic formula
+Automata theory
+Automated essay scoring
+Automated theorem proving
+Automatic identification and data capture
+Automatic summarization
+Automatic translation
+BabelNet
+Bag of words
+Bag-of-words model
+Bank of English
+Bigram
+Biomedical text mining
+Blocks world
+Capitalization
+Chatbot
+Chatterbots
+Chinese language
+Chinese room
+Civilization
+Closed-world assumption
+Coarticulation
+Cognition
+Cognitive linguistics
+Cognitive science
+Collocation extraction
+Compound term processing
+Compound-term processing
+Computational linguistics
+Computer
+Computer science
+Computer-assisted reviewing
+Computer-assisted translation
+Computing Machinery and Intelligence
+Concept mining
+Conceptual metaphor
+Concordancer
+Controlled natural language
+Coreference
+Corner case
+Corpus linguistics
+DBpedia
+Decision tree
+Deep learning
+Deep linguistic processing
+Dialogue system
+Discourse
+Discourse analysis
+Discourse representation theory
+Distant reading
+Distributional semantics
+Document AI
+Document classification
+Document-term matrix
+ELIZA
+English language
+Entity linking
+European Union
+Example-based machine translation
+Explainable artificial intelligence
+Explicit semantic analysis
+FastText
+Feature engineering
+It is primarily conce
+Major tasks in natura
+NLP
+Natural language proc
+Typically data is col
+a subfield of linguis
+achine learning and d
+and natural-language
+are speech recognitio
+based approaches in m
+cially artificial int
+eep learning
+elligence
+encoded in natural la
+essing
+generation
+ion and computational
+is a subfield of comp
+l language processing
+lected in text corpor
+linguistics
+lity to process data
+natural-language unde
+nguage and is thus cl
+omputers with the abi
+osely related to info
+rmation retrieval
+rned with providing c
+rstanding
+statistical or neural
+text classification
+tics
+using either rule-bas
+uter science and espe

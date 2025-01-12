@@ -55,7 +55,7 @@ export class VideoAttachment {
             const { thumbnail, duration } = await VideoModal.generateThumbnail(videoUrl);
             
             // 保存缩略图到服务器
-            const response = await fetch('/api/save_thumbnail', {
+            const response = await fetch('/api/image/save_thumbnail', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

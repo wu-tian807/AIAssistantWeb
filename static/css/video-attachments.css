@@ -7,7 +7,7 @@
     width: 200px;
     margin: 5px;
     border-radius: 8px;
-    overflow: hidden;
+    overflow: visible;
     background-color: #f5f5f5;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -20,6 +20,7 @@
     background-color: #000;
     cursor: pointer;
     overflow: hidden;
+    border-radius: 8px 8px 0 0;
 }
 
 /* 视频缩略图 */
@@ -42,33 +43,35 @@
     transform: translate(-50%, -50%);
     width: 40px;
     height: 40px;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.7);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
     font-size: 20px;
-    opacity: 0.8;
+    opacity: 0.9;
     transition: all 0.2s ease;
+    z-index: 2;
 }
 
 .video-thumbnail-container:hover .video-play-button {
-    background: rgba(0, 0, 0, 0.8);
+    background: rgba(0, 0, 0, 0.85);
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1.1);
+    transform: scale(1.1);
 }
 
 /* 视频时长显示 */
 .video-duration {
     position: absolute;
-    bottom: 8px;
-    right: 8px;
-    background: rgba(0, 0, 0, 0.6);
+    bottom: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.7);
     color: white;
-    padding: 2px 6px;
+    padding: 4px 8px;
     border-radius: 4px;
     font-size: 12px;
+    z-index: 2;
 }
 
 /* 文件名显示 */
@@ -81,27 +84,31 @@
     overflow: hidden;
     text-overflow: ellipsis;
     background-color: white;
+    border-radius: 0 0 8px 8px;
+    text-align: center;
 }
 
 /* 删除按钮 */
 .video-preview-item .delete-button {
     position: absolute;
-    top: 8px;
-    right: 8px;
+    top: -8px;
+    right: -8px;
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: rgba(0, 0, 0, 0.6);
+    background-color: #dc3545;
     color: white;
     border: none;
-    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
+    cursor: pointer;
     font-size: 14px;
-    transition: all 0.2s ease;
-    z-index: 2;
+    padding: 0;
     opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    z-index: 100;
 }
 
 .video-preview-item:hover .delete-button {
@@ -109,7 +116,7 @@
 }
 
 .video-preview-item .delete-button:hover {
-    background: rgba(255, 0, 0, 0.8);
+    background-color: #c82333;
     transform: scale(1.1);
 }
 

@@ -287,3 +287,137 @@ body.dark-theme .model-selector #model-select option:hover {
 body.dark-theme .model-selector #model-select option:checked {
     background-color: var(--dark-active-color);
 }
+
+/* 文本预览模态框暗色样式 */
+body.dark-theme .text-preview-modal .modal-content {
+    background-color: var(--dark-bg-secondary);
+    border-color: var(--dark-border-color);
+}
+
+body.dark-theme .text-preview-modal .modal-header {
+    background-color: var(--dark-bg-primary);
+    border-bottom-color: var(--dark-border-color);
+}
+
+body.dark-theme .text-preview-modal .modal-title {
+    color: var(--dark-text-primary);
+}
+
+body.dark-theme .text-preview-modal .btn-close {
+    color: var(--dark-text-primary);
+    filter: invert(1);
+}
+
+body.dark-theme .text-preview-modal .modal-body {
+    background-color: var(--dark-bg-secondary);
+}
+
+/* 文本信息区域 */
+body.dark-theme .text-preview-modal .text-info {
+    background-color: var(--dark-bg-primary);
+    color: var(--dark-text-primary);
+}
+
+body.dark-theme .text-preview-modal .text-info p {
+    color: var(--dark-text-primary);
+}
+
+body.dark-theme .text-preview-modal .text-info strong {
+    color: var(--dark-text-primary);
+}
+
+/* 文本内容区域 */
+body.dark-theme .text-preview-modal .text-content {
+    background-color: var(--dark-bg-primary);
+}
+
+body.dark-theme .text-preview-modal .text-content pre {
+    background-color: var(--dark-bg-primary);
+}
+
+body.dark-theme .text-preview-modal .text-content code {
+    color: var(--dark-text-primary);
+}
+
+/* 滚动条样式 */
+body.dark-theme .text-preview-modal .text-content pre::-webkit-scrollbar-track {
+    background: var(--dark-bg-primary);
+}
+
+body.dark-theme .text-preview-modal .text-content pre::-webkit-scrollbar-thumb {
+    background: var(--dark-border-color);
+}
+
+body.dark-theme .text-preview-modal .text-content pre::-webkit-scrollbar-thumb:hover {
+    background: var(--dark-text-secondary);
+}
+
+/* 加载状态 */
+body.dark-theme .text-preview-modal .text-content.loading {
+    color: var(--dark-text-secondary);
+}
+
+/* 错误状态 */
+body.dark-theme .text-preview-modal .text-content.error {
+    color: #dc3545;
+}
+
+/* 文本附件预览框暗色样式 */
+body.dark-theme .text-attachment-preview {
+    background-color: var(--dark-bg-secondary);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+body.dark-theme .text-attachment-preview:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* 文本图标容器暗色样式 */
+body.dark-theme .text-icon-container {
+    background-color: var(--dark-bg-primary);
+}
+
+body.dark-theme .text-icon-container:hover {
+    background-color: var(--dark-hover-color);
+}
+
+/* 文本图标暗色样式 */
+body.dark-theme .text-icon {
+    color: var(--dark-text-secondary);
+}
+
+body.dark-theme .text-attachment-preview:hover .text-icon {
+    color: var(--dark-text-primary);
+}
+
+/* 文件信息容器暗色样式 */
+body.dark-theme .text-attachment-preview .text-info {
+    background-color: var(--dark-bg-secondary);
+}
+
+/* 文件名暗色样式 */
+body.dark-theme .text-attachment-preview .text-info .file-name {
+    color: var(--dark-text-primary);
+}
+
+/* 文件详情暗色样式 */
+body.dark-theme .text-attachment-preview .text-info .file-details {
+    color: var(--dark-text-secondary);
+}
+
+/* 错误状态暗色样式 */
+body.dark-theme .text-attachment-preview.error {
+    border-color: #dc3545;
+    background-color: var(--dark-bg-primary);
+}
+
+body.dark-theme .text-attachment-preview.error .text-icon {
+    color: #dc3545;
+}
+
+body.dark-theme .text-attachment-preview.error .text-info .file-details.error {
+    color: #dc3545;
+}
+
+/* 删除按钮暗色样式保持原样，因为需要醒目 */
