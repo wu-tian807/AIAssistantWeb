@@ -1,4 +1,5 @@
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from google.genai.types import HarmCategory, HarmBlockThreshold
+from google.genai.types import Part,GenerateContentConfigDict
 import base64
 import os
 from flask import render_template, request, jsonify, Response, session, redirect, url_for, send_file
@@ -402,7 +403,7 @@ def chat():
     if not model_type:
         return jsonify({'error': '不支持的模型'}), 400
 
-    def process_message_with_attachments(message, model_type, model_support_list, user_id,genai):
+    def process_message_with_attachments(message, model_type, model_support_list, user_id):
         # 从配置中获取支持的图片类型
         from utils.files.file_config import MIME_TYPE_MAPPING, ATTACHMENT_TYPES, AttachmentType
         from utils.attachment_handler.image_handler import get_base64_by_id
@@ -489,8 +490,7 @@ def chat():
                                     model_type,
                                     processed_message,
                                     supported_type,
-                                    mime_type,
-                                    genai
+                                    mime_type
                                 )
                         else:
                             print("模型不支持图片处理，使用OCR提取文本")
@@ -537,8 +537,7 @@ def chat():
                                     model_type,
                                     processed_message,
                                     AttachmentType.GEMINI_VIDEO,
-                                    mime_type,
-                                    genai
+                                    mime_type
                                 )
                             else:
                                 print(f"视频格式不受Gemini支持: {file_ext}, {mime_type}")
@@ -559,8 +558,7 @@ def chat():
                                 model_type,
                                 processed_message,
                                 AttachmentType.VIDEO,
-                                mime_type,
-                                genai
+                                mime_type
                             )
                     # 其他类型的附件处理
                     else:
@@ -591,14 +589,11 @@ def chat():
             # 处理消息列表
             processed_messages = []
             for msg in messages:
-                # 获取新的genai实例
-                genai_instance, GenerativeModel = gemini_pool.get_client()
                 processed_msg = process_message_with_attachments(
                     msg, 
                     model_type, 
                     model_support_list, 
-                    user_id,
-                    genai_instance
+                    user_id
                 )
                 processed_messages.append(processed_msg)
             
@@ -682,72 +677,47 @@ def chat():
                         accumulated_output.append(content)
                         yield f"data: {json.dumps({'content': content})}\n\n"
                     complete_response = chunk
-
-
-
             elif model_type == 'google':
                 # Google 模型调用
-                genai, GenerativeModel = gemini_pool.get_client()
-                model = GenerativeModel(model_id)
+                genai_client = gemini_pool.get_client()
                 
-                # 将消息转换为 Google SDK 格式
+                # 将消息转换为 Google SDK 格式，采用新的格式标准
                 formatted_history = []
-                if model_id == 'gemini-exp-1206' or model_id == 'gemini-exp-1121' or model_id == 'learnlm-1.5-pro-experimental' :
-                    for msg in processed_messages[:-1]:  # 除了最后一条消息
-                        #暂时不适用系统词
-                        if msg['role'] == 'system':
-                            continue
+                system_instruction = ""
+                for msg in processed_messages[:-1]:  # 除了最后一条消息
+                    #处理系统提示词
+                    if msg['role'] == 'system':
+                        counter = 0
+                        for part in msg['parts']:
+                            system_instruction += "system_instruction {}:".format(counter)
+                            counter += 1
+                            if isinstance(part, dict) and 'text' in part:
+                                system_instruction += part['text']
+                    else:
+                        # 处理普通消息
                         message_parts = []
-                        # 添加文本内容
-                        if msg.get('content'):
-                            message_parts.append({'text': msg['content']})
-                        # 添加其他部分（如图片）
-                        if 'parts' in msg:
-                            message_parts.extend(msg['parts'])
-                        
-                        formatted_history.append({
-                            'role': 'model' if msg['role'] == 'assistant' else 'user',
-                            'parts': message_parts
-                        })
-                else:
-                    for msg in processed_messages[:-1]:  # 除了最后一条消息
-                        if msg['role'] == 'system':
-                            # 将系统提示词转换为特殊的用户-助手对话
-                            formatted_history.append({
-                                'role': 'user',
-                                'parts': [{'text': f"Instructions for your behavior: {msg.get('content', '')}"}]
-                            })
-                            formatted_history.append({
-                                'role': 'assistant',
-                                'parts': [{'text': 'I understand and will follow these instructions.'}]
-                            })
-                        else:
-                            # 处理普通消息
-                            message_parts = []
-                            # 添加文本内容
-                            if msg.get('content'):
-                                message_parts.append({'text': msg['content']})
-                            # 添加其他部分（如图片）
-                            if 'parts' in msg:
-                                message_parts.extend(msg['parts'])
-                            
-                            formatted_history.append({
-                                'role': msg['role'],
-                                'parts': message_parts
-                            })
+                        # 添加内容
+                        for part in msg['parts']:  # 修复：将part的定义移到这里
+                            if isinstance(part, dict):
+                                if 'text' in part:
+                                    # 添加文本内容，保持原有的role格式
+                                    message_parts.append(f"{msg['role']}:{part['text']}")
+                                elif 'inline_data' in part:
+                                    # 添加附件内容，附件为字典结构
+                                    message_parts.append(Part.from_bytes(data=part['inline_data']['data'], mime_type=part['inline_data']['mime_type']))
+                            elif isinstance(part, str):
+                                # 添加附件内容，附件非字典结构
+                                message_parts.append(part)
+                        formatted_history.extend(message_parts)
                 
                 # 创建聊天实例并传入历史记录
-                chat = model.start_chat(history=formatted_history)
+                chat = genai_client.chats.create(model=model_id,history=formatted_history)
                 
                 # 获取并处理最后一条消息
                 last_message = processed_messages[-1]
                 last_message_parts = []
                 
-                # 添加文本内容
-                if last_message.get('content'):
-                    last_message_parts.append({'text': last_message['content']})
-                
-                # 添加其他部分（如图片）
+                # 添加所有的消息，包括文字和附件
                 if 'parts' in last_message:
                     last_message_parts.extend(last_message['parts'])
                 
@@ -757,116 +727,118 @@ def chat():
                     print("\n=== 开始发送消息到Gemini ===")
                     
                     
-                    safety_settings = {
-                        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-                        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-                        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-                        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-                    }
+                    safety_settings_list = [
+                        {'category': HarmCategory.HARM_CATEGORY_HATE_SPEECH, 'threshold': HarmBlockThreshold.BLOCK_NONE},
+                        {'category': HarmCategory.HARM_CATEGORY_HARASSMENT, 'threshold': HarmBlockThreshold.BLOCK_NONE},
+                        {'category': HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, 'threshold': HarmBlockThreshold.BLOCK_NONE},
+                        {'category': HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, 'threshold': HarmBlockThreshold.BLOCK_NONE},
+                    ]
                     
                     print("\n=== 安全设置 ===")
-                    for category, threshold in safety_settings.items():
-                        print(f"{category}: {threshold}")
+                    for setting in safety_settings_list:
+                        print(f"类别: {setting['category'].name}, 阈值: {setting['threshold'].name}")
                     
-                    # 使用新的配置创建聊天实例
-                    chat = model.start_chat(
-                        history=formatted_history
-                    )
-                    
-                    try:
-                        response = chat.send_message(
-                            last_message_parts,
-                            stream=True,
-                            safety_settings=safety_settings,
-                            generation_config=genai_instance.GenerationConfig(
-                                max_output_tokens=max_tokens,
-                                temperature=temperature,
-                            )
+                    response = chat.send_message_stream(
+                        message=last_message_parts,
+                        config=GenerateContentConfigDict(
+                            system_instruction=system_instruction,
+                            max_output_tokens=max_tokens,
+                            temperature=temperature,
+                            safety_settings=safety_settings_list
                         )
-                        print("成功获取响应流")
-                        
-                        # 处理响应并获取token信息
-                        last_response = None
-                        for chunk in response:
-                            if hasattr(chunk, 'text') and chunk.text:
-                                accumulated_output.append(chunk.text)
-                                yield f"data: {json.dumps({'content': chunk.text})}\n\n"
-                            last_response = chunk
-
-                        # 从最后一个响应中获取token使用情况
-                        if last_response and hasattr(last_response, 'usage_metadata'):
-                            input_tokens = last_response.usage_metadata.prompt_token_count
-                            output_tokens = last_response.usage_metadata.candidates_token_count
-                            print(f"从Gemini响应获取到token数 - 输入: {input_tokens}, 输出: {output_tokens}")
-                        else:
-                            print("无法从Gemini响应获取token数，使用tiktoken估算")
-                            # 估算输入token
-                            input_tokens = token_counter.estimate_message_tokens(processed_messages)[0]
-                            # 估算输出token
-                            output_text = ''.join(accumulated_output)
-                            output_tokens = token_counter.estimate_completion_tokens(output_text)
-                            use_estimated = True
-
-                    except Exception as e:
-                        print(f"发送消息时出错: {str(e)}")
-                        if "safety_ratings" in str(e):
-                            print("\n=== 安全评级错误详情 ===")
-                            error_str = str(e)
-                            if "HARM_CATEGORY" in error_str:
-                                # 解析并打印详细的安全评级信息
-                                ratings_str = error_str[error_str.find("[category:"):]
-                                print(f"详细安全评级: {ratings_str}")
-                            yield f"data: {json.dumps({'error': '内容被安全系统拦截，这可能是由于内容涉及敏感话题。请尝试更委婉的表达方式。'})}\n\n"
-                        else:
-                            raise
-
-                except Exception as e:
-                    print(f"\n=== 发送消息时出错 ===")
-                    print(f"错误类型: {type(e).__name__}")
-                    print(f"错误信息: {str(e)}")
-                    print("详细错误信息:")
-                    traceback.print_exc()
-                    yield f"data: {json.dumps({'error': str(e)})}\n\n"
-
-            # 记录使用情况
-            try:
-                with app.app_context():
-                    usage = Usage(
-                        user_id=user_id,
-                        model_name=model_id,
-                        tokens_in=input_tokens,
-                        tokens_out=output_tokens
                     )
-                    usage.calculate_cost()
-                    db.session.add(usage)
-                    db.session.commit()
+                    print("成功获取响应流")
                     
-                    # 打印使用统计
-                    print("\n=== 使用统计 ===")
-                    print(f"Token计数方式: {'tiktoken预估' if use_estimated else '模型实际值'}")
-                    print(f"输入token数: {input_tokens}, 成本: ${usage.input_cost:.6f}")
-                    print(f"输出token数: {output_tokens}, 成本: ${usage.output_cost:.6f}")
-                    print(f"总成本: ${usage.total_cost:.6f}")
+                    # 处理响应并获取token信息
+                    last_response = None
+                    for chunk in response:
+                        if hasattr(chunk, 'text') and chunk.text:
+                            accumulated_output.append(chunk.text)
+                            yield f"data: {json.dumps({'content': chunk.text})}\n\n"
+                        last_response = chunk
+
+                    # 从最后一个响应中获取token使用情况
+                    if last_response and hasattr(last_response, 'usage_metadata'):
+                        input_tokens = last_response.usage_metadata.prompt_token_count
+                        output_tokens = last_response.usage_metadata.candidates_token_count
+                        use_estimated = False  # 更新为使用实际值
+                        print(f"从Gemini响应获取到token数 - 输入: {input_tokens}, 输出: {output_tokens}")
+                    else:
+                        print("无法从Gemini响应获取token数，使用tiktoken估算")
+                        use_estimated = True  # 更新为使用预估值
+                        # 使用tiktoken估算token数
+                        input_tokens = token_counter.estimate_message_tokens(processed_messages)[0]
+                        output_text = ''.join(accumulated_output)
+                        output_tokens = token_counter.estimate_completion_tokens(output_text)
                     
-                    # 发送使用统计信息
-                    usage_info = {
-                        'type': 'usage_info',
-                        'input_tokens': input_tokens,
-                        'output_tokens': output_tokens,
-                        'total_tokens': input_tokens + output_tokens,
-                        'input_cost': usage.input_cost,
-                        'output_cost': usage.output_cost,
-                        'total_cost': usage.total_cost,
-                        'is_estimated': use_estimated
+                except Exception as e:
+                    error_msg = f"与Gemini通信时出错: {str(e)}"
+                    print(f"\n=== 错误信息 ===")
+                    print(f"类型: {type(e).__name__}")
+                    print(f"描述: {str(e)}")
+                    print("详细堆栈:")
+                    import traceback
+                    print(traceback.format_exc())
+                    error_response = {
+                        'error': error_msg,
+                        'error_type': type(e).__name__,
+                        'status_code': 500
                     }
-                yield f"data: {json.dumps(usage_info)}\n\n"
-            except Exception as e:
-                print(f"记录使用情况时出错: {str(e)}")
-                db.session.rollback()
+                    yield f"data: {json.dumps(error_response)}\n\n"
+                    return  # 确保在错误发生时立即返回
+
+                # 记录使用情况
+                try:
+                    with app.app_context():
+                        usage = Usage(
+                            user_id=user_id,
+                            model_name=model_id,
+                            tokens_in=input_tokens,
+                            tokens_out=output_tokens
+                        )
+                        usage.calculate_cost()
+                        db.session.add(usage)
+                        db.session.commit()
+                        
+                        print("\n=== 使用统计 ===")
+                        print(f"Token计数方式: {'tiktoken预估' if use_estimated else '模型实际值'}")
+                        print(f"输入token数: {input_tokens}, 成本: ${usage.input_cost:.6f}")
+                        print(f"输出token数: {output_tokens}, 成本: ${usage.output_cost:.6f}")
+                        print(f"总成本: ${usage.total_cost:.6f}")
+                        
+                        usage_info = {
+                            'type': 'usage_info',
+                            'input_tokens': input_tokens,
+                            'output_tokens': output_tokens,
+                            'total_tokens': input_tokens + output_tokens,
+                            'input_cost': usage.input_cost,
+                            'output_cost': usage.output_cost,
+                            'total_cost': usage.total_cost,
+                            'is_estimated': use_estimated,
+                            'status_code': 200
+                        }
+                        yield f"data: {json.dumps(usage_info)}\n\n"
+                except Exception as e:
+                    error_msg = f"记录使用情况时出错: {str(e)}"
+                    print(error_msg)
+                    db.session.rollback()
+                    error_response = {
+                        'error': error_msg,
+                        'error_type': 'DatabaseError',
+                        'status_code': 500
+                    }
+                    yield f"data: {json.dumps(error_response)}\n\n"
+                    return
 
         except Exception as e:
             print(f"Error in generate(): {str(e)}")
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            error_response = {
+                'error': str(e),
+                'error_type': 'GeneralError',
+                'status_code': 500
+            }
+            yield f"data: {json.dumps(error_response)}\n\n"
+            return
 
     return Response(generate(), mimetype='text/event-stream')
 
@@ -1108,22 +1080,28 @@ def stream_chat_response_for_title(messages, model_id):
 
     if model_type == 'openai':
         # OpenAI 模型调用
-        stream = xai_client.chat.completions.create(
-            model=model_id,
-            messages=messages,
-            stream=True,
-            temperature=0.7
-        )
+        if model_id.startswith('grok'):
+            stream = xai_client.chat.completions.create(
+                model=model_id,
+                messages=messages,
+                stream=True,
+                temperature=0.7
+            )
+        elif model_id.startswith('deepseek'):
+            stream = deepseek_client.chat.completions.create(
+                model=model_id,
+                messages=messages,
+                stream=True,
+                temperature=0.7
+            )
         for chunk in stream:
             if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
                 yield chunk.choices[0].delta.content
 
     elif model_type == 'google':
         # Google 模型调用
-        genai, GenerativeModel = gemini_pool.get_client()
-        model = GenerativeModel(model_id)
-        chat = model.start_chat(history=[])
-        response = chat.send_message(messages[-1]['content'], stream=True)
+        genai_client = gemini_pool.get_client()
+        response = genai_client.models.generate_content_stream(model=model_id, contents=messages[-1]['content'],config=GenerateContentConfigDict(temperature=0.7))
         for chunk in response:
             if chunk.text:
                 yield chunk.text

@@ -19,9 +19,6 @@ def check_file_exists(file_path: str, mime_type: str = None) -> tuple:
     Returns:
         tuple: (是否存在, 文件对象或None)
     """
-    # 获取新的genai实例
-    genai_instance, GenerativeModel = gemini_pool.get_client()
-    
     try:
         # 获取本地文件信息
         local_file_size = os.path.getsize(file_path)
@@ -65,7 +62,7 @@ def check_file_exists(file_path: str, mime_type: str = None) -> tuple:
                                 if (os.path.normpath(cached_path) == os.path.normpath(file_path) and 
                                     (not mime_type or cached_mime == mime_type)):
                                     print(f"在缓存中找到匹配: {cached_uri}")
-                                    remote_file = genai_instance.get_file(cached_uri.split('/')[-1])
+                                    remote_file = client.files.get(cached_uri.split('/')[-1])
                                     if remote_file and remote_file.state.name == "ACTIVE":
                                         print("远程文件状态正常")
                                         cached_file = remote_file
@@ -90,12 +87,9 @@ def check_file_exists(file_path: str, mime_type: str = None) -> tuple:
         # 遍历所有API实例获取文件
         all_files = []
         for client in gemini_pool.clients:
-            genai_instance = client['genai']
-            # 配置当前实例的API key
-            genai_instance.configure(api_key=client['api_key'])
             try:
                 # 获取当前实例的文件列表
-                instance_files = list(genai_instance.list_files())
+                instance_files = list(client.files.list_files())
                 if instance_files:
                     print(f"从实例获取到 {len(instance_files)} 个文件")
                     all_files.extend(instance_files)
@@ -116,10 +110,8 @@ def check_file_exists(file_path: str, mime_type: str = None) -> tuple:
                 # 遍历所有实例尝试获取文件信息
                 remote_file = None
                 for client in gemini_pool.clients:
-                    genai_instance = client['genai']
-                    genai_instance.configure(api_key=client['api_key'])
                     try:
-                        remote_file = genai_instance.get_file(file.name)
+                        remote_file = client.files.get(file.name)
                         if remote_file:
                             print(f"在实例中找到文件")
                             break
@@ -162,7 +154,7 @@ def upload_large_file_to_gemini(
     file_size: int,
     mime_type: str,
     attachment_type: AttachmentType,
-    processed_message: Dict[str, Any]
+    processed_message: Dict[str, Any],
 ) -> bool:
     """
     通用的大文件上传函数，用于处理图片和视频文件的上传
@@ -179,8 +171,8 @@ def upload_large_file_to_gemini(
         bool: 上传是否成功
     """
     try:
-        # 获取新的genai实例
-        genai_instance, GenerativeModel = gemini_pool.get_client()
+        # 从gemini_pool中获取genai_client实例
+        genai_client = gemini_pool.get_client()
         
         # 检查文件大小限制
         if file_size > ATTACHMENT_TYPES[attachment_type]['max_size']:
@@ -244,7 +236,7 @@ def upload_large_file_to_gemini(
         
         # 上传文件
         print("开始上传文件...")
-        uploaded_file = genai_instance.upload_file(path=file_path)
+        uploaded_file = genai_client.files.upload(path=file_path)
         print(f"上传成功！URI: {uploaded_file.uri}")
         
         # 对于视频文件，需要等待处理完成
@@ -265,7 +257,7 @@ def upload_large_file_to_gemini(
                 print('.', end='', flush=True)
                 time.sleep(wait_interval)
                 total_waited += wait_interval
-                uploaded_file = genai_instance.get_file(uploaded_file.name)
+                uploaded_file = genai_client.files.get(uploaded_file.name)
                 
             print("\n处理完成")
             
@@ -330,8 +322,7 @@ def process_image_attachment(
     model_type: str,
     processed_message: Dict[str, Any],
     supported_type: str,
-    mime_type: str,
-    genai=None
+    mime_type: str
 ) -> None:
     """
     处理图片类型的附件
@@ -448,12 +439,12 @@ def process_image_attachment(
         
         # 2. 如果文件大于20MB，使用File API
         print(f"图片大小({image_size/(1024*1024):.2f}MB)超过20MB限制，使用File API")
-        if not genai:
-            print("Gemini API客户端未初始化")
-            processed_message['parts'].append({
-                "text": f"\n错误：无法处理大于20MB的图片 - Gemini API未初始化"
-            })
-            return
+        # if not genai:
+        #     print("Gemini API客户端未初始化")
+        #     processed_message['parts'].append({
+        #         "text": f"\n错误：无法处理大于20MB的图片 - Gemini API未初始化"
+        #     })
+        #     return
             
         if not local_path or not os.path.exists(local_path):
             error_msg = f"找不到图片文件: {local_path}"
@@ -488,8 +479,7 @@ def process_video_attachment(
     model_type: str,
     processed_message: Dict[str, Any],
     supported_type: str,
-    mime_type: str,
-    genai=None
+    mime_type: str
 ) -> None:
     """
     处理视频类型的附件
@@ -520,19 +510,19 @@ def process_video_attachment(
         })
     elif model_type == 'google':
         print("使用Google模型处理视频")
-        print(f"Genai客户端状态: {'已初始化' if genai else '未初始化'}")
+        # print(f"Genai客户端状态: {'已初始化' if genai else '未初始化'}")
         
-        if not genai:
-            error_msg = "Gemini API客户端未初始化"
-            print(error_msg)
-            send_status({
-                'action': 'showUploadError',
-                'error': error_msg
-            })
-            processed_message['parts'].append({
-                "text": f"\n错误：{error_msg}"
-            })
-            return
+        # if not genai:
+        #     error_msg = "Gemini API客户端未初始化"
+        #     print(error_msg)
+        #     send_status({
+        #         'action': 'showUploadError',
+        #         'error': error_msg
+        #     })
+        #     processed_message['parts'].append({
+        #         "text": f"\n错误：{error_msg}"
+        #     })
+        #     return
             
         if not local_path or not os.path.exists(local_path):
             error_msg = f"找不到视频文件: {local_path}"
