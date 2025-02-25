@@ -4,74 +4,74 @@ import time
 from pathlib import Path
 from initialization import app
 from utils.attachment_handler.image_handler import normalize_user_id
-from utils.text_attachment.embeddings import TextEmbedding
+#from utils.text_attachment.embeddings import TextEmbedding
 from typing import Dict, Any, List
 
 class TextHandler:
-    @staticmethod
-    async def save_text_locally(text_content, file_name, user_id, encoding='utf-8'):
-        """
-        将文本内容保存到本地文件，并生成embeddings
+    # @staticmethod
+    # async def save_text_locally(text_content, file_name, user_id, encoding='utf-8'):
+    #     """
+    #     将文本内容保存到本地文件，并生成embeddings
         
-        Args:
-            text_content (str): 文本内容
-            file_name (str): 原始文件名
-            user_id: 用户ID（邮箱或数字ID）
-            encoding (str): 文本编码，默认utf-8
+    #     Args:
+    #         text_content (str): 文本内容
+    #         file_name (str): 原始文件名
+    #         user_id: 用户ID（邮箱或数字ID）
+    #         encoding (str): 文本编码，默认utf-8
             
-        Returns:
-            dict: 包含文件信息的字典
-        """
-        try:
-            # 标准化用户ID
-            normalized_user_id = normalize_user_id(user_id)
+    #     Returns:
+    #         dict: 包含文件信息的字典
+    #     """
+    #     try:
+    #         # 标准化用户ID
+    #         normalized_user_id = normalize_user_id(user_id)
             
-            # 创建用户专属的文本文件存储目录
-            base_dir = Path(app.config['UPLOAD_FOLDER']) / normalized_user_id
-            text_dir = base_dir / 'text_files'
-            text_dir.mkdir(parents=True, exist_ok=True)
+    #         # 创建用户专属的文本文件存储目录
+    #         base_dir = Path(app.config['UPLOAD_FOLDER']) / normalized_user_id
+    #         text_dir = base_dir / 'text_files'
+    #         text_dir.mkdir(parents=True, exist_ok=True)
             
-            # 生成唯一文件名
-            timestamp = int(time.time() * 1000)
-            unique_id = f"{timestamp}"
+    #         # 生成唯一文件名
+    #         timestamp = int(time.time() * 1000)
+    #         unique_id = f"{timestamp}"
             
-            # 保存文本内容
-            file_path = text_dir / f"{unique_id}.txt"
-            with open(str(file_path), 'w', encoding=encoding) as f:
-                f.write(text_content)
+    #         # 保存文本内容
+    #         file_path = text_dir / f"{unique_id}.txt"
+    #         with open(str(file_path), 'w', encoding=encoding) as f:
+    #             f.write(text_content)
             
-            # 保存元数据
-            metadata = {
-                'file_name': file_name,
-                'content_id': unique_id,
-                'created_at': timestamp,
-                'encoding': encoding,
-                'size': len(text_content.encode(encoding)),
-                'line_count': len(text_content.splitlines()),
-                'file_path': str(file_path)
-            }
+    #         # 保存元数据
+    #         metadata = {
+    #             'file_name': file_name,
+    #             'content_id': unique_id,
+    #             'created_at': timestamp,
+    #             'encoding': encoding,
+    #             'size': len(text_content.encode(encoding)),
+    #             'line_count': len(text_content.splitlines()),
+    #             'file_path': str(file_path)
+    #         }
             
-            metadata_path = text_dir / f"{unique_id}_meta.json"
-            with open(str(metadata_path), 'w', encoding='utf-8') as f:
-                json.dump(metadata, f, ensure_ascii=False, indent=2)
+    #         metadata_path = text_dir / f"{unique_id}_meta.json"
+    #         with open(str(metadata_path), 'w', encoding='utf-8') as f:
+    #             json.dump(metadata, f, ensure_ascii=False, indent=2)
             
-            # 生成和保存embeddings
-            try:
-                embedding_processor = TextEmbedding()
-                embedding_result = await embedding_processor.process_text(
-                    text=text_content,
-                    file_id=unique_id,
-                    base_path=str(base_dir)
-                )
-                metadata['embedding'] = embedding_result
-            except Exception as e:
-                print(f"生成embeddings失败: {str(e)}")
-                metadata['embedding'] = {'success': False, 'error': str(e)}
+    #         # 生成和保存embeddings
+    #         try:
+    #             embedding_processor = TextEmbedding()
+    #             embedding_result = await embedding_processor.process_text(
+    #                 text=text_content,
+    #                 file_id=unique_id,
+    #                 base_path=str(base_dir)
+    #             )
+    #             metadata['embedding'] = embedding_result
+    #         except Exception as e:
+    #             print(f"生成embeddings失败: {str(e)}")
+    #             metadata['embedding'] = {'success': False, 'error': str(e)}
             
-            return metadata
+    #         return metadata
             
-        except Exception as e:
-            raise Exception(f"保存文本文件失败: {str(e)}")
+    #     except Exception as e:
+    #         raise Exception(f"保存文本文件失败: {str(e)}")
 
     @staticmethod
     def get_text_content(content_id, user_id):
@@ -115,42 +115,42 @@ class TextHandler:
         except Exception as e:
             raise Exception(f"获取文本内容失败: {str(e)}")
 
-    @staticmethod
-    def delete_text_file(content_id, user_id):
-        """
-        删除指定的文本文件及其元数据
+    # @staticmethod
+    # def delete_text_file(content_id, user_id):
+    #     """
+    #     删除指定的文本文件及其元数据
         
-        Args:
-            content_id (str): 内容唯一标识符
-            user_id: 用户ID
+    #     Args:
+    #         content_id (str): 内容唯一标识符
+    #         user_id: 用户ID
             
-        Returns:
-            bool: 是否删除成功
-        """
-        try:
-            normalized_user_id = normalize_user_id(user_id)
-            base_dir = Path(app.config['UPLOAD_FOLDER']) / normalized_user_id
-            text_dir = base_dir / 'text_files'
+    #     Returns:
+    #         bool: 是否删除成功
+    #     """
+    #     try:
+    #         normalized_user_id = normalize_user_id(user_id)
+    #         base_dir = Path(app.config['UPLOAD_FOLDER']) / normalized_user_id
+    #         text_dir = base_dir / 'text_files'
             
-            # 删除文本文件
-            file_path = text_dir / f"{content_id}.txt"
-            if file_path.exists():
-                os.remove(str(file_path))
+    #         # 删除文本文件
+    #         file_path = text_dir / f"{content_id}.txt"
+    #         if file_path.exists():
+    #             os.remove(str(file_path))
             
-            # 删除元数据文件
-            metadata_path = text_dir / f"{content_id}_meta.json"
-            if metadata_path.exists():
-                os.remove(str(metadata_path))
+    #         # 删除元数据文件
+    #         metadata_path = text_dir / f"{content_id}_meta.json"
+    #         if metadata_path.exists():
+    #             os.remove(str(metadata_path))
             
-            # 删除embeddings
-            embedding_processor = TextEmbedding()
-            embedding_processor.delete_embeddings(str(base_dir), content_id)
+    #         # 删除embeddings
+    #         embedding_processor = TextEmbedding()
+    #         embedding_processor.delete_embeddings(str(base_dir), content_id)
             
-            return True
+    #         return True
             
-        except Exception as e:
-            print(f"删除文本文件失败: {str(e)}")
-            return False
+    #     except Exception as e:
+    #         print(f"删除文本文件失败: {str(e)}")
+    #         return False
 
     @staticmethod
     def get_text_by_lines(content_id: str, user_id: str, index_line: int, up_line_count: int = 5, down_line_count: int = 5) -> Dict[str, Any]:

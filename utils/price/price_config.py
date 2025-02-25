@@ -1,6 +1,22 @@
 ###记录模型的价格（美元/百万tokens）
 PRICE_CONFIG = {
     # Gemini 模型（免费）
+    "gemini-2.0":{
+        "input": 0,
+        "output": 0
+    },
+    "gemini-2.0-flash-lite-preview-02-05":{
+        "input": 0,
+        "output": 0
+    },
+    "gemini-2.0-pro-exp-02-05":{
+        "input": 0,
+        "output": 0
+    },
+    "gemini-2.0-flash-thinking-exp-01-21":{
+        "input": 0,
+        "output": 0
+    },
     "gemini-2.0-flash-exp": {
         "input": 0,
         "output": 0
@@ -14,14 +30,6 @@ PRICE_CONFIG = {
         "output": 0
     },
     "gemini-1.5-pro": {
-        "input": 0,
-        "output": 0
-    },
-    "gemini-exp-1206": {
-        "input": 0,
-        "output": 0
-    },
-    "gemini-exp-1121": {
         "input": 0,
         "output": 0
     },

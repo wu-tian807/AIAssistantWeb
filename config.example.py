@@ -29,19 +29,21 @@ AVAILABLE_MODELS = {
     },
     'google': {
         'models': [
+            {'id': 'gemini-2.0', 'name': 'Gemini 2.0', 'description': '新一代功能、速度和多模态生成，适用于各种各样的任务','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 16384 },
+            {'id': 'gemini-2.0-flash-lite-preview-02-05','name':'Gemini 2.0 Flash Lite Preview','description':'新一代功能、速度和多模态生成，适用于各种各样的任务','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 16384 },
+            {'id': 'gemini-2.0-pro-exp-02-05','name':'Gemini 2.0 Pro Exp','description':'质量有所提升，尤其是对于世界知识、代码和长篇幅上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 32768 },
+            {'id': 'gemini-2.0-flash-thinking-exp-01-21','name':'Gemini 2.0 Flash Thinking Exp','description':'针对复杂问题进行推理，具备新的思考能力','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 16384 },
             {'id': 'gemini-2.0-flash-exp', 'name': 'Gemini 2.0 Flash Exp', 'description': '新一代功能、卓越的速度、原生工具使用和多模态生成','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 15000 },
             {'id': 'gemini-1.5-flash', 'name': 'Gemini 1.5 Flash', 'description': '快速、多样化的性能','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens':15000},
             {'id': 'gemini-1.5-flash-8b', 'name': 'Gemini 1.5 Flash-8B', 'description': '量大且智能程度较低的任务','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens':15000},
             {'id': 'gemini-1.5-pro', 'name': 'Gemini 1.5 Pro', 'description': '需要更多智能的复杂推理任务','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens':30000},
-            {'id': 'gemini-exp-1206', 'name': 'Gemini Exp 1206', 'description': '改进了编码、推理和视觉能力','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens':30000},
-            {'id': 'gemini-exp-1121', 'name': 'Gemini Exp 1121', 'description': '质量改进','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens':30000},
             {'id': 'learnlm-1.5-pro-experimental', 'name': 'LearnLM 1.5 Pro', 'description': '支持音频、图片、视频和文本','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens':4000}
         ],
         'api_type': 'google'
     },
     'deepseek':{
         'models':[
-            {'id':'deepseek-chat','name':'DeepSeek V3','description':'DeepSeek V3 是深度求索公司开发的智能助手，支持文本输入，64K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT],'max_output_tokens':8192}
+            {'id':'deepseek-chat','name':'DeepSeek V3','description':'DeepSeek V3 是深度求索公司开发的智能助手，支持文本输入，64K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT],'max_output_tokens':8192}#8k
         ],
         'api_type': 'openai'
     }

@@ -4,11 +4,9 @@ import os
 from flask import render_template, request, jsonify, Response, session, redirect, url_for, send_file
 import json
 from datetime import datetime, timezone, timedelta
-import PIL.Image
 from werkzeug.utils import secure_filename
 import secrets
 import traceback
-import time
 
 from config import AVAILABLE_MODELS
 from config import RATE_LIMIT_WINDOW
@@ -30,9 +28,9 @@ from routes.user import user_profile
 from routes.upload_status import upload_status_bp
 from routes.user.settings import user_settings
 from routes.image import image_bp  # 添加这行
-from utils.price.sentence2token import TokenCounter
+from utils.price.tokenCounter import TokenCounter
 from utils.price.usage_model import Usage
-from utils.attachment_handler.image_handler import delete_base64_file, save_base64_locally
+from utils.attachment_handler.image_handler import delete_base64_file, save_base64_locally, get_base64_by_id
 from routes.upload_attachment_types import upload_attachment_types_bp
 from routes.text.text_routes import text_bp  # 添加这行
 
@@ -407,6 +405,7 @@ def chat():
     def process_message_with_attachments(message, model_type, model_support_list, user_id,genai):
         # 从配置中获取支持的图片类型
         from utils.files.file_config import MIME_TYPE_MAPPING, ATTACHMENT_TYPES, AttachmentType
+        from utils.attachment_handler.image_handler import get_base64_by_id
         
         # 创建新的消息对象，只复制必要的字段
         processed_message = {
@@ -464,14 +463,35 @@ def chat():
                         # 检查模型是否支持图片处理
                         if AttachmentType.IMAGE in model_support_list:
                             print("模型支持图片处理，使用标准图片处理流程")
-                            process_image_attachment(
-                                attachment,
-                                model_type,
-                                processed_message,
-                                supported_type,
-                                mime_type,
-                                genai
-                            )
+                            if model_type == 'openai':
+                                # 获取 base64 数据
+                                base64_data = None
+                                if 'base64_id' in attachment:
+                                    try:
+                                        base64_data = get_base64_by_id(attachment['base64_id'], user_id)
+                                        print("成功获取base64数据")
+                                    except Exception as e:
+                                        print(f"获取base64数据失败: {e}")
+                                        continue
+                                    
+                                if base64_data:
+                                    processed_message['content'].append({
+                                        "type": "image_url",
+                                        "image_url": {
+                                            "url": f"data:{mime_type};base64,{base64_data}",
+                                            "detail": "high"
+                                        }
+                                    })
+                                    print(f"添加图片附件，MIME类型: {mime_type}")
+                            else:
+                                process_image_attachment(
+                                    attachment,
+                                    model_type,
+                                    processed_message,
+                                    supported_type,
+                                    mime_type,
+                                    genai
+                                )
                         else:
                             print("模型不支持图片处理，使用OCR提取文本")
                             process_image_attachment_by_ocr(
@@ -582,25 +602,34 @@ def chat():
                 )
                 processed_messages.append(processed_msg)
             
-            # 计算输入token数
-            input_tokens, _ = token_counter.estimate_tokens(processed_messages)
-            accumulated_output = []  # 用于累积输出文本
-            
+            # 初始化token计数器和累积输出
+            token_counter = TokenCounter()
+            accumulated_output = []
+            input_tokens = 0
+            output_tokens = 0
+            use_estimated = False
+
+            # 使用tiktoken计算token数量
+            print(f"使用tiktoken计算{model_id}的token数")
+            # 估算输入token
+            input_tokens = token_counter.estimate_message_tokens(processed_messages, model_id)[0]
+            # 估算输出token
+            output_text = ''.join(accumulated_output)
+            output_tokens = token_counter.estimate_completion_tokens(output_text, model_id)
+            use_estimated = True
+            print(f"Token计算结果 - 输入: {input_tokens}, 输出: {output_tokens}")
+
             if model_type == 'openai':
                 # OpenAI 模型调用
                 if model_id.startswith('deepseek'):
                     client = deepseek_client
-                    # DeepSeek API 需要特殊处理消息格式
                     formatted_messages = []
-                    for i, msg in enumerate(processed_messages):
-                        print(f"处理第 {i} 条消息:", msg)  # 调试日志
-                        
+                    for msg in processed_messages:
                         # 确保content是字符串
                         content = ''
                         if isinstance(msg.get('content'), str):
                             content = msg['content']
                         elif isinstance(msg.get('content'), list):
-                            # 如果content是数组，提取所有文本
                             text_parts = []
                             for item in msg['content']:
                                 if isinstance(item, dict):
@@ -623,14 +652,12 @@ def chat():
                             if parts_content:
                                 content = content + ' ' + ' '.join(parts_content)
                         
-                        formatted_msg = {
+                        formatted_messages.append({
                             'role': msg['role'],
                             'content': content.strip()
-                        }
-                        print(f"格式化后的消息:", formatted_msg)  # 调试日志
-                        formatted_messages.append(formatted_msg)
+                        })
                     
-                    print("最终发送给 DeepSeek 的消息:", formatted_messages)  # 调试日志
+                    print("发送给模型的消息:", formatted_messages)
                     stream = client.chat.completions.create(
                         model=model_id,
                         messages=formatted_messages,
@@ -648,11 +675,15 @@ def chat():
                         max_tokens=max_tokens
                     )
 
+                # 处理流式响应
                 for chunk in stream:
                     if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
                         content = chunk.choices[0].delta.content
-                        accumulated_output.append(content)  # 累积输出文本
+                        accumulated_output.append(content)
                         yield f"data: {json.dumps({'content': content})}\n\n"
+                    complete_response = chunk
+
+
 
             elif model_type == 'google':
                 # Google 模型调用
@@ -725,8 +756,6 @@ def chat():
                 try:
                     print("\n=== 开始发送消息到Gemini ===")
                     
-                    # 获取新的genai实例用于生成配置
-                    genai_instance, GenerativeModel = gemini_pool.get_client()
                     
                     safety_settings = {
                         HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
@@ -756,50 +785,28 @@ def chat():
                         )
                         print("成功获取响应流")
                         
+                        # 处理响应并获取token信息
+                        last_response = None
                         for chunk in response:
-                            print("\n=== 处理响应块 ===")
-                            try:
-                                # 处理安全评级
-                                safety_ratings = None
-                                if hasattr(chunk, 'candidates') and chunk.candidates:
-                                    for candidate in chunk.candidates:
-                                        if hasattr(candidate, 'safety_ratings'):
-                                            safety_ratings = candidate.safety_ratings
-                                            break
-                                elif hasattr(chunk, 'safety_ratings'):
-                                    safety_ratings = chunk.safety_ratings
+                            if hasattr(chunk, 'text') and chunk.text:
+                                accumulated_output.append(chunk.text)
+                                yield f"data: {json.dumps({'content': chunk.text})}\n\n"
+                            last_response = chunk
 
-                                if safety_ratings:
-                                    print("\n=== 安全评级信息 ===")
-                                    for rating in safety_ratings:
-                                        category = str(rating.category).replace('HarmCategory.', '')
-                                        probability = str(rating.probability)
-                                        blocked = getattr(rating, 'blocked', False)
-                                        
-                                        print(f"类别: {category}")
-                                        print(f"概率等级: {probability}")
-                                        print(f"是否被阻止: {blocked}")
-                                        print("---")
-                                        
-                                        # 如果内容被阻止，记录详细信息
-                                        if blocked:
-                                            print(f"警告：{category} 内容被阻止，概率等级：{probability}")
+                        # 从最后一个响应中获取token使用情况
+                        if last_response and hasattr(last_response, 'usage_metadata'):
+                            input_tokens = last_response.usage_metadata.prompt_token_count
+                            output_tokens = last_response.usage_metadata.candidates_token_count
+                            print(f"从Gemini响应获取到token数 - 输入: {input_tokens}, 输出: {output_tokens}")
+                        else:
+                            print("无法从Gemini响应获取token数，使用tiktoken估算")
+                            # 估算输入token
+                            input_tokens = token_counter.estimate_message_tokens(processed_messages)[0]
+                            # 估算输出token
+                            output_text = ''.join(accumulated_output)
+                            output_tokens = token_counter.estimate_completion_tokens(output_text)
+                            use_estimated = True
 
-                                # 检查chunk的内容
-                                if hasattr(chunk, 'text') and chunk.text:
-                                    print(f"响应文本: {chunk.text}")
-                                    accumulated_output.append(chunk.text)  # 累积输出文本
-                                    yield f"data: {json.dumps({'content': chunk.text})}\n\n"
-                                else:
-                                    print("响应块没有文本内容")
-                                    if hasattr(chunk, 'finish_reason'):
-                                        print(f"完成原因: {chunk.finish_reason}")
-                                    
-                            except Exception as e:
-                                print(f"处理响应块时出错: {str(e)}")
-                                print(f"响应块内容: {dir(chunk)}")  # 打印chunk的所有属性
-                                raise
-                                
                     except Exception as e:
                         print(f"发送消息时出错: {str(e)}")
                         if "safety_ratings" in str(e):
@@ -821,33 +828,27 @@ def chat():
                     traceback.print_exc()
                     yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
-            # 计算输出token数并记录使用情况
-            output_text = ''.join(accumulated_output)
-            _, output_tokens = token_counter.estimate_tokens([{
-                'role': 'assistant',
-                'content': output_text
-            }])
-            
+            # 记录使用情况
             try:
                 with app.app_context():
-                    # 记录使用情况
                     usage = Usage(
                         user_id=user_id,
                         model_name=model_id,
                         tokens_in=input_tokens,
                         tokens_out=output_tokens
                     )
-                    usage.calculate_cost()  # 在添加到session之前计算成本
+                    usage.calculate_cost()
                     db.session.add(usage)
                     db.session.commit()
                     
                     # 打印使用统计
                     print("\n=== 使用统计 ===")
+                    print(f"Token计数方式: {'tiktoken预估' if use_estimated else '模型实际值'}")
                     print(f"输入token数: {input_tokens}, 成本: ${usage.input_cost:.6f}")
                     print(f"输出token数: {output_tokens}, 成本: ${usage.output_cost:.6f}")
                     print(f"总成本: ${usage.total_cost:.6f}")
                     
-                    # 发送最终的token统计信息
+                    # 发送使用统计信息
                     usage_info = {
                         'type': 'usage_info',
                         'input_tokens': input_tokens,
@@ -855,7 +856,8 @@ def chat():
                         'total_tokens': input_tokens + output_tokens,
                         'input_cost': usage.input_cost,
                         'output_cost': usage.output_cost,
-                        'total_cost': usage.total_cost
+                        'total_cost': usage.total_cost,
+                        'is_estimated': use_estimated
                     }
                 yield f"data: {json.dumps(usage_info)}\n\n"
             except Exception as e:

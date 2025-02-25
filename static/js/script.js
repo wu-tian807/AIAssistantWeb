@@ -596,11 +596,17 @@ async function switchConversation(conversationId) {
         // 获取当前选中的模型配置
         const modelSelect = document.getElementById('model-select');
         
-        // 如果对话中保存了模型ID，则切换到该模型
-        if (conversation.model_id) {
-            modelSelect.value = conversation.model_id;
-            // 触发 change 事件以更新其他相关设置
-            modelSelect.dispatchEvent(new Event('change'));
+        // 获取最后一条助手消息的模型信息
+        const lastModel = getLastAssistantModel({messages: conversation.messages});
+        console.log('lastModel:', lastModel);
+        
+        // 如果有最后使用的模型，则使用该模型
+        // 否则使用对话中保存的模型ID
+        // 如果都没有，保持当前选择
+        if (lastModel && lastModel.modelId) {
+            updateModelSelect(lastModel.modelId, modelSelect);
+        } else if (conversation.model_id) {
+            updateModelSelect(conversation.model_id, modelSelect);
         }
         
         const selectedOption = modelSelect.selectedOptions[0];
@@ -689,16 +695,6 @@ async function switchConversation(conversationId) {
             const style = document.createElement('style');
             style.textContent = '@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }';
             document.head.appendChild(style);
-        }
-        else{
-            //动态加载默认选择的模型为最后一条模型的类别
-            //使用import { getLastAssistantModel,updateModelSelect } from './utils/model_selector/modelSelect.js';
-            const lastModel = getLastAssistantModel({messages: conversation.messages});
-            console.log('lastModel:', lastModel);
-            if (lastModel) {
-                const modelSelect = document.querySelector('#model-select');
-                updateModelSelect(lastModel.modelId, modelSelect);
-            }
         }
     }
 
@@ -860,6 +856,9 @@ async function sendMessage(retryCount = 3, retryDelay = 1000) {
         {"role": "system", "content": currentConversation.systemPrompt || default_system_prompt},
         ...currentConversation.messages
     ];
+    
+    // 立即保存用户消息到数据库
+    await saveConversation(currentConversation.id, 'update');
     
     // 如果是第一条消息，生成对话标题
     if (currentConversation.messages.length === 1) {

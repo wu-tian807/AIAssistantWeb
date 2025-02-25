@@ -3,7 +3,8 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail
 from openai import OpenAI
-import google.generativeai as genai
+#老旧的import google.generativeai as genai
+from google import genai
 from config import API_KEYS, API_BASE_URLS
 from flask_migrate import Migrate
 import random
@@ -17,11 +18,9 @@ class GeminiAPIPool:
     def _initialize_clients(self):
         self.clients = []
         for api_key in self.api_keys:
-            genai_instance = genai.GenerativeModel
-            genai.configure(api_key=api_key)
+            genai_client = genai.Client(api_key=api_key)
             self.clients.append({
-                'genai': genai,
-                'instance': genai_instance,
+                'instance': genai_client,
                 'api_key': api_key
             })
     
@@ -29,8 +28,7 @@ class GeminiAPIPool:
         # 随机选择一个客户端
         client = random.choice(self.clients)
         # 确保使用正确的API key
-        genai.configure(api_key=client['api_key'])
-        return client['genai'], client['instance']
+        return client['instance']
 
 # 初始化 Flask 应用
 app = Flask(__name__)
