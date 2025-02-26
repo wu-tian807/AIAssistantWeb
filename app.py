@@ -371,9 +371,6 @@ def chat():
     temperature = data.get('temperature', 0.7)
     max_tokens = data.get('max_tokens', 4096)
     
-    # 创建token计数器实例
-    token_counter = TokenCounter()
-    
     print(f"\n=== 聊天请求信息 ===")
     print(f"模型ID: {model_id}")
     print(f"会话ID: {conversation_id}")
@@ -490,7 +487,8 @@ def chat():
                                     model_type,
                                     processed_message,
                                     supported_type,
-                                    mime_type
+                                    mime_type,
+                                    user_id
                                 )
                         else:
                             print("模型不支持图片处理，使用OCR提取文本")
@@ -602,17 +600,8 @@ def chat():
             accumulated_output = []
             input_tokens = 0
             output_tokens = 0
-            use_estimated = False
-
-            # 使用tiktoken计算token数量
-            print(f"使用tiktoken计算{model_id}的token数")
-            # 估算输入token
-            input_tokens = token_counter.estimate_message_tokens(processed_messages, model_id)[0]
-            # 估算输出token
-            output_text = ''.join(accumulated_output)
-            output_tokens = token_counter.estimate_completion_tokens(output_text, model_id)
+            cached_input_tokens = 0
             use_estimated = True
-            print(f"Token计算结果 - 输入: {input_tokens}, 输出: {output_tokens}")
 
             if model_type == 'openai':
                 # OpenAI 模型调用
@@ -676,7 +665,23 @@ def chat():
                         content = chunk.choices[0].delta.content
                         accumulated_output.append(content)
                         yield f"data: {json.dumps({'content': content})}\n\n"
-                    complete_response = chunk
+                last_response = chunk
+                if last_response and hasattr(last_response, 'usage'):
+                    try:
+                        #print(f"OpenAI响应: {last_response}")
+                        usage_dict = last_response.usage
+                        input_tokens = usage_dict['prompt_tokens'] - usage_dict['prompt_tokens_details']['cached_tokens']
+                        output_tokens = usage_dict['completion_tokens']
+                        cached_input_tokens = usage_dict['prompt_tokens_details']['cached_tokens']
+                        use_estimated = False
+                        print(f"从OpenAI响应获取到token数 - 输入: {input_tokens}, 输出: {output_tokens}, 缓存输入: {cached_input_tokens}")
+                    except Exception as e:
+                        print(f"从OpenAI响应获取token数时出错: {e}")
+                        print(f"完整的usage信息: {last_response.usage if hasattr(last_response, 'usage') else 'None'}")
+                        use_estimated = True
+                else:
+                    print("无法从OpenAI响应获取token数，使用tiktoken估算")
+                    use_estimated = True
             elif model_type == 'google':
                 # Google 模型调用
                 genai_client = gemini_pool.get_client()
@@ -705,11 +710,11 @@ def chat():
                                 elif 'inline_data' in part:
                                     # 添加附件内容，附件为字典结构
                                     message_parts.append(Part.from_bytes(data=part['inline_data']['data'], mime_type=part['inline_data']['mime_type']))
-                            elif isinstance(part, str):
+                            else:
                                 # 添加附件内容，附件非字典结构
                                 message_parts.append(part)
                         formatted_history.extend(message_parts)
-                
+                #print("formatted_history："+str(formatted_history))
                 # 创建聊天实例并传入历史记录
                 chat = genai_client.chats.create(model=model_id,history=formatted_history)
                 
@@ -787,48 +792,58 @@ def chat():
                     yield f"data: {json.dumps(error_response)}\n\n"
                     return  # 确保在错误发生时立即返回
 
-                # 记录使用情况
-                try:
-                    with app.app_context():
-                        usage = Usage(
-                            user_id=user_id,
-                            model_name=model_id,
-                            tokens_in=input_tokens,
-                            tokens_out=output_tokens
-                        )
-                        usage.calculate_cost()
-                        db.session.add(usage)
-                        db.session.commit()
-                        
-                        print("\n=== 使用统计 ===")
-                        print(f"Token计数方式: {'tiktoken预估' if use_estimated else '模型实际值'}")
-                        print(f"输入token数: {input_tokens}, 成本: ${usage.input_cost:.6f}")
-                        print(f"输出token数: {output_tokens}, 成本: ${usage.output_cost:.6f}")
-                        print(f"总成本: ${usage.total_cost:.6f}")
-                        
-                        usage_info = {
-                            'type': 'usage_info',
-                            'input_tokens': input_tokens,
-                            'output_tokens': output_tokens,
-                            'total_tokens': input_tokens + output_tokens,
-                            'input_cost': usage.input_cost,
-                            'output_cost': usage.output_cost,
-                            'total_cost': usage.total_cost,
-                            'is_estimated': use_estimated,
-                            'status_code': 200
-                        }
-                        yield f"data: {json.dumps(usage_info)}\n\n"
-                except Exception as e:
-                    error_msg = f"记录使用情况时出错: {str(e)}"
-                    print(error_msg)
-                    db.session.rollback()
-                    error_response = {
-                        'error': error_msg,
-                        'error_type': 'DatabaseError',
-                        'status_code': 500
+            # 记录使用情况
+            try:
+                if use_estimated:
+                    # 使用tiktoken计算token数量
+                    print(f"使用tiktoken计算{model_id}的token数")
+                    # 估算输入token
+                    input_tokens = token_counter.estimate_message_tokens(processed_messages, model_id)[0]
+                    # 估算输出token
+                    output_text = ''.join(accumulated_output)
+                    output_tokens = token_counter.estimate_completion_tokens(output_text, model_id)
+                    print(f"Token计算结果 - 输入: {input_tokens}, 输出: {output_tokens}")
+                with app.app_context():
+                    usage = Usage(
+                        user_id=user_id,
+                        model_name=model_id,
+                        tokens_in=input_tokens,
+                        cached_input_tokens=cached_input_tokens,
+                        tokens_out=output_tokens
+                    )
+                    usage.calculate_cost()
+                    db.session.add(usage)
+                    db.session.commit()
+                    
+                    print("\n=== 使用统计 ===")
+                    print(f"Token计数方式: {'tiktoken预估' if use_estimated else '模型实际值'}")
+                    print(f"输入token数: {input_tokens}, 命中缓存token数: {cached_input_tokens}, 成本: ${usage.input_cost:.6f}")
+                    print(f"输出token数: {output_tokens}, 成本: ${usage.output_cost:.6f}")
+                    print(f"总成本: ${usage.total_cost:.6f}")
+                    
+                    usage_info = {
+                        'type': 'usage_info',
+                        'input_tokens': input_tokens,
+                        'output_tokens': output_tokens,
+                        'total_tokens': input_tokens + output_tokens,
+                        'input_cost': usage.input_cost,
+                        'output_cost': usage.output_cost,
+                        'total_cost': usage.total_cost,
+                        'is_estimated': use_estimated,
+                        'status_code': 200
                     }
-                    yield f"data: {json.dumps(error_response)}\n\n"
-                    return
+                    yield f"data: {json.dumps(usage_info)}\n\n"
+            except Exception as e:
+                error_msg = f"记录使用情况时出错: {str(e)}"
+                print(error_msg)
+                db.session.rollback()
+                error_response = {
+                    'error': error_msg,
+                    'error_type': 'DatabaseError',
+                    'status_code': 500
+                }
+                yield f"data: {json.dumps(error_response)}\n\n"
+                return
 
         except Exception as e:
             print(f"Error in generate(): {str(e)}")

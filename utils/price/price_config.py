@@ -40,8 +40,14 @@ PRICE_CONFIG = {
     
     # DeepSeek 模型
     "deepseek-chat": {
+        "cached_input": 0.07,
         "input": 0.27,      # 使用未命中缓存的输入价格
         "output": 1.10      # 输出价格
+    },
+    "deepseek-reasoner": {
+        "cached_input": 0.14,
+        "input": 0.55,      # 使用未命中缓存的输入价格
+        "output": 2.19      # 输出价格
     },
 
     # Grok 模型

@@ -51,17 +51,18 @@ def get_base64_by_id(base64_id, user_id):
     ctx = None
     try:
         # 确保在应用上下文中运行
-        from flask import has_app_context
-        if not has_app_context():
-            print("创建新的应用上下文")
-            ctx = app.app_context()
-            ctx.push()
+        # from flask import has_app_context
+        # if not has_app_context():
+        #     print("创建新的应用上下文")
+        #     ctx = app.app_context()
+        #     ctx.push()
+        with app.app_context():
         
-        # 构建文件路径
-        normalized_user_id = normalize_user_id(user_id)
-        base_dir = Path(app.config['UPLOAD_FOLDER']) / normalized_user_id / 'base64_store'
-        file_path = base_dir / f"{base64_id}.json"
-        
+            # 构建文件路径
+            normalized_user_id = normalize_user_id(user_id)
+            base_dir = Path(app.config['UPLOAD_FOLDER']) / normalized_user_id / 'base64_store'
+            file_path = base_dir / f"{base64_id}.json"
+            
         print(f"\n=== 获取base64数据 ===")
         print(f"用户ID: {user_id}")
         print(f"标准化用户ID: {normalized_user_id}")
@@ -87,9 +88,10 @@ def get_base64_by_id(base64_id, user_id):
         raise Exception(f"获取 base64 数据失败: {str(e)}")
     finally:
         # 如果我们创建了新的上下文，需要弹出它
-        if ctx is not None:
-            print("弹出应用上下文")
-            ctx.pop()
+        # if ctx is not None:
+        #     print("弹出应用上下文")
+        #     ctx.pop()
+        pass
 
 def delete_base64_file(base64_id, user_id):
     """删除指定的 base64 文件"""

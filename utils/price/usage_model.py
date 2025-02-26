@@ -9,14 +9,16 @@ class Usage(db.Model):
     tokens_in = db.Column(db.Integer, default=0)  # 输入token数
     tokens_out = db.Column(db.Integer, default=0)  # 输出token数
     input_cost = db.Column(db.Float, default=0.0)  # 输入成本（美元）
+    cached_input_tokens = db.Column(db.Integer, default=0)  # 缓存的输入token数
     output_cost = db.Column(db.Float, default=0.0)  # 输出成本（美元）
     total_cost = db.Column(db.Float, default=0.0)  # 总成本（美元）
     created_at = db.Column(db.DateTime, default=datetime.utcnow)  # 创建时间
     
-    def __init__(self, user_id, model_name, tokens_in=0, tokens_out=0):
+    def __init__(self, user_id, model_name, tokens_in=0, cached_input_tokens=0, tokens_out=0):
         self.user_id = user_id
         self.model_name = model_name
         self.tokens_in = tokens_in
+        self.cached_input_tokens = cached_input_tokens
         self.tokens_out = tokens_out
 
     def calculate_cost(self):
@@ -29,9 +31,23 @@ class Usage(db.Model):
             self.total_cost = 0.0
             return
             
-        # 计算输入和输出成本（每百万token的价格）
-        self.input_cost = (self.tokens_in / 1_000_000) * price['input']
+        # 计算常规输入token成本
+        regular_input_cost = (self.tokens_in / 1_000_000) * price['input']
+        
+        # 计算缓存token成本并加入到input_cost中
+        if self.cached_input_tokens > 0:
+            # 如果模型有特定的缓存价格，使用缓存价格；否则使用常规输入价格
+            cache_price = price.get('cached_input', price['input'])
+            cached_cost = (self.cached_input_tokens / 1_000_000) * cache_price
+            # 将缓存成本直接加入到输入成本中
+            self.input_cost = regular_input_cost + cached_cost
+        else:
+            self.input_cost = regular_input_cost
+        
+        # 计算输出成本
         self.output_cost = (self.tokens_out / 1_000_000) * price['output']
+        
+        # 计算总成本
         self.total_cost = self.input_cost + self.output_cost
         
         # 保留6位小数

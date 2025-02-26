@@ -322,7 +322,8 @@ def process_image_attachment(
     model_type: str,
     processed_message: Dict[str, Any],
     supported_type: str,
-    mime_type: str
+    mime_type: str,
+    user_id: str
 ) -> None:
     """
     处理图片类型的附件
@@ -341,7 +342,8 @@ def process_image_attachment(
         if 'base64_id' in attachment:
             try:
                 from utils.attachment_handler.image_handler import get_base64_by_id
-                base64_data = get_base64_by_id(attachment['base64_id'], session.get('user_id'))
+                print("用户id："+user_id)
+                base64_data = get_base64_by_id(attachment['base64_id'], user_id)
             except Exception as e:
                 print(f"获取base64数据失败: {e}")
                 return
@@ -392,7 +394,7 @@ def process_image_attachment(
         if 'base64_id' in attachment:
             try:
                 from utils.attachment_handler.image_handler import get_base64_by_id
-                base64_data = get_base64_by_id(attachment['base64_id'], session.get('user_id'))
+                base64_data = get_base64_by_id(attachment['base64_id'], user_id)
             except Exception as e:
                 print(f"获取base64数据失败: {e}")
         
@@ -417,6 +419,7 @@ def process_image_attachment(
                     })
                     processed_message['parts'].append(image)
                     print("加入Gemini的图片信息："+str(image))
+                    print("Processed Message："+str(processed_message))
                     return
                 except Exception as e:
                     print(f"无法打开本地图片文件: {str(e)}")
