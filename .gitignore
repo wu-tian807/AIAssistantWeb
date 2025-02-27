@@ -50,4 +50,7 @@ Thumbs.db
 
 # 缓存文件
 .ocr_cache/
-.gemini_files_cache.txt 
+.gemini_files_cache.txt
+
+# 测试缓存
+test_cache/ 
