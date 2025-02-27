@@ -1,0 +1,90 @@
+.message-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.reasoning-box {
+    background-color: #f5f5f5;
+    border-left: 4px solid #4a90e2;
+    margin: 10px 0;
+    padding: 15px;
+    border-radius: 4px;
+    font-style: italic;
+    color: #666;
+    position: relative;
+    order: -1;
+    margin-bottom: 10px;
+    align-self: stretch;
+}
+
+.reasoning-box-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 12px;
+}
+
+.reasoning-box-title {
+    font-weight: bold;
+    color: #4a90e2;
+    font-style: normal;
+}
+
+.reasoning-box-time {
+    color: #888;
+    font-size: 0.9em;
+    font-style: normal;
+}
+
+.reasoning-box-toggle {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    padding: 4px 8px;
+    background-color: transparent;
+    border: 1px solid #4a90e2;
+    border-radius: 4px;
+    color: #4a90e2;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.3s ease;
+}
+
+.reasoning-box-toggle:hover {
+    background-color: #4a90e2;
+    color: white;
+}
+
+.reasoning-box-content {
+    transition: all 0.3s ease;
+}
+
+.reasoning-box p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* 暗色主题支持 */
+.dark-theme .reasoning-box {
+    background-color: #2d2d2d;
+    border-left-color: #5c9ce6;
+    color: #b0b0b0;
+}
+
+.dark-theme .reasoning-box-title {
+    color: #5c9ce6;
+}
+
+.dark-theme .reasoning-box-time {
+    color: #888;
+}
+
+.dark-theme .reasoning-box-toggle {
+    border-color: #5c9ce6;
+    color: #5c9ce6;
+}
+
+.dark-theme .reasoning-box-toggle:hover {
+    background-color: #5c9ce6;
+    color: #2d2d2d;
+}

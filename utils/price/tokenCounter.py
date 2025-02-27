@@ -66,7 +66,7 @@ class TokenCounter:
             return int(num_patches * 2 * 1.5)  # 每个分块2token，1.5倍余量
         except Exception as e:
             print(f"图片处理错误: {str(e)}")
-            return 100  # 返回一个保守的默认值，避免完全忽略图片
+            return 0
 
     def estimate_video_tokens(self, video_path: str) -> int:
         """估算视频token数（1fps采样+音频估算）"""
@@ -75,57 +75,54 @@ class TokenCounter:
             if not cap.isOpened():
                 return 0
             
+            # 获取视频元数据
             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            fps = max(cap.get(cv2.CAP_PROP_FPS), 1)
+            fps = max(cap.get(cv2.CAP_PROP_FPS), 1)  # 避免除零
             duration = frame_count / fps
             w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             cap.release()
             
-            num_frames = int(duration)
+            # 计算视觉token
+            num_frames = int(duration)  # 1fps采样
             patches_per_frame = math.ceil(w/16) * math.ceil(h/16)
-            video_tokens = num_frames * patches_per_frame * 2
+            video_tokens = num_frames * patches_per_frame * 2  # 每分块2token
+            
+            # 音频token（20token/秒）
             audio_tokens = int(duration * 20)
             
-            return int((video_tokens + audio_tokens) * 1.5)
+            return int((video_tokens + audio_tokens) * 1.5)  # 总余量1.5倍
         except Exception as e:
             print(f"视频处理错误: {str(e)}")
             return 0
 
-    def estimate_message_tokens(self, messages: List[Dict], model_id: str = None) -> Tuple[int, int]:
+    def estimate_message_tokens(self, messages: List[Dict], model_id: str) -> Tuple[int, int]:
         """
         支持多模态内容的token估算
         返回: (输入token数, 输出token数)
         """
-        input_tokens = 0
-        output_tokens = 0
+        input_tokens, output_tokens = 0, 0
         
         for message in messages:
             role = message.get('role', '')
             
+            # 处理OpenAI格式（content列表）
             if 'content' in message and isinstance(message['content'], list):
                 for item in message['content']:
                     tokens = self._process_content_item(item, model_id)
-                    if role == 'assistant':
-                        output_tokens += tokens
-                    else:
-                        input_tokens += tokens
+                    self._accumulate_tokens(role, tokens, input_tokens, output_tokens)
             
+            # 处理Google格式（parts列表）
             elif 'parts' in message:
                 for part in message['parts']:
                     tokens = self._process_part(part, model_id)
-                    if role == 'assistant':
-                        output_tokens += tokens
-                    else:
-                        input_tokens += tokens
+                    self._accumulate_tokens(role, tokens, input_tokens, output_tokens)
             
+            # 处理纯文本消息
             else:
                 text = str(message.get('content', ''))
                 tokens = self.count_tokens_by_model(text, model_id)
-                if role == 'assistant':
-                    output_tokens += tokens
-                else:
-                    input_tokens += tokens
+                self._accumulate_tokens(role, tokens, input_tokens, output_tokens)
         
         return input_tokens, output_tokens
 
@@ -136,13 +133,7 @@ class TokenCounter:
         elif 'image_url' in item:
             url = item['image_url'].get('url', '')
             if url.startswith('data:image/'):
-                base64_data = url.split(',', 1)[1]
-                print(f"处理图片，base64数据长度: {len(base64_data)}")
-                return self.estimate_image_tokens(base64_data=base64_data)
-            else:
-                print(f"图片URL格式错误: {url}")
-        else:
-            print(f"未知内容项类型: {item}")
+                return self.estimate_image_tokens(base64_data=url.split(',', 1)[1])
         return 0
 
     def _process_part(self, part, model_id: str) -> int:
@@ -163,6 +154,13 @@ class TokenCounter:
                     print(f"视频解码失败: {str(e)}")
                     return 0
         return self.count_tokens_by_model(str(part), model_id)
+
+    def _accumulate_tokens(self, role: str, tokens: int, input_tokens: int, output_tokens: int) -> None:
+        """累加token到相应统计量"""
+        if role == 'assistant':
+            output_tokens += tokens
+        else:
+            input_tokens += tokens
 
     def estimate_completion_tokens(self, text: str, model_id: str = None) -> int:
         """计算生成文本的token数量"""

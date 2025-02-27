@@ -1,6 +1,7 @@
 . 
 .\routes 
 .\routes\image 
+.\routes\text 
 .\routes\user 
 .\static 
 .\static\css 
@@ -21,9 +22,12 @@
 .\static\js\utils\attachments\renderer 
 .\static\js\utils\attachments\uploader 
 .\static\js\utils\model_selector 
+.\temp 
 .\templates 
 .\utils 
+.\utils\attachment_handler 
 .\utils\chat 
 .\utils\files 
 .\utils\ocr 
 .\utils\price 
+.\utils\text_attachment 

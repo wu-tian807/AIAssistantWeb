@@ -56,6 +56,16 @@ body.dark-theme .assistant-message p {
     color: var(--dark-text-primary);
 }
 
+/* 添加标题的暗色主题样式 */
+body.dark-theme .assistant-message h1,
+body.dark-theme .assistant-message h2,
+body.dark-theme .assistant-message h3,
+body.dark-theme .assistant-message h4,
+body.dark-theme .assistant-message h5,
+body.dark-theme .assistant-message h6 {
+    color: var(--dark-text-primary);
+}
+
 /* 侧边栏暗色样式 */
 body.dark-theme .sidebar {
     background-color: var(--dark-bg-secondary);

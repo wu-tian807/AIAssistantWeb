@@ -255,6 +255,61 @@ export async function fetchModels() {
             select.appendChild(deepseekGroup);
         }
         
+        // 添加DeepSeek模型组后，添加SiliconCloud模型组
+        if (models.siliconcloud && models.siliconcloud.models.length > 0) {
+            const siliconcloudGroup = document.createElement('optgroup');
+            siliconcloudGroup.label = 'SiliconCloud Models';
+            
+            // 如果存在自定义选择器，创建组
+            if (customSelect) {
+                const group = document.createElement('div');
+                group.className = 'option-group';
+                
+                const label = document.createElement('div');
+                label.className = 'group-label';
+                label.textContent = 'SiliconCloud Models';
+                group.appendChild(label);
+                
+                models.siliconcloud.models.forEach(model => {
+                    // 创建原始option
+                    const option = document.createElement('option');
+                    option.setAttribute('data-model-icon', 'siliconcloud');
+                    option.setAttribute('data-max-output-tokens', model.max_output_tokens);
+                    option.value = model.id;
+                    option.textContent = `${model.name} - ${model.description}`;
+                    siliconcloudGroup.appendChild(option);
+                    
+                    // 创建自定义选项
+                    const item = document.createElement('div');
+                    item.className = 'option-item';
+                    item.textContent = `${model.name} - ${model.description}`;
+                    item.setAttribute('data-value', model.id);
+                    item.setAttribute('data-model-icon', 'siliconcloud');
+                    item.setAttribute('data-max-output-tokens', model.max_output_tokens);
+                    
+                    item.addEventListener('click', () => {
+                        const allItems = customSelect.querySelectorAll('.option-item');
+                        allItems.forEach(i => i.classList.remove('selected'));
+                        item.classList.add('selected');
+                        
+                        const selectedText = customSelect.querySelector('.selected-text');
+                        selectedText.textContent = item.textContent;
+                        
+                        select.value = model.id;
+                        const event = new Event('change');
+                        select.dispatchEvent(event);
+                        
+                        customSelect.classList.remove('open');
+                    });
+                    
+                    group.appendChild(item);
+                });
+                
+                customSelect.querySelector('.select-options').appendChild(group);
+            }
+            
+            select.appendChild(siliconcloudGroup);
+        }
         // 设置默认选中的模型
         select.value = 'grok-2-vision-1212';
         

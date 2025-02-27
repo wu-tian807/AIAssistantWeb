@@ -13,7 +13,7 @@ from config import AVAILABLE_MODELS
 from config import RATE_LIMIT_WINDOW
 from utils.files.file_config import ATTACHMENT_TYPES, AttachmentType
 
-from initialization import app, db, mail, xai_client, deepseek_client,gemini_pool
+from initialization import app, db, mail, xai_client, deepseek_client,gemini_pool,siliconcloud_client
 
 
 from utils.user_model import User
@@ -361,8 +361,8 @@ def process_image(temp_path, output_path):
 @login_required
 def chat():
     if request.method == 'GET':
-        return Response(status=200)
-        
+        return render_template('chat.html')
+
     data = request.json
     messages = data.get('messages', [])
     conversation_id = data.get('conversation_id')
@@ -370,7 +370,7 @@ def chat():
     user_id = session.get('user_id')
     temperature = data.get('temperature', 0.7)
     max_tokens = data.get('max_tokens', 4096)
-    
+
     print(f"\n=== 聊天请求信息 ===")
     print(f"模型ID: {model_id}")
     print(f"会话ID: {conversation_id}")
@@ -386,11 +386,13 @@ def chat():
     # 获取模型类型和支持的附件类型
     model_type = None
     model_support_list = []
+    is_reasoner = False
     for provider, config in AVAILABLE_MODELS.items():
         for model in config['models']:
             if model['id'] == model_id:
                 model_type = config['api_type']
                 model_support_list = model['available_attachments']
+                is_reasoner = model.get('reasoner', False)
                 print(f"模型类型: {model_type}")
                 print(f"支持的附件类型: {[str(t) for t in model_support_list]}")
                 break
@@ -606,7 +608,10 @@ def chat():
             if model_type == 'openai':
                 # OpenAI 模型调用
                 if model_id.startswith('deepseek'):
-                    client = deepseek_client
+                    if provider == 'deepseek':
+                        client = deepseek_client
+                    elif provider == 'siliconcloud':
+                        client = siliconcloud_client
                     formatted_messages = []
                     for msg in processed_messages:
                         # 确保content是字符串
@@ -658,21 +663,58 @@ def chat():
                         temperature=temperature,
                         max_tokens=max_tokens
                     )
-
-                # 处理流式响应
-                for chunk in stream:
-                    if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
-                        content = chunk.choices[0].delta.content
-                        accumulated_output.append(content)
-                        yield f"data: {json.dumps({'content': content})}\n\n"
+                chunk = None
+                if is_reasoner:
+                    print("使用reasoner模式")
+                    for chunk in stream:
+                        try:
+                            if chunk.choices[0].delta.reasoning_content is not None:
+                                reasoning_content = chunk.choices[0].delta.reasoning_content
+                                accumulated_output.append(reasoning_content)
+                                # 立即发送推理内容
+                                response = f"data: {json.dumps({'reasoning_content': reasoning_content})}\n\n"
+                                yield response
+                                # 强制刷新
+                                if hasattr(response, 'flush'):
+                                    response.flush()
+                            elif hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
+                                content = chunk.choices[0].delta.content
+                                accumulated_output.append(content)
+                                # 立即发送内容
+                                response = f"data: {json.dumps({'content': content})}\n\n"
+                                yield response
+                                # 强制刷新
+                                if hasattr(response, 'flush'):
+                                    response.flush()
+                            print("reasoning_content："+reasoning_content)
+                            print("content："+content)
+                        except Exception as e:
+                            print(f"处理流式响应chunk时出错: {str(e)}")
+                            continue
+                else:        
+                    # 处理流式响应
+                    for chunk in stream:
+                        try:
+                            if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
+                                content = chunk.choices[0].delta.content
+                                accumulated_output.append(content)
+                                # 立即发送内容
+                                response = f"data: {json.dumps({'content': content})}\n\n"
+                                yield response
+                                # 强制刷新
+                                if hasattr(response, 'flush'):
+                                    response.flush()
+                        except Exception as e:
+                            print(f"处理流式响应chunk时出错: {str(e)}")
+                            continue
                 last_response = chunk
                 if last_response and hasattr(last_response, 'usage'):
                     try:
                         #print(f"OpenAI响应: {last_response}")
                         usage_dict = last_response.usage
-                        input_tokens = usage_dict['prompt_tokens'] - usage_dict['prompt_tokens_details']['cached_tokens']
+                        input_tokens = usage_dict['prompt_tokens'] - usage_dict.get('prompt_tokens_details', {}).get('cached_tokens', 0)
                         output_tokens = usage_dict['completion_tokens']
-                        cached_input_tokens = usage_dict['prompt_tokens_details']['cached_tokens']
+                        cached_input_tokens = usage_dict.get('prompt_tokens_details', {}).get('cached_tokens', 0)
                         use_estimated = False
                         print(f"从OpenAI响应获取到token数 - 输入: {input_tokens}, 输出: {output_tokens}, 缓存输入: {cached_input_tokens}")
                     except Exception as e:
@@ -772,9 +814,9 @@ def chat():
                         print("无法从Gemini响应获取token数，使用tiktoken估算")
                         use_estimated = True  # 更新为使用预估值
                         # 使用tiktoken估算token数
-                        input_tokens = token_counter.estimate_message_tokens(processed_messages)[0]
+                        input_tokens = token_counter.estimate_message_tokens(processed_messages,model_id)[0]
                         output_text = ''.join(accumulated_output)
-                        output_tokens = token_counter.estimate_completion_tokens(output_text)
+                        output_tokens = token_counter.estimate_completion_tokens(output_text,model_id)
                     
                 except Exception as e:
                     error_msg = f"与Gemini通信时出错: {str(e)}"

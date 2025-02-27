@@ -1,4 +1,5 @@
 @echo off
+chcp 65001
 :: 设置输出文件
 set OUTPUT_FILE=structure.txt
 

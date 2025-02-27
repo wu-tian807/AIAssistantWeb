@@ -74,5 +74,9 @@ PRICE_CONFIG = {
     "grok-2-latest": {     # 与 grok-2-1212 相同
         "input": 2.00,
         "output": 10.00
+    },
+    "deepseek-ai/DeepSeek-R1":{
+        "input": 0.55,
+        "output": 2.19
     }
 }
