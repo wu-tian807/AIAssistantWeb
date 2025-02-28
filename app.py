@@ -34,6 +34,7 @@ from utils.price.usage_model import Usage
 from utils.attachment_handler.image_handler import delete_base64_file, save_base64_locally, get_base64_by_id
 from routes.upload_attachment_types import upload_attachment_types_bp
 from routes.text.text_routes import text_bp  # 添加这行
+from routes.generate_text import summary_bp  # 导入摘要生成蓝图
 
 # 注册蓝图
 app.register_blueprint(user_profile)
@@ -42,6 +43,7 @@ app.register_blueprint(upload_status_bp, url_prefix='/api/upload-status')
 app.register_blueprint(image_bp, url_prefix='/api/image')  # 添加这行
 app.register_blueprint(upload_attachment_types_bp)  # 注册附件类型蓝图
 app.register_blueprint(text_bp, url_prefix='/api/text')  # 添加这行
+app.register_blueprint(summary_bp, url_prefix='/api/summary')  # 注册摘要生成蓝图
 
 # 在每个请求之前生成CSRF Token
 @app.before_request
@@ -1079,6 +1081,11 @@ def get_models():
                     'available_attachments': available_attachments,
                     'max_output_tokens': model['max_output_tokens']
                 }
+                
+                # 添加reasoner属性，如果存在
+                if 'reasoner' in model:
+                    serializable_model['reasoner'] = model['reasoner']
+                
                 provider_config['models'].append(serializable_model)
                 
             serializable_models[provider] = provider_config

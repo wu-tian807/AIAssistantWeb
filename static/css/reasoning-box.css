@@ -4,17 +4,21 @@
 }
 
 .reasoning-box {
-    background-color: #f5f5f5;
-    border-left: 4px solid #4a90e2;
+    background-color: #f9f9d9; /* 便利贴黄色 */
+    border-left: 4px solid #e6c64c;
     margin: 10px 0;
     padding: 15px;
     border-radius: 4px;
-    font-style: italic;
-    color: #666;
+    color: #333;
     position: relative;
     order: -1;
     margin-bottom: 10px;
     align-self: stretch;
+    transition: all 0.3s ease;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23); /* 添加阴影提供立体感 */
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    will-change: transform, box-shadow; /* 优化动画性能 */
 }
 
 .reasoning-box-header {
@@ -22,11 +26,13 @@
     align-items: center;
     margin-bottom: 12px;
     gap: 12px;
+    position: relative;
+    z-index: 2; /* 确保头部始终在上层 */
 }
 
 .reasoning-box-title {
     font-weight: bold;
-    color: #4a90e2;
+    color: #8b6914;
     font-style: normal;
 }
 
@@ -42,21 +48,63 @@
     right: 12px;
     padding: 4px 8px;
     background-color: transparent;
-    border: 1px solid #4a90e2;
+    border: 1px solid #e6c64c;
     border-radius: 4px;
-    color: #4a90e2;
+    color: #8b6914;
     cursor: pointer;
     font-size: 12px;
     transition: all 0.3s ease;
+    z-index: 3; /* 确保按钮始终在最上层 */
 }
 
 .reasoning-box-toggle:hover {
-    background-color: #4a90e2;
+    background-color: #e6c64c;
     color: white;
 }
 
 .reasoning-box-content {
+    transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+                opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                margin 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    opacity: 1;
+    max-height: 2000px; /* 足够大的高度以容纳内容 */
+    transform: translateZ(0); /* 启用GPU加速 */
+    will-change: max-height, opacity; /* 告知浏览器将变化的属性 */
+}
+
+.reasoning-box-content.collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    visibility: hidden; /* 完全隐藏 */
+}
+
+.reasoning-box-summary {
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.6);
+    border-radius: 3px;
+    margin-top: 8px;
+    font-weight: normal;
+    color: #333;
     transition: all 0.3s ease;
+    display: none; /* 初始隐藏 */
+    opacity: 0;
+}
+
+.reasoning-box-summary.visible {
+    display: block;
+    opacity: 1;
+    animation: fadeIn 0.3s ease forwards;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 .reasoning-box p {
@@ -64,27 +112,58 @@
     line-height: 1.5;
 }
 
+/* 鼠标悬停时的效果 */
+.reasoning-box:hover {
+    box-shadow: 0 8px 16px rgba(0,0,0,0.1), 0 8px 16px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
+}
+
 /* 暗色主题支持 */
 .dark-theme .reasoning-box {
-    background-color: #2d2d2d;
-    border-left-color: #5c9ce6;
-    color: #b0b0b0;
+    background-color: #3a3a2e;
+    border-left-color: #c4a93a;
+    color: #e0e0e0;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.3), 0 3px 6px rgba(0,0,0,0.4);
 }
 
 .dark-theme .reasoning-box-title {
-    color: #5c9ce6;
+    color: #e6c64c;
 }
 
 .dark-theme .reasoning-box-time {
-    color: #888;
+    color: #aaa;
 }
 
 .dark-theme .reasoning-box-toggle {
-    border-color: #5c9ce6;
-    color: #5c9ce6;
+    border-color: #c4a93a;
+    color: #e6c64c;
 }
 
 .dark-theme .reasoning-box-toggle:hover {
-    background-color: #5c9ce6;
-    color: #2d2d2d;
+    background-color: #c4a93a;
+    color: #1a1a1a;
+}
+
+.dark-theme .reasoning-box-summary {
+    background-color: rgba(30, 30, 30, 0.6);
+    color: #ddd;
+}
+
+/* 添加便利贴效果 */
+.reasoning-box::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 20px;
+    width: 40px;
+    height: 15px;
+    background: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transform: rotate(-2deg);
+    z-index: 1;
+    border-radius: 2px;
+}
+
+.dark-theme .reasoning-box::before {
+    background: rgba(100, 100, 100, 0.3);
 }

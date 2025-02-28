@@ -6,6 +6,7 @@ from .price.usage_model import Usage
 DEFAULT_USER_SETTINGS = {
     'image_compression': True,  # 默认开启图片压缩
     'dark_theme': False,  # 默认关闭夜间主题
+    'enable_ocr': True,  # 默认开启非视觉模型的OCR功能
 }
 
 # 用户模型

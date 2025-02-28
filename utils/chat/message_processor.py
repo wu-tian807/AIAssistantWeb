@@ -590,7 +590,8 @@ def process_image_attachment_by_ocr(
     attachment: Dict[str, Any],
     model_type: str,
     processed_message: Dict[str, Any],
-    user_id: str = None
+    user_id: str = None,
+    enable_ocr: bool = True
 ) -> None:
     """
     使用OCR处理图片附件，提取文本内容并添加到消息中

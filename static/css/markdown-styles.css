@@ -87,10 +87,12 @@
 
 /* 正常代码块的样式 - 使用特定的包装器类 */
 .code-block-wrapper {
-    margin: 1.5em 0;
+    margin: 1.5em auto;  /* 上下间距1.5em，左右自动（居中）*/
     border-radius: 8px;
     overflow: hidden;
     background: #282c34;
+    max-width: 95%;  /* 最大宽度限制，避免在宽屏上过宽 */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);  /* 添加阴影提升层次感 */
 }
 
 .code-block-header {

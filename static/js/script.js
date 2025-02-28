@@ -1,5 +1,5 @@
 // 配置 markdown-it 实例，启用各种功能
-import { initMarkdownit ,applyCodeHighlight} from "./utils/markdownit.js";
+import { initMarkdownit ,applyCodeHighlight, initializeCodeBlocks} from "./utils/markdownit.js";
 import { Uploader } from "./utils/attachments/uploader/Uploader.js";
 import { AttachmentRenderer } from './utils/attachments/AttachmentRenderer.js';
 import { imageUploader } from './utils/attachments/uploader/ImageUploader.js';
@@ -15,6 +15,8 @@ const md = initMarkdownit();
 let messages = [];
 // 当前的流式响应对象
 let currentReader = null;
+// 添加全局标志，用于表示是否手动停止生成
+let generationStopped = false;
 
 // 获取 DOM 元素
 const chatMessages = document.getElementById('chat-messages');
@@ -75,15 +77,34 @@ function stopGeneration() {
     if (currentReader) {
         try {
             currentReader.cancel(); // 取消读取流
+            // 设置标记表示生成已被手动停止
+            generationStopped = true;
         } catch (error) {
             console.log('Stream already closed or cancelled:', error);
         }
         currentReader = null;
     }
+    
+    // 重置界面状态
     sendButton.textContent = '发送';
     sendButton.classList.remove('stop');
-    sendButton.disabled = !canSendMessage();  // 使用 canSendMessage 来决定按钮状态
+    sendButton.disabled = !canSendMessage();
     userInput.disabled = false;
+    
+    // 如果当前正在处理消息中，添加一个"[已停止]"标记
+    const pendingMessage = document.querySelector('.assistant-message:last-child .message-content');
+    if (pendingMessage && sendButton.textContent === '发送' && pendingMessage.parentElement.classList.contains('loading')) {
+        pendingMessage.parentElement.classList.remove('loading');
+        pendingMessage.innerHTML += '<p><em>[生成已停止]</em></p>';
+        
+        // 停止生成后滚动到底部
+        const chatMessages = document.getElementById('chat-messages');
+        if (shouldAutoScroll(chatMessages)) {
+            setTimeout(() => {
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }, 0);
+        }
+    }
 }
 
 
@@ -91,15 +112,25 @@ function stopGeneration() {
 // 在文件开头添加一个新的变量来跟踪用户是否正在滚动
 let userScrolling = false;
 let lastScrollTop = 0;
+// 添加内容生成状态标志
+window.isGenerating = false;
 
 // 在文件开头添加这个函数
-function shouldAutoScroll(container) {
-    // 如果用户正在滚动，不自动滚动
+window.shouldAutoScroll = function(container) {
+    // 如果用户正在滚动，即使在内容生成中也不自动滚动
     if (userScrolling) return false;
     
     // 检查是否已经滚动到接近底部（距离底部100px以内）
-    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
-    return isNearBottom;
+    const scrollPosition = container.scrollHeight - container.scrollTop - container.clientHeight;
+    const isNearBottom = scrollPosition < 100;
+    
+    // 如果已在底部或内容生成中且不是用户主动滚动，则自动滚动
+    return isNearBottom || (window.isGenerating && !userScrolling);
+};
+
+// 向后兼容的函数引用
+function shouldAutoScroll(container) {
+    return window.shouldAutoScroll(container);
 }
 
 // 在文件开头定义函数
@@ -185,6 +216,25 @@ function createRegenerateButton(messageIndex, messageActions, isError = false) {
     return regenerateBtn;
 }
 
+// 从思考内容提取摘要，如果有
+function extractSummaryFromThinking(reasoningData) {
+    if (reasoningData.reasoning_summary) {
+        return reasoningData.reasoning_summary;
+    }
+    
+    // 如果没有摘要但有思考内容，截取开头的一部分作为摘要
+    if (reasoningData.reasoning_content) {
+        const content = reasoningData.reasoning_content;
+        // 如果内容太长，截取前200个字符作为摘要
+        if (content.length > 200) {
+            return content.substring(0, 200) + '...';
+        }
+        return content;
+    }
+    
+    return null;
+}
+
 // 修改后的 appendMessage 函数
 function appendMessage(content, isUser = false, messageIndex = null, attachments = [], modelInfo = null,error = false) {
     const messageDiv = document.createElement('div');
@@ -230,13 +280,26 @@ function appendMessage(content, isUser = false, messageIndex = null, attachments
     // 如果是助手消息，先检查是否有思考内容
     if (!isUser) {
         const message = currentConversationId && conversations.find(c => c.id === currentConversationId)?.messages[messageIndex];
-        if (message?.reasoning_content) {
-            // 使用 ReasoningBox 类创建思考框
-            const reasoningBox = new ReasoningBox(messageContent, md);
-            reasoningBox.setContent(message.reasoning_content);
-            // 如果有已记录的思考时间，设置它
-            if (typeof message.thinking_time === 'number' && message.thinking_time > 0) {
-                reasoningBox.setThinkingTime(message.thinking_time);
+        if (message) {
+            // 获取当前版本或直接使用消息的思考内容
+            const reasoningData = message.versions && message.versions[message.currentVersion] ? 
+                message.versions[message.currentVersion] : 
+                message;
+            
+            // 直接检查思考内容是否存在
+            if (reasoningData.reasoning_content) {
+                // 使用 ReasoningBox 类创建思考框
+                const reasoningBox = new ReasoningBox(messageContent, md);
+                
+                // 从序列化数据恢复
+                reasoningBox.loadFromSerializedData({
+                    reasoning_content: reasoningData.reasoning_content,
+                    reasoning_summary: reasoningData.reasoning_summary,
+                    reasoning_time: reasoningData.thinking_time
+                });
+                
+                // 确保思考框可见
+                reasoningBox.show();
             }
         }
     }
@@ -248,7 +311,7 @@ function appendMessage(content, isUser = false, messageIndex = null, attachments
         textContent.textContent = content;
     } else {
         textContent.innerHTML = md.render(content);
-        applyCodeHighlight(textContent);
+        initializeCodeBlocks(textContent);  // 使用initializeCodeBlocks函数替代applyCodeHighlight函数
     }
     messageContent.appendChild(textContent);
     
@@ -338,9 +401,11 @@ function appendMessage(content, isUser = false, messageIndex = null, attachments
     }
 
     // 应用代码高亮
-    messageContent.querySelectorAll('pre code').forEach(block => {
-        hljs.highlightElement(block);
-    });
+    // 这段代码会破坏代码块的嵌套结构，因为它直接对pre code应用高亮
+    // 而不是通过applyCodeHighlight函数应用，导致code-block-wrapper结构被破坏
+    // messageContent.querySelectorAll('pre code').forEach(block => {
+    //     hljs.highlightElement(block);
+    // });
 
     // 如果在底部，自动滚动
     const chatMessages = document.getElementById('chat-messages');
@@ -351,8 +416,13 @@ function appendMessage(content, isUser = false, messageIndex = null, attachments
     // 添加到消息容器
     chatMessages.appendChild(messageDiv);
     
-    if (shouldAutoScroll(chatMessages)) {
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+    // 再次检查并滚动到底部（确保在DOM更新后滚动到最新位置）
+    if (shouldAutoScroll(chatMessages) || isUser) {
+        // 对于用户消息，始终滚动到底部
+        // 使用setTimeout确保在DOM完全更新后执行滚动
+        setTimeout(() => {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }, 0);
     }
 }
 
@@ -403,6 +473,27 @@ const default_system_prompt = String.raw`你是一个AI助理。你需要尽可�
    \end{cases}
    $$
 
+7. 多环境公式嵌套与流程图的正确表示方法：
+   $$
+   \begin{align}
+   \text{流程步骤1} &\rightarrow \text{流程步骤2} \rightarrow \text{流程步骤3} \\
+   &\rightarrow \text{流程步骤4} \rightarrow \text{流程步骤5}
+   \end{align}
+   $$
+
+8. 单独公式块的正确隔离：每个不同类型的公式应使用独立的公式块，例如：
+   $$
+   \begin{align}
+   \text{第一组公式} &\rightarrow \text{内容} \\
+   &\rightarrow \text{更多内容}
+   \end{align}
+   $$
+   $$
+   \begin{equation}
+   \text{第二组公式} = \boxed{\text{内容}}
+   \end{equation}
+   $$
+
 特别注意事项（必须严格遵守）：
 1. 所有LaTeX环境和命令必须以反斜杠(\)开头，例如：
    - 正确：\begin{equation}
@@ -421,6 +512,12 @@ const default_system_prompt = String.raw`你是一个AI助理。你需要尽可�
 
 5. 分数必须使用 \frac 而不是其他简写形式
 
+6. 环境标签必须匹配：\begin{环境名} 必须对应 \end{环境名}
+   - 正确：\begin{align} ... \end{align}
+   - 错误：\begin{align} ... \end{equation}
+
+7. 不同的公式块必须分开写，不要混合不同类型的公式在同一个公式块中
+
 支持的数学符号和命令：
 - 上标：^
 - 下标：_
@@ -438,8 +535,10 @@ const default_system_prompt = String.raw`你是一个AI助理。你需要尽可�
 - rac{a}{b} ❌  应该是 \frac{a}{b}
 - 直接写中文文本 ❌  应该用 \text{中文文本}
 - 使用单个\ ❌  应该用 \\
+- \begin{align} ... \end{equation} ❌  应该用 \begin{align} ... \end{align}
+- 在同一个公式块中混合多种不相关公式 ❌  应该分成多个公式块
 
-请确保公式格式正确，并在适当的场景使用合适的公式环境。每个公式都必须经过仔细检查，确保所有命令都有正确的反斜杠前缀。`;
+请确保公式格式正确，并在适当的场景使用合适的公式环境。每个公式都必须经过仔细检查，确保所有命令都有正确的反斜杠前缀，并且环境标签正确匹配。`;
 
 // 修改保存函数，改为只保存单个对话
 export async function saveConversation(conversationId, operation = 'update') {
@@ -748,46 +847,15 @@ async function switchConversation(conversationId) {
             const currentVersion = msg.versions[msg.currentVersion];
             appendMessage(msg.content, false, index, msg.attachments, currentVersion.modelIcon);
         } else {
-            appendMessage(msg.content, msg.role === 'user', index, msg.attachments, msg.modelIcon);
+            appendMessage(msg.content, msg.role === 'user', index, msg.attachments);
         }
     });
-
-    // 检查最后一条消息是否是用户消息
-    if (conversation.messages.length > 0) {
-        const lastMessage = conversation.messages[conversation.messages.length - 1];
-        if (lastMessage.role === 'user') {
-            // 创建重新生成按钮容器
-            const regenerateContainer = document.createElement('div');
-            regenerateContainer.className = 'regenerate-container';
-            regenerateContainer.style.cssText = 'text-align: center; margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); animation: fadeIn 0.3s ease-out;';
-
-            const promptText = document.createElement('div');
-            promptText.style.cssText = 'color: #666; margin-bottom: 10px; font-size: 14px;';
-            promptText.textContent = '检测到对话未完成，是否继续生成回复？';
-
-            const regenerateBtn = document.createElement('button');
-            regenerateBtn.className = 'regenerate-btn';
-            regenerateBtn.innerHTML = '🔄 继续生成回复';
-            regenerateBtn.style.cssText = 'padding: 10px 20px; font-size: 15px; background-color: #007AFF; color: white; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s ease;';
-            
-            regenerateBtn.onmouseover = () => regenerateBtn.style.backgroundColor = '#0056b3';
-            regenerateBtn.onmouseout = () => regenerateBtn.style.backgroundColor = '#007AFF';
-            
-            regenerateBtn.onclick = async () => {
-                regenerateContainer.remove();
-                await regenerateErrorMessage(conversation.messages.length);
-            };
-
-            regenerateContainer.appendChild(promptText);
-            regenerateContainer.appendChild(regenerateBtn);
-            chatMessages.appendChild(regenerateContainer);
-
-            // 添加淡入动画样式
-            const style = document.createElement('style');
-            style.textContent = '@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }';
-            document.head.appendChild(style);
-        }
-    }
+    
+    // 重新应用代码高亮，确保所有代码块正确渲染
+    document.querySelectorAll('.text-content').forEach(textContent => {
+        // 重新应用代码高亮，但是只对包含code-block-wrapper的容器
+        initializeCodeBlocks(textContent);
+    });
 
     renderConversationsList();
 }
@@ -886,315 +954,391 @@ function clearAttachmentPreview() {
 
 // 修改现有的sendMessage函数
 async function sendMessage(retryCount = 3, retryDelay = 1000) {
-    let error = false;
-    const content = userInput.value.trim();
-    const md = initMarkdownit(); // 确保md对象被正确初始化
-
-    if (!content && !hasAttachments()) return;
-
-    // 获取选中的模型ID和类型
-    const modelSelect = document.getElementById('model-select');
-    const selectedOption = modelSelect.options[modelSelect.selectedIndex];
-    const modelIcon = selectedOption.getAttribute('data-model-icon');
-    const modelSettings = window.modelSettingRenderer.getSettings();
-    const temperature = modelSettings.temperature;
-    const max_tokens = modelSettings.current_output_tokens;
-
-    console.log('Model selection:', {
-        selectedValue: modelSelect.value,
-        optgroup: selectedOption.closest('optgroup')?.label,
-        modelIcon: modelIcon,
-        temperature: temperature,
-        max_tokens: max_tokens
-    });
-
-    const selectedModel = modelSelect.value;
-    if (!selectedModel) {
-        alert('请选择一个模型');
-        return;
-    }
-
-    // 确保有当前对话
-    if (!currentConversationId) {
-        await createNewConversation();
-    }
-
-    // 将当前对话移动到列表顶部
-    const currentIndex = conversations.findIndex(c => c.id === currentConversationId);
-    if (currentIndex > 0) {
-        const [conversation] = conversations.splice(currentIndex, 1);
-        conversations.unshift(conversation);
-        renderConversationsList();
-    }
-
-    // 获取当前对话
-    const currentConversation = conversations[0];
+    if (!canSendMessage()) return;
     
-    // 准备用户消息和附件
-    const attachments = uploader.collectAttachments();
-    const userMessage = {
-        role: "user",
-        content: content,
-        attachments: attachments
-    };
+    // 设置内容生成状态为true
+    window.isGenerating = true;
+    
+    try {
+        let error = false;
+        const content = userInput.value.trim();
+        const md = initMarkdownit(); // 确保md对象被正确初始化
 
-    // 添加用户消息到存储和界面
-    currentConversation.messages.push(userMessage);
-    const userMessageIndex = currentConversation.messages.length - 1;
-    appendMessage(content, true, userMessageIndex, attachments, error);
-    
-    // 更新 messages 数组
-    messages = [
-        {"role": "system", "content": currentConversation.systemPrompt || default_system_prompt},
-        ...currentConversation.messages
-    ];
-    
-    // 立即保存用户消息到数据库
-    await saveConversation(currentConversation.id, 'update');
-    
-    // 如果是第一条消息，生成对话标题
-    if (currentConversation.messages.length === 1) {
-        currentConversation.title = content.slice(0, 20) + (content.length > 20 ? '...' : '');
-        renderConversationsList();
-        generateTitle(content);
-    }
+        if (!content && !hasAttachments()) return;
 
-    // 清空输入框并更新按钮状态
-    userInput.value = '';
-    clearAttachmentPreview();
-    sendButton.textContent = '停止';
-    sendButton.classList.add('stop');
-    sendButton.disabled = !canSendMessage();
-    userInput.disabled = false;
+        // 获取选中的模型ID和类型
+        const modelSelect = document.getElementById('model-select');
+        const selectedOption = modelSelect.options[modelSelect.selectedIndex];
+        const modelIcon = selectedOption.getAttribute('data-model-icon');
+        const modelSettings = window.modelSettingRenderer.getSettings();
+        const temperature = modelSettings.temperature;
+        const max_tokens = modelSettings.current_output_tokens;
 
-    let assistantMessage = '';
-    let reasoningContent = '';  // 添加思考内容变量
-    const messageIndex = currentConversation.messages.length;
-    
-    // 创建消息元素
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'message assistant-message';
-    messageDiv.setAttribute('data-message-index', messageIndex);
+        // 清空输入框并重置高度
+        userInput.value = '';
+        userInput.style.height = 'auto'; // 重置输入框高度
+        // 如果存在adjustTextareaHeight函数，调用它以确保高度正确重置
+        if (typeof adjustTextareaHeight === 'function') {
+            adjustTextareaHeight(userInput);
+        }
 
-    // 模型icon和模型信息
-    const iconRenderer = new IconRenderer(modelIcon);
-    const iconWrapper = document.createElement('div');
-    iconWrapper.className = 'model-icon-wrapper';
-    iconWrapper.setAttribute('data-model-icon', modelIcon);
-    iconWrapper.appendChild(iconRenderer.modelIcon);
-    messageDiv.appendChild(iconWrapper);
-    
-    const messageWrapper = document.createElement('div');
-    messageWrapper.className = 'message-wrapper';
-    
-    const messageContent = document.createElement('div');
-    messageContent.className = 'message-content';
-    messageContent.innerHTML = '';
+        console.log('Model selection:', {
+            selectedValue: modelSelect.value,
+            optgroup: selectedOption.closest('optgroup')?.label,
+            modelIcon: modelIcon,
+            temperature: temperature,
+            max_tokens: max_tokens
+        });
 
-    // 创建思考框元素
-    const reasoningBox = new ReasoningBox(messageContent, md);
-    
-    const messageActions = document.createElement('div');
-    messageActions.className = 'message-actions';
-    
-    createRegenerateButton(messageIndex, messageActions, false);
-    
-    messageWrapper.appendChild(messageContent);
-    messageWrapper.appendChild(messageActions);
-    messageDiv.appendChild(messageWrapper);
-    chatMessages.appendChild(messageDiv);
+        const selectedModel = modelSelect.value;
+        if (!selectedModel) {
+            alert('请选择一个模型');
+            return;
+        }
 
-    // 重试循环
-    for (let attempt = 0; attempt < retryCount; attempt++) {
-        try {
-            console.log(`[${new Date().toISOString()}] 尝试发送消息 (${attempt + 1}/${retryCount}):`, {
-                conversation_id: currentConversationId,
-                model_id: selectedModel,
-                temperature: temperature,
-                max_tokens: max_tokens,
-                networkType: navigator.connection?.type,
-                networkSpeed: navigator.connection?.downlink
-            });
+        // 确保有当前对话
+        if (!currentConversationId) {
+            await createNewConversation();
+        }
 
-            const response = await fetch('/chat', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ 
-                    messages: messages,
+        // 将当前对话移动到列表顶部
+        const currentIndex = conversations.findIndex(c => c.id === currentConversationId);
+        if (currentIndex > 0) {
+            const [conversation] = conversations.splice(currentIndex, 1);
+            conversations.unshift(conversation);
+            renderConversationsList();
+        }
+
+        // 获取当前对话
+        const currentConversation = conversations[0];
+        
+        // 准备用户消息和附件
+        const attachments = uploader.collectAttachments();
+        const userMessage = {
+            role: "user",
+            content: content,
+            attachments: attachments
+        };
+
+        // 添加用户消息到存储和界面
+        currentConversation.messages.push(userMessage);
+        const userMessageIndex = currentConversation.messages.length - 1;
+        appendMessage(content, true, userMessageIndex, attachments, error);
+        
+        // 更新 messages 数组
+        messages = [
+            {"role": "system", "content": currentConversation.systemPrompt || default_system_prompt},
+            ...currentConversation.messages
+        ];
+        
+        // 添加思考内容到消息中
+        // 遍历当前对话中的所有消息
+        const messagesWithThinking = messages.map(msg => {
+            // 只处理助手消息
+            if (msg.role === 'assistant') {
+                // 获取对应的对话对象
+                const messageIndex = currentConversation.messages.findIndex(m => m.content === msg.content && m.role === 'assistant');
+                if (messageIndex !== -1) {
+                    const message = currentConversation.messages[messageIndex];
+                    // 检查是否有思考内容
+                    const reasoningData = message.versions && message.versions[message.currentVersion] ? 
+                        message.versions[message.currentVersion] : 
+                        message;
+                    
+                    if (reasoningData.reasoning_content) {
+                        // 获取思考摘要
+                        const summary = extractSummaryFromThinking(reasoningData);
+                        if (summary) {
+                            // 添加思考摘要，使用 <think></think> 标记包裹
+                            return {
+                                ...msg,
+                                content: msg.content + '\n<think>' + summary + '</think>'
+                            };
+                        }
+                    }
+                }
+            }
+            return msg;
+        });
+        
+        // 立即保存用户消息到数据库
+        await saveConversation(currentConversation.id, 'update');
+        
+        // 如果是第一条消息，生成对话标题
+        if (currentConversation.messages.length === 1) {
+            currentConversation.title = content.slice(0, 20) + (content.length > 20 ? '...' : '');
+            renderConversationsList();
+            generateTitle(content);
+        }
+
+        // 清空输入框并更新按钮状态
+        userInput.value = '';
+        clearAttachmentPreview();
+        sendButton.textContent = '停止';
+        sendButton.classList.add('stop');
+        sendButton.disabled = false; // 确保停止按钮始终可用
+        userInput.disabled = false;
+
+        // 发送消息后强制滚动到底部
+        const chatMessages = document.getElementById('chat-messages');
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        // 临时重置用户滚动状态，确保接下来的消息能够自动滚动
+        userScrolling = false;
+
+        let assistantMessage = '';
+        let reasoningContent = '';  // 添加思考内容变量
+        const messageIndex = currentConversation.messages.length;
+        
+        // 创建消息元素
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message assistant-message';
+        messageDiv.setAttribute('data-message-index', messageIndex);
+
+        // 模型icon和模型信息
+        const iconRenderer = new IconRenderer(modelIcon);
+        const iconWrapper = document.createElement('div');
+        iconWrapper.className = 'model-icon-wrapper';
+        iconWrapper.setAttribute('data-model-icon', modelIcon);
+        iconWrapper.appendChild(iconRenderer.modelIcon);
+        messageDiv.appendChild(iconWrapper);
+        
+        const messageWrapper = document.createElement('div');
+        messageWrapper.className = 'message-wrapper';
+        
+        const messageContent = document.createElement('div');
+        messageContent.className = 'message-content';
+        messageContent.innerHTML = '';
+
+        // 创建思考框元素
+        const reasoningBox = new ReasoningBox(messageContent, md);
+        
+        const messageActions = document.createElement('div');
+        messageActions.className = 'message-actions';
+        
+        createRegenerateButton(messageIndex, messageActions, false);
+        
+        messageWrapper.appendChild(messageContent);
+        messageWrapper.appendChild(messageActions);
+        messageDiv.appendChild(messageWrapper);
+        chatMessages.appendChild(messageDiv);
+
+        // 重试循环
+        for (let attempt = 0; attempt < retryCount; attempt++) {
+            try {
+                console.log(`[${new Date().toISOString()}] 尝试发送消息 (${attempt + 1}/${retryCount}):`, {
                     conversation_id: currentConversationId,
                     model_id: selectedModel,
                     temperature: temperature,
-                    max_tokens: max_tokens
-                })
-            });
+                    max_tokens: max_tokens,
+                    networkType: navigator.connection?.type,
+                    networkSpeed: navigator.connection?.downlink
+                });
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        messages: messagesWithThinking, // 使用包含思考内容的消息
+                        conversation_id: currentConversationId,
+                        model_id: selectedModel,
+                        temperature: temperature,
+                        max_tokens: max_tokens
+                    })
+                });
 
-            const reader = response.body.getReader();
-            currentReader = reader;
-            const decoder = new TextDecoder();
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
 
-            // 在开始时声明 reasoningBox 变量
-            let reasoningBox = null;
-            
-            while (true) {
-                try {
-                    const { value, done } = await reader.read();
-                    if (done) {
-                        // 只有在存在 reasoningBox 时才标记完成
-                        if (reasoningBox) {
-                            reasoningBox.markGenerationComplete();
+                const reader = response.body.getReader();
+                currentReader = reader;
+                const decoder = new TextDecoder();
+
+                // 在开始时声明 reasoningBox 变量
+                let reasoningBox = null;
+                
+                while (true) {
+                    try {
+                        // 检查是否已手动停止生成
+                        if (generationStopped) {
+                            // 重置标志
+                            generationStopped = false;
+                            break;
                         }
-                        break;
-                    }
-                    
-                    const text = decoder.decode(value);
-                    const lines = text.split('\n');
-                    
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                const data = JSON.parse(line.slice(6));
-                                if (data.error) {
-                                    console.error('解析SSE数据出错:', data.error);
-                                    messageDiv.classList.add('error-message');
-                                    messageContent.innerHTML = md.render('发生错误，请重试\n'+data.error);
-                                    throw new Error(data.error);
-                                }
-                                
-                                // 处理思考内容
-                                if (data.reasoning_content) {
-                                    // 如果还没有创建 reasoningBox，创建一个
-                                    if (!reasoningBox) {
-                                        reasoningBox = new ReasoningBox(messageContent, md);
+                        
+                        const { value, done } = await reader.read();
+                        if (done) {
+                            // 只有在存在 reasoningBox 时才标记完成
+                            if (reasoningBox) {
+                                reasoningBox.markGenerationComplete();
+                            }
+                            break;
+                        }
+                        
+                        const text = decoder.decode(value);
+                        const lines = text.split('\n');
+                        
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.slice(6));
+                                    if (data.error) {
+                                        console.error('解析SSE数据出错:', data.error);
+                                        messageDiv.classList.add('error-message');
+                                        messageContent.innerHTML = md.render('发生错误，请重试\n'+data.error);
+                                        throw new Error(data.error);
                                     }
-                                    reasoningBox.appendContent(data.reasoning_content);
-                                } 
-                                // 处理正常内容
-                                else if (data.content) {
-                                    // 如果有 reasoningBox 且是第一次收到内容，标记思考完成
-                                    if (assistantMessage === '' && reasoningBox) {
+                                    
+                                    // 处理思考内容
+                                    if (data.reasoning_content) {
+                                        // 如果还没有创建 reasoningBox，创建一个
+                                        if (!reasoningBox) {
+                                            reasoningBox = new ReasoningBox(messageContent, md);
+                                        }
+                                        reasoningBox.appendContent(data.reasoning_content);
+                                    } 
+                                    // 处理正常内容
+                                    else if (data.content) {
+                                        // 如果有 reasoningBox 且是第一次收到内容，标记思考完成
+                                        if (assistantMessage === '' && reasoningBox) {
+                                            reasoningBox.markGenerationComplete();
+                                        }
+                                        assistantMessage += data.content;
+                                        // 创建或更新普通内容的容器
+                                        let textContentDiv = messageContent.querySelector('.text-content');
+                                        if (!textContentDiv) {
+                                            textContentDiv = document.createElement('div');
+                                            textContentDiv.className = 'text-content';
+                                            messageContent.appendChild(textContentDiv);
+                                        }
+                                        textContentDiv.innerHTML = md.render(assistantMessage);
+                                        initializeCodeBlocks(textContentDiv);
+                                        
+                                        // 检查并处理图片加载完成后的滚动
+                                        const images = textContentDiv.querySelectorAll('img');
+                                        if (images.length > 0) {
+                                            images.forEach(img => {
+                                                if (!img.complete) {
+                                                    img.onload = function() {
+                                                        ensureScrollToBottom(chatMessages);
+                                                    };
+                                                }
+                                            });
+                                        }
+                                        
+                                        // 使用新函数确保滚动到底部
+                                        ensureScrollToBottom(chatMessages);
+                                    }
+                                } catch (error) {
+                                    console.error('解析SSE数据出错:', error, '原始数据:', line);
+                                    messageDiv.classList.add('error-message');
+                                    messageContent.innerHTML = md.render('发生错误，请重试\n'+error.message);
+
+                                    if (reasoningBox) {
                                         reasoningBox.markGenerationComplete();
                                     }
-                                    assistantMessage += data.content;
-                                    // 创建或更新普通内容的容器
-                                    let textContentDiv = messageContent.querySelector('.text-content');
-                                    if (!textContentDiv) {
-                                        textContentDiv = document.createElement('div');
-                                        textContentDiv.className = 'text-content';
-                                        messageContent.appendChild(textContentDiv);
-                                    }
-                                    textContentDiv.innerHTML = md.render(assistantMessage);
-                                    applyCodeHighlight(textContentDiv);
-                                    // 立即滚动到最新内容
-                                    if (shouldAutoScroll(chatMessages)) {
-                                        textContentDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                                    }
+                                    throw error;
                                 }
-                            } catch (error) {
-                                console.error('解析SSE数据出错:', error, '原始数据:', line);
-                                messageDiv.classList.add('error-message');
-                                messageContent.innerHTML = md.render('发生错误，请重试\n'+error.message);
-
-                                if (reasoningBox) {
-                                    reasoningBox.markGenerationComplete();
-                                }
-                                throw error;
                             }
                         }
-                    }
-                } catch (error) {
-                    if (error.name === 'AbortError' || error.name === 'CancelError') {
-                        if (reasoningBox) {
-                            reasoningBox.markGenerationComplete();
+                    } catch (error) {
+                        if (error.name === 'AbortError' || error.name === 'CancelError') {
+                            if (reasoningBox) {
+                                reasoningBox.markGenerationComplete();
+                            }
+                            messageDiv.classList.add('error-message');
+                            console.log('Stream reading cancelled');
+                            break;
                         }
-                        messageDiv.classList.add('error-message');
-                        console.log('Stream reading cancelled');
-                        break;
+                        throw error;
                     }
-                    throw error;
                 }
-            }
 
-            // 成功接收到内容，保存到消息历史
-            if (assistantMessage.trim()) {
-                const thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : 0;
-                currentConversation.messages.push({ 
-                    role: "assistant", 
-                    content: assistantMessage,
-                    reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
-                    thinking_time: thinking_time,  // 保存思考时间
-                    modelIcon: modelIcon,
-                    modelId: selectedModel,
-                    versions: [{
+                // 成功接收到内容，保存到消息历史
+                if (assistantMessage.trim()) {
+                    const thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : 0;
+                    const reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null;
+                    
+                    currentConversation.messages.push({ 
+                        role: "assistant", 
                         content: assistantMessage,
                         reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
-                        thinking_time: thinking_time,  // 保存思考时间到版本历史
-                        attachments: [],
-                        subsequentMessages: [],
+                        reasoning_summary: reasoning_summary, // 保存摘要
+                        thinking_time: thinking_time,  // 保存思考时间
                         modelIcon: modelIcon,
-                        modelId: selectedModel
-                    }],
-                    currentVersion: 0
-                });
-                await saveConversation(currentConversation.id, 'update');
-            }
-
-            // 如果成功，跳出重试循环
-            break;
-
-        } catch (error) {
-            console.error(`[${new Date().toISOString()}] 发送消息失败 (尝试 ${attempt + 1}/${retryCount}):`, {
-                error: error.message,
-                stack: error.stack,
-                networkStatus: navigator.onLine ? '在线' : '离线',
-                readyState: document.readyState
-            });
-
-            // 清理状态
-            if (currentReader) {
-                try {
-                    await currentReader.cancel();
-                } catch (e) {
-                    console.log('Error cancelling stream:', e);
+                        modelId: selectedModel,
+                        versions: [{
+                            content: assistantMessage,
+                            reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
+                            reasoning_summary: reasoning_summary, // 保存摘要到版本历史
+                            thinking_time: thinking_time,  // 保存思考时间到版本历史
+                            attachments: [],
+                            subsequentMessages: [],
+                            modelIcon: modelIcon,
+                            modelId: selectedModel
+                        }],
+                        currentVersion: 0
+                    });
+                    await saveConversation(currentConversation.id, 'update');
                 }
-                currentReader = null;
-            }
 
-            // 如果是最后一次尝试，显示错误
-            if (attempt === retryCount - 1) {
-                messageDiv.classList.add('error-message');
-                messageContent.innerHTML = md.render('发生错误，请重试\n' + error.message);
-                messageActions.innerHTML = '';
-                createRegenerateButton(messageIndex, messageActions, true);
-                error = true;
-            } else {
-                // 等待一段时间后重试
-                console.log(`[${new Date().toISOString()}] 等待 ${retryDelay}ms 后重试...`);
-                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                // 如果成功，跳出重试循环
+                break;
+
+            } catch (error) {
+                console.error(`[${new Date().toISOString()}] 发送消息失败 (尝试 ${attempt + 1}/${retryCount}):`, {
+                    error: error.message,
+                    stack: error.stack,
+                    networkStatus: navigator.onLine ? '在线' : '离线',
+                    readyState: document.readyState
+                });
+
+                // 清理状态
+                if (currentReader) {
+                    try {
+                        await currentReader.cancel();
+                    } catch (e) {
+                        console.log('Error cancelling stream:', e);
+                    }
+                    currentReader = null;
+                }
+
+                // 如果是最后一次尝试，显示错误
+                if (attempt === retryCount - 1) {
+                    messageDiv.classList.add('error-message');
+                    messageContent.innerHTML = md.render('发生错误，请重试\n' + error.message);
+                    messageActions.innerHTML = '';
+                    createRegenerateButton(messageIndex, messageActions, true);
+                    error = true;
+                } else {
+                    // 等待一段时间后重试
+                    console.log(`[${new Date().toISOString()}] 等待 ${retryDelay}ms 后重试...`);
+                    await new Promise(resolve => setTimeout(resolve, retryDelay));
+                }
             }
         }
-    }
 
-    // 最终清理
-    if (currentReader) {
-        try {
-            await currentReader.cancel();
-        } catch (e) {
-            console.log('Error cancelling stream:', e);
+        // 最终清理
+        if (currentReader) {
+            try {
+                await currentReader.cancel();
+            } catch (e) {
+                console.log('Error cancelling stream:', e);
+            }
+            currentReader = null;
         }
-        currentReader = null;
+        
+        userInput.disabled = false;
+        sendButton.textContent = '发送';
+        sendButton.classList.remove('stop');
+        sendButton.disabled = false;
+        userInput.focus();
+    } finally {
+        // 确保在所有情况下都将生成状态设为false
+        window.isGenerating = false;
     }
-    
-    userInput.disabled = false;
-    sendButton.textContent = '发送';
-    sendButton.classList.remove('stop');
-    sendButton.disabled = false;
-    userInput.focus();
 }
 
 // 将拖拽相关的代码移到单独的函数中
@@ -1293,6 +1437,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     initializeTheme(); // 添加主题初始化
     initializeUserProfile(); // 添加用户配置初始化
     
+    // 确保页面中所有已有的代码块都正确渲染
+    document.querySelectorAll('.text-content').forEach(textContent => {
+        initializeCodeBlocks(textContent);
+    });
+    
     // 等待模型列表加载完成
     const modelSelect = document.getElementById('model-select');
     if (!modelSelect.options.length) {
@@ -1351,17 +1500,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 获取当前的设置值
             const currentSettings = window.modelSettingRenderer.getSettings();
             
-            // 计算新的 current_output_tokens：
-            // 如果当前值超过新的最大值，使用新的最大值
-            // 否则保持当前值
-            const newCurrentTokens = currentSettings.current_output_tokens > newMaxTokens 
-                ? newMaxTokens 
-                : currentSettings.current_output_tokens;
+            // 始终重置为新模型max_token的一半
+            const newCurrentTokens = Math.floor(newMaxTokens / 2);
 
             window.modelSettingRenderer.setSettings({
                 max_output_tokens: newMaxTokens,
                 default_output_tokens: Math.floor(newMaxTokens / 2),
-                current_output_tokens: newCurrentTokens,  // 使用计算后的值
+                current_output_tokens: newCurrentTokens,  // 使用新计算的值
                 temperature: currentSettings.temperature // 保持当前的温度值
             });
         }
@@ -1391,13 +1536,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 添加滚动事件监听
     chatMessages.addEventListener('scroll', () => {
         const currentScrollTop = chatMessages.scrollTop;
+        
+        // 如果滚动位置发生变化
         if (currentScrollTop !== lastScrollTop) {
-            userScrolling = true;
-            clearTimeout(window.scrollTimeout);
-            window.scrollTimeout = setTimeout(() => {
+            // 检测是否接近底部（在底部20px范围内）
+            const isVeryNearBottom = chatMessages.scrollHeight - currentScrollTop - chatMessages.clientHeight < 20;
+            
+            // 检测是否是向上滚动（远离底部）
+            const isScrollingUp = currentScrollTop < lastScrollTop;
+            
+            // 如果向上滚动或不在底部附近，标记为用户滚动
+            if (isScrollingUp || !isVeryNearBottom) {
+                userScrolling = true;
+                clearTimeout(window.scrollTimeout);
+                window.scrollTimeout = setTimeout(() => {
+                    // 只有当停止滚动超过2秒，才重置用户滚动状态
+                    userScrolling = false;
+                }, 2000);
+            } else if (isVeryNearBottom) {
+                // 如果用户主动滚动到了底部，可以恢复自动滚动
                 userScrolling = false;
-            }, 1000);
+            }
         }
+        
         lastScrollTop = currentScrollTop;
     });
 
@@ -1410,25 +1571,83 @@ document.addEventListener('DOMContentLoaded', async () => {
 // 添加复制代码功能
 function copyCode(button) {
     const pre = button.parentElement.nextElementSibling;
+    if (!pre) {
+        console.error('找不到pre元素');
+        return;
+    }
+    
     const code = pre.querySelector('code');
-    const text = code.innerText;
+    if (!code) {
+        console.error('找不到code元素');
+        return;
+    }
+    
+    const text = code.innerText || code.textContent;
+    
+    try {
+        // 使用传统剪贴板API作为备选方案
+        if (!navigator.clipboard) {
+            fallbackCopyTextToClipboard(text, button);
+            return;
+        }
+        
+        navigator.clipboard.writeText(text)
+            .then(() => {
+                button.textContent = '已复制！';
+                button.classList.add('copied');
+                
+                setTimeout(() => {
+                    button.textContent = '复制代码';
+                    button.classList.remove('copied');
+                }, 2000);
+            })
+            .catch(err => {
+                console.error('复制失败:', err);
+                fallbackCopyTextToClipboard(text, button);
+            });
+    } catch (err) {
+        console.error('复制出错:', err);
+        fallbackCopyTextToClipboard(text, button);
+    }
+}
 
-    navigator.clipboard.writeText(text).then(() => {
-        button.textContent = '已复制！';
-        button.classList.add('copied');
+// 添加传统复制方法作为备选
+function fallbackCopyTextToClipboard(text, button) {
+    try {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        
+        // 避免滚动到底部
+        textArea.style.top = "0";
+        textArea.style.left = "0";
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        if (successful) {
+            button.textContent = '已复制！';
+            button.classList.add('copied');
+        } else {
+            button.textContent = '复制失败';
+        }
         
         setTimeout(() => {
             button.textContent = '复制代码';
             button.classList.remove('copied');
         }, 2000);
-    }).catch(err => {
-        console.error('复制失败:', err);
+    } catch (err) {
+        console.error('备选复制方法失败:', err);
         button.textContent = '复制失败';
-        
         setTimeout(() => {
             button.textContent = '复制代码';
         }, 2000);
-    });
+    }
 }
 
 // 确保 copyCode 函数在全局范围可用
@@ -1441,279 +1660,315 @@ async function regenerateMessage(messageIndex) {
         sendButton.disabled = false;
     }
 
-    // 获取当前消息元素
-    const messageDiv = chatMessages.children[messageIndex];
-    // 添加regenerating标记
-    messageDiv.classList.add('regenerating');
-    
-    // 隐藏重新生成按钮
-    const regenerateBtn = messageDiv.querySelector('.regenerate-btn');
-    if (regenerateBtn) {
-        regenerateBtn.style.display = 'none';
-    }
-    
-    const messageContent = messageDiv.querySelector('.message-content');
-    
-    // 清空所有内容
-    messageContent.innerHTML = '';
-    
-    // 创建思考框
-    const reasoningBox = new ReasoningBox(messageContent, md);
-    
-    // 创建文本内容容器
-    const textContent = document.createElement('div');
-    textContent.className = 'text-content';
-    messageContent.appendChild(textContent);
-    
-    if (!currentConversationId) return;
-    
-    const currentConversation = conversations.find(c => c.id === currentConversationId);
-    if (!currentConversation) return;
-    
-    const message = currentConversation.messages[messageIndex];
-    if (!message || message.role !== 'assistant') return;
-    
-    // 保存后续消息
-    const subsequentMessages = currentConversation.messages.slice(messageIndex + 1);
-    
-    // 初始化versions数组(如果不存在)，现在包含完整的消息对象
-    if (!message.versions) {
-        message.versions = [{
-            content: message.content,
-            attachments: message.attachments || [],
-            subsequentMessages: subsequentMessages,  // 保存后续消息
-            modelIcon: message.modelIcon,  // 保存原始版本的模型信息
-            modelId: message.modelId
-        }];
-        message.currentVersion = 0;
-    }
-    
-    // 获取到指定消息之前的所有消息，包括附件
-    const messagesUntilIndex = currentConversation.messages.slice(0, messageIndex);
-    console.log('Messages until index:', messagesUntilIndex); // 调试日志
-    
-    // 设置messages数组用于API请求
-    messages = [
-        {"role": "system", "content": currentConversation.systemPrompt || default_system_prompt},
-        ...messagesUntilIndex
-    ];
-    
-    // 禁用发送按钮，显示停止按钮
-    sendButton.textContent = '停止';
-    sendButton.classList.add('stop');
-    sendButton.disabled = false;  // 确保停止按钮可点击
-    userInput.disabled = false;  // 禁用输入框
+    // 设置内容生成状态为true
+    window.isGenerating = true;
     
     try {
-        // 获取选中的模型ID和图标信息
-        const modelSelect = document.getElementById('model-select');
-        const selectedOption = modelSelect.options[modelSelect.selectedIndex];
-        const selectedModel = modelSelect.value;
-        const modelIcon = selectedOption.getAttribute('data-model-icon');
-        // 获取模型设置参数
-        const modelSettings = window.modelSettingRenderer.getSettings();
-        if (!selectedModel) {
-            alert('请选择一个模型');
-            return;
-        }
-
-        const response = await fetch('/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-                messages: messages,
-                conversation_id: currentConversationId,
-                model_id: selectedModel,
-                temperature: modelSettings.temperature,
-                max_tokens: modelSettings.current_output_tokens
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        // 保存 reader 对象以便能够中断它
-        const reader = response.body.getReader();
-        currentReader = reader;
-        const decoder = new TextDecoder();
+        // 获取当前消息元素
+        const messageDiv = chatMessages.children[messageIndex];
+        // 添加regenerating标记
+        messageDiv.classList.add('regenerating');
         
-        let assistantMessage = '';
+        // 移除错误状态
+        messageDiv.classList.remove('error-message');
+        
+        // 隐藏重新生成按钮
+        const regenerateBtn = messageDiv.querySelector('.regenerate-btn');
+        if (regenerateBtn) {
+            regenerateBtn.style.display = 'none';
+        }
+        
+        const messageContent = messageDiv.querySelector('.message-content');
+        
+        // 清空所有内容
+        messageContent.innerHTML = '';
+        
+        // 创建思考框
+        const reasoningBox = new ReasoningBox(messageContent, md);
+        
+        // 创建文本内容容器
+        const textContent = document.createElement('div');
+        textContent.className = 'text-content';
+        messageContent.appendChild(textContent);
+        
+        if (!currentConversationId) return;
+        
+        const currentConversation = conversations.find(c => c.id === currentConversationId);
+        if (!currentConversation) return;
+        
+        const message = currentConversation.messages[messageIndex];
+        if (!message || message.role !== 'assistant') return;
+        
+        // 保存后续消息
+        const subsequentMessages = currentConversation.messages.slice(messageIndex + 1);
+        
+        // 初始化versions数组(如果不存在)，现在包含完整的消息对象
+        if (!message.versions) {
+            message.versions = [{
+                content: message.content,
+                attachments: message.attachments || [],
+                subsequentMessages: subsequentMessages,  // 保存后续消息
+                modelIcon: message.modelIcon,  // 保存原始版本的模型信息
+                modelId: message.modelId
+            }];
+            message.currentVersion = 0;
+        }
+        
+        // 获取到指定消息之前的所有消息，包括附件
+        const messagesUntilIndex = currentConversation.messages.slice(0, messageIndex);
+        console.log('Messages until index:', messagesUntilIndex); // 调试日志
+        
+        // 设置messages数组用于API请求
+        messages = [
+            {"role": "system", "content": currentConversation.systemPrompt || default_system_prompt},
+            ...messagesUntilIndex
+        ];
+        
+        // 禁用发送按钮，显示停止按钮
+        sendButton.textContent = '停止';
+        sendButton.classList.add('stop');
+        sendButton.disabled = false;  // 确保停止按钮可点击
+        userInput.disabled = false;  // 禁用输入框
+        
+        try {
+            // 获取选中的模型ID和图标信息
+            const modelSelect = document.getElementById('model-select');
+            const selectedOption = modelSelect.options[modelSelect.selectedIndex];
+            const selectedModel = modelSelect.value;
+            const modelIcon = selectedOption.getAttribute('data-model-icon');
+            // 获取模型设置参数
+            const modelSettings = window.modelSettingRenderer.getSettings();
+            if (!selectedModel) {
+                alert('请选择一个模型');
+                return;
+            }
 
-        // 循环读取响应流
-        while (true) {
-            try {
-                const { value, done } = await reader.read();
-                if (done) {
-                    if (reasoningBox) {
-                        reasoningBox.markGenerationComplete();
+            // 更新消息元素中的模型图标
+            const iconWrapper = messageDiv.querySelector('.model-icon-wrapper');
+            if (iconWrapper) {
+                // 更新 data-model-icon 属性
+                iconWrapper.setAttribute('data-model-icon', modelIcon);
+                
+                // 清空现有图标
+                iconWrapper.innerHTML = '';
+                
+                // 创建新图标
+                const iconRenderer = new IconRenderer(modelIcon);
+                iconWrapper.appendChild(iconRenderer.modelIcon);
+            }
+
+            const response = await fetch('/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    messages: messages,
+                    conversation_id: currentConversationId,
+                    model_id: selectedModel,
+                    temperature: modelSettings.temperature,
+                    max_tokens: modelSettings.current_output_tokens
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            // 保存 reader 对象以便能够中断它
+            const reader = response.body.getReader();
+            currentReader = reader;
+            const decoder = new TextDecoder();
+            
+            let assistantMessage = '';
+
+            // 循环读取响应流
+            while (true) {
+                try {
+                    // 检查是否已手动停止生成
+                    if (generationStopped) {
+                        // 重置标志
+                        generationStopped = false;
+                        break;
                     }
-                    break;
-                }
-                
-                const text = decoder.decode(value);
-                const lines = text.split('\n');
-                
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        try {
-                            const data = JSON.parse(line.slice(6));
-                            if (data.error) {
-                                throw new Error(data.error);
-                            }
-                            
-                            // 处理思考内容
-                            if (data.reasoning_content) {
-                                if (!reasoningBox) {
-                                    reasoningBox = new ReasoningBox(messageContent, md);
+                    
+                    const { value, done } = await reader.read();
+                    if (done) {
+                        if (reasoningBox) {
+                            reasoningBox.markGenerationComplete();
+                        }
+                        break;
+                    }
+                    
+                    const text = decoder.decode(value);
+                    const lines = text.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                if (data.error) {
+                                    throw new Error(data.error);
                                 }
-                                reasoningBox.appendContent(data.reasoning_content);
-                            } 
-                            // 处理正常内容
-                            else if (data.content) {
-                                if (assistantMessage === '' && reasoningBox) {
+                                
+                                // 处理思考内容
+                                if (data.reasoning_content) {
+                                    if (!reasoningBox) {
+                                        reasoningBox = new ReasoningBox(messageContent, md);
+                                    }
+                                    reasoningBox.appendContent(data.reasoning_content);
+                                } 
+                                // 处理正常内容
+                                else if (data.content) {
+                                    if (assistantMessage === '' && reasoningBox) {
+                                        reasoningBox.markGenerationComplete();
+                                    }
+                                    assistantMessage += data.content;
+                                    // 创建或更新普通内容的容器
+                                    let textContentDiv = messageContent.querySelector('.text-content');
+                                    if (!textContentDiv) {
+                                        textContentDiv = document.createElement('div');
+                                        textContentDiv.className = 'text-content';
+                                        messageContent.appendChild(textContentDiv);
+                                    }
+                                    textContentDiv.innerHTML = md.render(assistantMessage);
+                                    initializeCodeBlocks(textContentDiv);
+                                    if (shouldAutoScroll(chatMessages)) {
+                                        textContentDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                                    }
+                                }
+                            } catch (error) {
+                                if (reasoningBox) {
                                     reasoningBox.markGenerationComplete();
                                 }
-                                assistantMessage += data.content;
-                                // 创建或更新普通内容的容器
-                                let textContentDiv = messageContent.querySelector('.text-content');
-                                if (!textContentDiv) {
-                                    textContentDiv = document.createElement('div');
-                                    textContentDiv.className = 'text-content';
-                                    messageContent.appendChild(textContentDiv);
-                                }
-                                textContentDiv.innerHTML = md.render(assistantMessage);
-                                applyCodeHighlight(textContentDiv);
-                                if (shouldAutoScroll(chatMessages)) {
-                                    textContentDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                                }
+                                throw error;
                             }
-                        } catch (error) {
-                            if (reasoningBox) {
-                                reasoningBox.markGenerationComplete();
-                            }
-                            throw error;
                         }
                     }
-                }
-            } catch (error) {
-                if (error.name === 'AbortError' || error.name === 'CancelError') {
-                    if (reasoningBox) {
-                        reasoningBox.markGenerationComplete();
+                } catch (error) {
+                    if (error.name === 'AbortError' || error.name === 'CancelError') {
+                        if (reasoningBox) {
+                            reasoningBox.markGenerationComplete();
+                        }
+                        messageDiv.classList.add('error-message');
+                        console.log('Stream reading cancelled');
+                        break;
                     }
-                    messageDiv.classList.add('error-message');
-                    console.log('Stream reading cancelled');
-                    break;
+                    throw error;
                 }
-                throw error;
-            }
-        }
-        
-        if (assistantMessage.trim()) {
-            // 创建新版本，新版本不包含任何后续消息
-            const newVersion = {
-                content: assistantMessage,
-                reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
-                thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,  // 添加空值检查
-                attachments: message.attachments || [],
-                subsequentMessages: [],
-                modelIcon: modelIcon,
-                modelId: selectedModel
-            };
-            
-            // 将新的版本添加到versions数组
-            message.versions.push(newVersion);
-            message.currentVersion = message.versions.length - 1;
-            
-            // 更新当前消息的内容和附件，但不更新模型信息
-            message.content = assistantMessage;
-            message.reasoning_content = reasoningBox ? reasoningBox.getContent() : null;
-            message.thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : null;  // 添加空值检查
-            message.attachments = newVersion.attachments;
-            
-            // 清除当前对话中这条消息后的所有消息
-            currentConversation.messages = currentConversation.messages.slice(0, messageIndex + 1);
-            
-            // 清除UI中的消息
-            while (chatMessages.children.length > messageIndex + 1) {
-                chatMessages.removeChild(chatMessages.lastChild);
             }
             
-            // 更新UI，添加版本控制
+            if (assistantMessage.trim()) {
+                // 创建新版本
+                const newVersion = {
+                    content: assistantMessage,
+                    reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
+                    reasoning_summary: reasoningBox ? reasoningBox.getSummary() : null, // 保存摘要到版本历史
+                    thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,  // 保存思考时间到版本历史
+                    attachments: [],
+                    subsequentMessages: message.versions[message.currentVersion].subsequentMessages,
+                    modelIcon: modelIcon, // 使用当前选择的模型图标
+                    modelId: selectedModel // 使用当前选择的模型ID
+                };
+                
+                // 添加到版本历史
+                message.versions.push(newVersion);
+                message.currentVersion = message.versions.length - 1;
+                
+                // 更新主消息
+                message.content = assistantMessage;
+                message.modelIcon = modelIcon; // 更新主消息的模型信息
+                message.modelId = selectedModel; // 更新主消息的模型ID
+                message.reasoning_content = reasoningBox ? reasoningBox.getContent() : null; // 保存思考内容
+                message.reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null; // 保存摘要
+                message.thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : null;  // 添加空值检查
+                message.attachments = newVersion.attachments;
+                
+                // 清除当前对话中这条消息后的所有消息
+                currentConversation.messages = currentConversation.messages.slice(0, messageIndex + 1);
+                
+                // 清除UI中的消息
+                while (chatMessages.children.length > messageIndex + 1) {
+                    chatMessages.removeChild(chatMessages.lastChild);
+                }
+                
+                // 更新UI，添加版本控制
+                const messageWrapper = messageDiv.querySelector('.message-wrapper');
+                const messageActions = messageWrapper.querySelector('.message-actions');
+                messageActions.innerHTML = '';
+                
+                // 先添加重新生成按钮
+                createRegenerateButton(messageIndex, messageActions, false);
+                
+                // 再添加版本控制
+                if (message.versions.length > 1) {
+                    createVersionControl(messageIndex, messageActions, message);
+                }
+                
+                // 保存对话
+                await saveConversation(currentConversation.id, 'update');
+            }
+            
+            // 清理状态
+            if (currentReader) {
+                currentReader = null;
+            }
+            userInput.disabled = false;
+            sendButton.textContent = '发送';
+            sendButton.classList.remove('stop');
+            sendButton.disabled = false;
+            
+            // 移除regenerating标记
+            messageDiv.classList.remove('regenerating');
+            
+        } catch (error) {
+            // 清理状态
+            if (currentReader) {
+                await currentReader.cancel();
+                currentReader = null;
+            }
+            userInput.disabled = false;
+            sendButton.textContent = '发送';
+            sendButton.classList.remove('stop');
+            sendButton.disabled = false;
+            
+            messageDiv.classList.add('error-message');
+            // 移除regenerating标记
+            messageDiv.classList.remove('regenerating');
+            messageContent.innerHTML = md.render('发生错误，请重试\n'+error.message);
+            
+            // 重新创建重新生成按钮
             const messageWrapper = messageDiv.querySelector('.message-wrapper');
             const messageActions = messageWrapper.querySelector('.message-actions');
             messageActions.innerHTML = '';
+            createRegenerateButton(messageIndex, messageActions, true);
+            throw error;
+        } finally {
+            // 清理状态
+            if (currentReader) {
+                try {
+                    await currentReader.cancel();
+                } catch (e) {
+                    console.log('Error cancelling stream:', e);
+                }
+                currentReader = null;
+            }
+            userInput.disabled = false;
+            sendButton.textContent = '发送';
+            sendButton.classList.remove('stop');
+            sendButton.disabled = false;
             
-            // 先添加重新生成按钮
-            createRegenerateButton(messageIndex, messageActions, false);
-            
-            // 再添加版本控制
-            if (message.versions.length > 1) {
-                createVersionControl(messageIndex, messageActions, message);
+            // 移除regenerating标记
+            const messageDiv = chatMessages.children[messageIndex];
+            if (messageDiv) {
+                messageDiv.classList.remove('regenerating');
             }
             
-            // 保存对话
-            await saveConversation(currentConversation.id, 'update');
+            // 不再重复创建重新生成按钮，因为已经在前面创建过了
         }
-        
-        // 清理状态
-        if (currentReader) {
-            currentReader = null;
-        }
-        userInput.disabled = false;
-        sendButton.textContent = '发送';
-        sendButton.classList.remove('stop');
-        sendButton.disabled = false;
-        
-        // 移除regenerating标记
-        messageDiv.classList.remove('regenerating');
-        
-    } catch (error) {
-        // 清理状态
-        if (currentReader) {
-            await currentReader.cancel();
-            currentReader = null;
-        }
-        userInput.disabled = false;
-        sendButton.textContent = '发送';
-        sendButton.classList.remove('stop');
-        sendButton.disabled = false;
-        
-        messageDiv.classList.add('error-message');
-        // 移除regenerating标记
-        messageDiv.classList.remove('regenerating');
-        messageContent.innerHTML = md.render('发生错误，请重试\n'+error.message);
-        
-        // 重新创建重新生成按钮
-        const messageWrapper = messageDiv.querySelector('.message-wrapper');
-        const messageActions = messageWrapper.querySelector('.message-actions');
-        messageActions.innerHTML = '';
-        createRegenerateButton(messageIndex, messageActions, true);
-        throw error;
     } finally {
-        // 清理状态
-        if (currentReader) {
-            try {
-                await currentReader.cancel();
-            } catch (e) {
-                console.log('Error cancelling stream:', e);
-            }
-            currentReader = null;
-        }
-        userInput.disabled = false;
-        sendButton.textContent = '发送';
-        sendButton.classList.remove('stop');
-        sendButton.disabled = false;
-        
-        // 移除regenerating标记
-        const messageDiv = chatMessages.children[messageIndex];
-        if (messageDiv) {
-            messageDiv.classList.remove('regenerating');
-        }
-        
-        // 不再重复创建重新生成按钮，因为已经在前面创建过了
+        // 确保在所有情况下都将生成状态设为false
+        window.isGenerating = false;
     }
 }
 
@@ -2063,7 +2318,7 @@ async function editUserMessage(messageIndex, originalContent) {
                                     if (data.content) {
                                         assistantMessage += data.content;
                                         messageContent.innerHTML = md.render(assistantMessage);
-                                        applyCodeHighlight(messageContent);
+                                        initializeCodeBlocks(messageContent);
                                     }
                                 }
                             }
@@ -2173,15 +2428,38 @@ async function switchVersion(messageIndex, newVersion) {
     message.currentVersion = newVersion;
     const version = message.versions[newVersion];
 
+    // 更新模型图标
+    if (version.modelIcon) {
+        const iconWrapper = messageDiv.querySelector('.model-icon-wrapper');
+        if (iconWrapper) {
+            // 更新 data-model-icon 属性
+            iconWrapper.setAttribute('data-model-icon', version.modelIcon);
+            
+            // 清空现有图标
+            iconWrapper.innerHTML = '';
+            
+            // 创建新图标
+            const iconRenderer = new IconRenderer(version.modelIcon);
+            iconWrapper.appendChild(iconRenderer.modelIcon);
+        }
+    }
+
     // 清空现有内容
     messageContent.innerHTML = '';
 
     // 如果有思考内容，创建新的思考框
     if (version.reasoning_content) {
-        const reasoningBox = new ReasoningBox(messageContent, md);
-        reasoningBox.setContent(version.reasoning_content);
-        if (version.thinking_time) {
-            reasoningBox.setThinkingTime(version.thinking_time);
+        // 检查该消息使用的模型是否支持推理
+        const modelId = version.modelId;
+        // 只有当模型支持推理时才创建推理框
+        if (modelId && isReasonerModel(modelId)) {
+            const reasoningBox = new ReasoningBox(messageContent, md);
+            // 使用loadFromSerializedData加载数据
+            reasoningBox.loadFromSerializedData({
+                reasoning_content: version.reasoning_content,
+                reasoning_summary: version.reasoning_summary,
+                reasoning_time: version.thinking_time
+            });
         }
     }
 
@@ -2192,9 +2470,8 @@ async function switchVersion(messageIndex, newVersion) {
     messageContent.appendChild(textContent);
 
     // 应用代码高亮
-    textContent.querySelectorAll('pre code').forEach(block => {
-        hljs.highlightElement(block);
-    });
+    // 使用applyCodeHighlight函数而不是直接高亮，防止破坏代码块结构
+    initializeCodeBlocks(textContent);
 
     // 如果在底部，自动滚动
     const chatMessages = document.getElementById('chat-messages');
@@ -2431,40 +2708,64 @@ async function regenerateErrorMessage(messageIndex) {
         // 移除旧的错误消息（如果存在）
         const oldMessageDiv = chatMessages.querySelector(`[data-message-index="${messageIndex}"]`);
         if (oldMessageDiv) {
-            oldMessageDiv.remove();
-        }
-
-        // 创建并添加模型图标
-        const iconWrapper = document.createElement('div');
-        iconWrapper.className = 'model-icon-wrapper';
-        iconWrapper.setAttribute('data-model-icon', modelIcon);
-        const iconRenderer = new IconRenderer(modelIcon);
-        iconWrapper.appendChild(iconRenderer.modelIcon);
-        messageDiv.appendChild(iconWrapper);
-
-        // 创建消息包装器
-        const messageWrapper = document.createElement('div');
-        messageWrapper.className = 'message-wrapper';
-        
-        const messageContent = document.createElement('div');
-        messageContent.className = 'message-content';
-        messageContent.innerHTML = ''; // 初始化为空内容
-        
-        const messageActions = document.createElement('div');
-        messageActions.className = 'message-actions';
-        
-        // 添加重新生成按钮
-        createRegenerateButton(messageIndex, messageActions, false);
-        
-        messageWrapper.appendChild(messageContent);
-        messageWrapper.appendChild(messageActions);
-        messageDiv.appendChild(messageWrapper);
-        
-        // 插入到正确的位置
-        if (messageIndex < chatMessages.children.length) {
-            chatMessages.insertBefore(messageDiv, chatMessages.children[messageIndex]);
+            // 更新消息元素中的模型图标，而不是删除整个消息
+            const iconWrapper = oldMessageDiv.querySelector('.model-icon-wrapper');
+            if (iconWrapper) {
+                // 更新 data-model-icon 属性
+                iconWrapper.setAttribute('data-model-icon', modelIcon);
+                
+                // 清空现有图标
+                iconWrapper.innerHTML = '';
+                
+                // 创建新图标
+                const iconRenderer = new IconRenderer(modelIcon);
+                iconWrapper.appendChild(iconRenderer.modelIcon);
+            }
+            
+            // 清空消息内容，准备重新生成
+            const messageContent = oldMessageDiv.querySelector('.message-content');
+            if (messageContent) {
+                messageContent.innerHTML = '';
+            }
+            
+            // 移除错误状态
+            oldMessageDiv.classList.remove('error-message');
+            
+            // 使用现有的消息div而不是创建新的
+            messageDiv = oldMessageDiv;
         } else {
-            chatMessages.appendChild(messageDiv);
+            // 如果没有找到旧消息，创建并添加新的模型图标
+            const iconWrapper = document.createElement('div');
+            iconWrapper.className = 'model-icon-wrapper';
+            iconWrapper.setAttribute('data-model-icon', modelIcon);
+            const iconRenderer = new IconRenderer(modelIcon);
+            iconWrapper.appendChild(iconRenderer.modelIcon);
+            messageDiv.appendChild(iconWrapper);
+
+            // 创建消息包装器
+            const messageWrapper = document.createElement('div');
+            messageWrapper.className = 'message-wrapper';
+            
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-content';
+            messageContent.innerHTML = ''; // 初始化为空内容
+            
+            const messageActions = document.createElement('div');
+            messageActions.className = 'message-actions';
+            
+            // 添加重新生成按钮
+            createRegenerateButton(messageIndex, messageActions, false);
+            
+            messageWrapper.appendChild(messageContent);
+            messageWrapper.appendChild(messageActions);
+            messageDiv.appendChild(messageWrapper);
+            
+            // 插入到正确的位置
+            if (messageIndex < chatMessages.children.length) {
+                chatMessages.insertBefore(messageDiv, chatMessages.children[messageIndex]);
+            } else {
+                chatMessages.appendChild(messageDiv);
+            }
         }
 
         const response = await fetch('/chat', {
@@ -2510,6 +2811,13 @@ async function regenerateErrorMessage(messageIndex) {
         // 循环读取响应流
         while (true) {
             try {
+                // 检查是否已手动停止生成
+                if (generationStopped) {
+                    // 重置标志
+                    generationStopped = false;
+                    break;
+                }
+                
                 const { value, done } = await reader.read();
                 if (done) {
                     if (reasoningBox) {
@@ -2531,7 +2839,6 @@ async function regenerateErrorMessage(messageIndex) {
                             
                             // 处理思考内容
                             if (data.reasoning_content) {
-                                // 如果还没有创建 reasoningBox，创建一个
                                 if (!reasoningBox) {
                                     reasoningBox = new ReasoningBox(messageContent, md);
                                 }
@@ -2539,7 +2846,6 @@ async function regenerateErrorMessage(messageIndex) {
                             } 
                             // 处理正常内容
                             else if (data.content) {
-                                // 如果有 reasoningBox 且是第一次收到内容，标记思考完成
                                 if (assistantMessage === '' && reasoningBox) {
                                     reasoningBox.markGenerationComplete();
                                 }
@@ -2552,132 +2858,118 @@ async function regenerateErrorMessage(messageIndex) {
                                     messageContent.appendChild(textContentDiv);
                                 }
                                 textContentDiv.innerHTML = md.render(assistantMessage);
-                                applyCodeHighlight(textContentDiv);
+                                initializeCodeBlocks(textContentDiv);
                                 if (shouldAutoScroll(chatMessages)) {
-                                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                                    textContentDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
                                 }
                             }
                         } catch (error) {
-                            
-                            console.error('解析SSE数据出错:', error);
-                            messageDiv.classList.add('error-message');
-                            messageContent.innerHTML = md.render('发生错误，请重试\n' + error.message);
-                            
                             if (reasoningBox) {
                                 reasoningBox.markGenerationComplete();
                             }
-                            
-                            // 重新创建重新生成按钮
-                            messageActions.innerHTML = '';
-                            createRegenerateButton(messageIndex, messageActions, true);
                             throw error;
                         }
                     }
                 }
             } catch (error) {
                 if (error.name === 'AbortError' || error.name === 'CancelError') {
-                    // 清理状态
-                    if (currentReader) {
-                        await currentReader.cancel();
-                        currentReader = null;
-                    }
-                    userInput.disabled = false;
-                    sendButton.textContent = '发送';
-                    sendButton.classList.remove('stop');
-                    sendButton.disabled = false;
-                    
-                    messageDiv.classList.add('error-message');
-                    messageContent.innerHTML = md.render('生成被中断');
-                    
-                    // 重新创建重新生成按钮
-                    messageActions.innerHTML = '';
-                    createRegenerateButton(messageIndex, messageActions, true);
-                        
                     if (reasoningBox) {
                         reasoningBox.markGenerationComplete();
                     }
+                    messageDiv.classList.add('error-message');
                     console.log('Stream reading cancelled');
                     break;
                 }
-                // 清理状态
-                if (currentReader) {
-                    await currentReader.cancel();
-                    currentReader = null;
-                }
-                userInput.disabled = false;
-                sendButton.textContent = '发送';
-                sendButton.classList.remove('stop');
-                sendButton.disabled = false;
-                
-                messageDiv.classList.add('error-message');
-                messageContent.innerHTML = md.render('发生错误，请重试\n'+error.message);
-                
-                // 重新创建重新生成按钮
-                messageActions.innerHTML = '';
-                createRegenerateButton(messageIndex, messageActions, true);
                 throw error;
             }
         }
 
         // 成功接收到内容，保存到消息历史
         if (assistantMessage.trim()) {
-            // 检查是否已经存在助手消息
-            if (existingMessage && existingMessage.role === 'assistant') {
-                // 如果存在，更新现有消息
-                existingMessage.content = assistantMessage;
-                existingMessage.modelIcon = modelIcon;
-                existingMessage.modelId = selectedModel;
-                if (!existingMessage.versions) {
-                    existingMessage.versions = [];
-                }
-                existingMessage.versions.push({
-                    content: assistantMessage,
-                    attachments: [],
-                    subsequentMessages: [],
-                    modelIcon: modelIcon,
-                    modelId: selectedModel,
-                    reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
-                    thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null
-                });
-                existingMessage.currentVersion = existingMessage.versions.length - 1;
-            } else {
-                // 如果不存在，创建新消息
-                const newMessage = {
-                    role: "assistant",
-                    content: assistantMessage,
-                    modelIcon: modelIcon,
-                    modelId: selectedModel,
-                    versions: [{
-                        content: assistantMessage,
-                        reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
-                        thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,
-                        attachments: [],
-                        subsequentMessages: [],
-                        modelIcon: modelIcon,
-                        modelId: selectedModel
-                    }],
-                    currentVersion: 0
-                };
-// 替换或添加消息
-                if (messageIndex < currentConversation.messages.length) {
-                    currentConversation.messages[messageIndex] = newMessage;
-                } else {
-                    currentConversation.messages.push(newMessage);
-                }
+            // 创建新版本
+            const newVersion = {
+                content: assistantMessage,
+                reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
+                reasoning_summary: reasoningBox ? reasoningBox.getSummary() : null, // 保存摘要到版本历史
+                thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,  // 保存思考时间到版本历史
+                attachments: [],
+                subsequentMessages: message.versions[message.currentVersion].subsequentMessages,
+                modelIcon: modelIcon, // 使用当前选择的模型图标
+                modelId: selectedModel // 使用当前选择的模型ID
+            };
+            
+            // 添加到版本历史
+            message.versions.push(newVersion);
+            message.currentVersion = message.versions.length - 1;
+            
+            // 更新主消息
+            message.content = assistantMessage;
+            message.modelIcon = modelIcon; // 更新主消息的模型信息
+            message.modelId = selectedModel; // 更新主消息的模型ID
+            message.reasoning_content = reasoningBox ? reasoningBox.getContent() : null; // 保存思考内容
+            message.reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null; // 保存摘要
+            message.thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : null;  // 添加空值检查
+            message.attachments = newVersion.attachments;
+            
+            // 清除当前对话中这条消息后的所有消息
+            currentConversation.messages = currentConversation.messages.slice(0, messageIndex + 1);
+            
+            // 清除UI中的消息
+            while (chatMessages.children.length > messageIndex + 1) {
+                chatMessages.removeChild(chatMessages.lastChild);
             }
-
+            
+            // 更新UI，添加版本控制
+            const messageWrapper = messageDiv.querySelector('.message-wrapper');
+            const messageActions = messageWrapper.querySelector('.message-actions');
+            messageActions.innerHTML = '';
+            
+            // 先添加重新生成按钮
+            createRegenerateButton(messageIndex, messageActions, false);
+            
+            // 再添加版本控制
+            if (message.versions.length > 1) {
+                createVersionControl(messageIndex, messageActions, message);
+            }
+            
             // 保存对话
             await saveConversation(currentConversation.id, 'update');
         }
-
+        
+        // 清理状态
+        if (currentReader) {
+            currentReader = null;
+        }
+        userInput.disabled = false;
+        sendButton.textContent = '发送';
+        sendButton.classList.remove('stop');
+        sendButton.disabled = false;
+        
+        // 移除regenerating标记
+        messageDiv.classList.remove('regenerating');
+        
     } catch (error) {
-        console.error('重新生成消息时发生错误:', error);
+        // 清理状态
+        if (currentReader) {
+            await currentReader.cancel();
+            currentReader = null;
+        }
+        userInput.disabled = false;
+        sendButton.textContent = '发送';
+        sendButton.classList.remove('stop');
+        sendButton.disabled = false;
+        
         messageDiv.classList.add('error-message');
-        messageContent.innerHTML = md.render('发生错误，请重试\n' + error.message);
+        // 移除regenerating标记
+        messageDiv.classList.remove('regenerating');
+        messageContent.innerHTML = md.render('发生错误，请重试\n'+error.message);
         
         // 重新创建重新生成按钮
+        const messageWrapper = messageDiv.querySelector('.message-wrapper');
+        const messageActions = messageWrapper.querySelector('.message-actions');
         messageActions.innerHTML = '';
         createRegenerateButton(messageIndex, messageActions, true);
+        throw error;
     } finally {
         // 清理状态
         if (currentReader) {
@@ -2700,5 +2992,48 @@ async function regenerateErrorMessage(messageIndex) {
         }
         
         // 不再重复创建重新生成按钮，因为已经在前面创建过了
+    }
+}
+
+// 添加检测是否支持推理功能的工具函数
+function isReasonerModel(modelId) {
+    // 首先尝试从DOM中查找，速度更快
+    const modelOption = document.querySelector(`option[value="${modelId}"]`);
+    if (modelOption) {
+        const reasonerAttr = modelOption.getAttribute('data-reasoner');
+        if (reasonerAttr !== null) {
+            return reasonerAttr === 'true';
+        }
+    }
+    
+    // 尝试从选择器中查找所有option元素
+    const allOptions = document.querySelectorAll('#model-select option');
+    for (const option of allOptions) {
+        if (option.value === modelId) {
+            const reasonerAttr = option.getAttribute('data-reasoner');
+            return reasonerAttr === 'true';
+        }
+    }
+    
+    // 如果无法获取模型信息，默认返回false
+    return false;
+}
+
+// 添加一个确保滚动到底部的函数
+function ensureScrollToBottom(container) {
+    if (shouldAutoScroll(container)) {
+        // 立即滚动
+        container.scrollTop = container.scrollHeight;
+        
+        // 设置较少的延时滚动，以处理不同类型内容的加载时间差异
+        const delays = [50, 150];  // 减少延迟次数和间隔时间
+        delays.forEach(delay => {
+            setTimeout(() => {
+                // 再次检查是否应该滚动，以尊重用户可能的新滚动行为
+                if (shouldAutoScroll(container)) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            }, delay);
+        });
     }
 }

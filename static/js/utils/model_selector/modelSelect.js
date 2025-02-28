@@ -107,6 +107,10 @@ export async function fetchModels() {
                     const option = document.createElement('option');
                     option.setAttribute('data-model-icon', 'xai');
                     option.setAttribute('data-max-output-tokens', model.max_output_tokens);
+                    // 添加reasoner属性，如果存在
+                    if (model.reasoner !== undefined) {
+                        option.setAttribute('data-reasoner', model.reasoner);
+                    }
                     option.value = model.id;
                     option.textContent = `${model.name} - ${model.description}`;
                     xaiGroup.appendChild(option);
@@ -118,6 +122,10 @@ export async function fetchModels() {
                     item.setAttribute('data-value', model.id);
                     item.setAttribute('data-model-icon', 'xai');
                     item.setAttribute('data-max-output-tokens', model.max_output_tokens);
+                    // 添加reasoner属性，如果存在
+                    if (model.reasoner !== undefined) {
+                        item.setAttribute('data-reasoner', model.reasoner);
+                    }
                     
                     item.addEventListener('click', () => {
                         const allItems = customSelect.querySelectorAll('.option-item');
@@ -163,6 +171,10 @@ export async function fetchModels() {
                     const option = document.createElement('option');
                     option.setAttribute('data-model-icon', 'google');
                     option.setAttribute('data-max-output-tokens', model.max_output_tokens);
+                    // 添加reasoner属性，如果存在
+                    if (model.reasoner !== undefined) {
+                        option.setAttribute('data-reasoner', model.reasoner);
+                    }
                     option.value = model.id;
                     option.textContent = `${model.name} - ${model.description}`;
                     googleGroup.appendChild(option);
@@ -174,6 +186,10 @@ export async function fetchModels() {
                     item.setAttribute('data-value', model.id);
                     item.setAttribute('data-model-icon', 'google');
                     item.setAttribute('data-max-output-tokens', model.max_output_tokens);
+                    // 添加reasoner属性，如果存在
+                    if (model.reasoner !== undefined) {
+                        item.setAttribute('data-reasoner', model.reasoner);
+                    }
                     
                     item.addEventListener('click', () => {
                         const allItems = customSelect.querySelectorAll('.option-item');
@@ -219,6 +235,10 @@ export async function fetchModels() {
                     const option = document.createElement('option');
                     option.setAttribute('data-model-icon', 'deepseek');
                     option.setAttribute('data-max-output-tokens', model.max_output_tokens);
+                    // 添加reasoner属性，如果存在
+                    if (model.reasoner !== undefined) {
+                        option.setAttribute('data-reasoner', model.reasoner);
+                    }
                     option.value = model.id;
                     option.textContent = `${model.name} - ${model.description}`;
                     deepseekGroup.appendChild(option);
@@ -230,6 +250,10 @@ export async function fetchModels() {
                     item.setAttribute('data-value', model.id);
                     item.setAttribute('data-model-icon', 'deepseek');
                     item.setAttribute('data-max-output-tokens', model.max_output_tokens);
+                    // 添加reasoner属性，如果存在
+                    if (model.reasoner !== undefined) {
+                        item.setAttribute('data-reasoner', model.reasoner);
+                    }
                     
                     item.addEventListener('click', () => {
                         const allItems = customSelect.querySelectorAll('.option-item');
@@ -275,6 +299,10 @@ export async function fetchModels() {
                     const option = document.createElement('option');
                     option.setAttribute('data-model-icon', 'siliconcloud');
                     option.setAttribute('data-max-output-tokens', model.max_output_tokens);
+                    // 添加reasoner属性，如果存在
+                    if (model.reasoner !== undefined) {
+                        option.setAttribute('data-reasoner', model.reasoner);
+                    }
                     option.value = model.id;
                     option.textContent = `${model.name} - ${model.description}`;
                     siliconcloudGroup.appendChild(option);
@@ -286,6 +314,10 @@ export async function fetchModels() {
                     item.setAttribute('data-value', model.id);
                     item.setAttribute('data-model-icon', 'siliconcloud');
                     item.setAttribute('data-max-output-tokens', model.max_output_tokens);
+                    // 添加reasoner属性，如果存在
+                    if (model.reasoner !== undefined) {
+                        item.setAttribute('data-reasoner', model.reasoner);
+                    }
                     
                     item.addEventListener('click', () => {
                         const allItems = customSelect.querySelectorAll('.option-item');

@@ -8,7 +8,7 @@ export function initMarkdownit() {
             return `<div class="code-block-wrapper">
                 <div class="code-block-header">
                     <span>${lang || '代码'}</span>
-                    <button class="copy-button" onclick="copyCode(this)">复制代码</button>
+                    <button class="copy-button" data-action="copy">复制代码</button>
                 </div>
                 <pre><code class="language-${lang || 'plaintext'}">${md.utils.escapeHtml(str)}</code></pre>
             </div>`;
@@ -106,5 +106,41 @@ export function applyCodeHighlight(container) {
             // 如果高亮失败，至少确保基本样式
             block.className = 'hljs';
         }
+    });
+}
+
+// 添加代码高亮和复制功能的初始化函数
+export function initializeCodeBlocks(container) {
+    // 应用代码高亮
+    applyCodeHighlight(container);
+    
+    // 添加复制按钮事件监听
+    container.querySelectorAll('.code-block-header .copy-button[data-action="copy"]').forEach(button => {
+        // 移除可能的旧事件监听器
+        button.removeAttribute('onclick');
+        
+        // 添加新的事件监听
+        button.addEventListener('click', function() {
+            const pre = this.closest('.code-block-wrapper').querySelector('pre');
+            const code = pre.querySelector('code');
+            const text = code.innerText;
+
+            navigator.clipboard.writeText(text).then(() => {
+                this.textContent = '已复制！';
+                this.classList.add('copied');
+                
+                setTimeout(() => {
+                    this.textContent = '复制代码';
+                    this.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('复制失败:', err);
+                this.textContent = '复制失败';
+                
+                setTimeout(() => {
+                    this.textContent = '复制代码';
+                }, 2000);
+            });
+        });
     });
 }
