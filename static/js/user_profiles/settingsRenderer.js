@@ -139,7 +139,8 @@ export class SettingsRenderer {
             // 初始化设置对象
             this.settings = {
                 image_compression: false,
-                dark_theme: false
+                dark_theme: false,
+                enable_ocr: true
             };
 
             // 加载图片压缩设置
@@ -159,6 +160,13 @@ export class SettingsRenderer {
                 // 保存主题设置到本地存储，用于页面加载时立即应用
                 localStorage.setItem('theme', this.settings.dark_theme ? 'dark' : 'light');
             }
+            
+            // 加载OCR功能设置
+            const ocrResponse = await fetch('/api/user/settings/ocr_model');
+            if (ocrResponse.ok) {
+                const data = await ocrResponse.json();
+                this.settings.enable_ocr = data.enable_ocr;
+            }
         } catch (error) {
             console.error('加载设置失败:', error);
             showToast('加载设置失败', 'error');
@@ -174,10 +182,13 @@ export class SettingsRenderer {
                         <li class="settings-menu-item active" data-section="general">
                             通用设置
                         </li>
+                        <li class="settings-menu-item" data-section="model-features">
+                            模型功能
+                        </li>
                     </ul>
                 </div>
                 <div class="settings-content">
-                    <div class="settings-section" id="general-settings">
+                    <div class="settings-section" id="general-settings" style="display: block;">
                         <h2>通用设置</h2>
                         <div class="setting-item">
                             <div class="setting-label">
@@ -198,6 +209,21 @@ export class SettingsRenderer {
                             <label class="switch">
                                 <input type="checkbox" id="dark-theme-toggle"
                                        ${this.settings.dark_theme ? 'checked' : ''}>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-section" id="model-features-settings" style="display: none;">
+                        <h2>模型功能</h2>
+                        <div class="setting-item">
+                            <div class="setting-label">
+                                <div>OCR功能</div>
+                                <div class="setting-description">开启后，非视觉模型也可以识别图片中的文字</div>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="ocr-toggle"
+                                       ${this.settings.enable_ocr ? 'checked' : ''}>
                                 <span class="slider"></span>
                             </label>
                         </div>
@@ -278,6 +304,39 @@ export class SettingsRenderer {
                 }
             });
         }
+        
+        // OCR功能切换
+        const ocrToggle = document.getElementById('ocr-toggle');
+        if (ocrToggle) {
+            ocrToggle.addEventListener('change', async (e) => {
+                try {
+                    const response = await fetch('/api/user/settings/ocr_model', {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+                        },
+                        body: JSON.stringify({
+                            enable_ocr: e.target.checked
+                        })
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        // 更新本地状态
+                        this.settings.enable_ocr = data.enable_ocr;
+                        showToast('OCR功能设置已更新', 'success');
+                    } else {
+                        throw new Error('更新设置失败');
+                    }
+                } catch (error) {
+                    console.error('更新OCR功能设置失败:', error);
+                    showToast('更新设置失败', 'error');
+                    // 恢复原状态
+                    e.target.checked = !e.target.checked;
+                }
+            });
+        }
 
         // 侧边栏菜单项点击
         const menuItems = document.querySelectorAll('.settings-menu-item');
@@ -286,7 +345,17 @@ export class SettingsRenderer {
                 menuItems.forEach(i => i.classList.remove('active'));
                 item.classList.add('active');
                 this.currentSection = item.dataset.section;
-                // 这里可以添加切换不同设置部分的逻辑
+                
+                // 显示对应的设置部分，隐藏其他部分
+                const sections = document.querySelectorAll('.settings-section');
+                sections.forEach(section => {
+                    section.style.display = 'none';
+                });
+                
+                const activeSection = document.getElementById(`${this.currentSection}-settings`);
+                if (activeSection) {
+                    activeSection.style.display = 'block';
+                }
             });
         });
     }

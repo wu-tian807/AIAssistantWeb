@@ -16,7 +16,7 @@ from utils.files.file_config import ATTACHMENT_TYPES, AttachmentType
 from initialization import app, db, mail, xai_client, deepseek_client,gemini_pool,siliconcloud_client
 
 
-from utils.user_model import User
+from utils.user_model import User, DEFAULT_USER_SETTINGS
 from utils.conversation_model import Conversation
 
 from utils.wrapper import login_required
@@ -368,17 +368,22 @@ def chat():
     data = request.json
     messages = data.get('messages', [])
     conversation_id = data.get('conversation_id')
-    model_id = data.get('model_id', 'gemini-1.5-pro')
+    model_id = data.get('model_id', 'grok-2-latest')
     user_id = session.get('user_id')
     temperature = data.get('temperature', 0.7)
     max_tokens = data.get('max_tokens', 4096)
+    
+    # 从数据库获取用户设置
+    user = User.query.get(user_id)
+    enable_ocr = user.get_setting('enable_ocr', DEFAULT_USER_SETTINGS['enable_ocr']) if user else DEFAULT_USER_SETTINGS['enable_ocr']
 
     print(f"\n=== 聊天请求信息 ===")
     print(f"模型ID: {model_id}")
     print(f"会话ID: {conversation_id}")
     print(f"消息数量: {len(messages)}")
     print(f"用户ID: {user_id}")
-
+    print(f"OCR功能: {'启用' if enable_ocr else '禁用'}")
+    
     # 验证对话归属权
     if conversation_id:
         conversation = Conversation.query.filter_by(id=conversation_id, user_id=session['user_id']).first()
@@ -404,7 +409,7 @@ def chat():
     if not model_type:
         return jsonify({'error': '不支持的模型'}), 400
 
-    def process_message_with_attachments(message, model_type, model_support_list, user_id):
+    def process_message_with_attachments(message, model_type, model_support_list, user_id,enable_ocr):
         # 从配置中获取支持的图片类型
         from utils.files.file_config import MIME_TYPE_MAPPING, ATTACHMENT_TYPES, AttachmentType
         from utils.attachment_handler.image_handler import get_base64_by_id
@@ -500,7 +505,8 @@ def chat():
                                 attachment,
                                 model_type,
                                 processed_message,
-                                user_id  # 传递用户ID
+                                user_id,  # 传递用户ID
+                                enable_ocr  # 传递OCR功能状态
                             )
                         continue
                         
@@ -595,7 +601,8 @@ def chat():
                     msg, 
                     model_type, 
                     model_support_list, 
-                    user_id
+                    user_id,
+                    enable_ocr
                 )
                 processed_messages.append(processed_msg)
             

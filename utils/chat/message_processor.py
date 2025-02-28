@@ -608,7 +608,18 @@ def process_image_attachment_by_ocr(
     
     file_name = attachment.get('fileName', '未命名文件')
     file_path = attachment.get('file_path')
-    
+    if not enable_ocr:
+        print("OCR功能未开启，跳过OCR处理")
+        if model_type == 'openai':
+            processed_message['content'].append({
+                "type": "text",
+                "text": "[图片OCR结果 - "+file_name+"]\nOCR功能未开启，跳过OCR处理"
+            })
+        else:
+            processed_message['parts'].append({
+                "text": "[图片OCR结果 - "+file_name+"]\nOCR功能未开启，跳过OCR处理"
+            })
+        return
     if not file_path or not os.path.exists(file_path):
         error_text = f"[图片OCR失败：找不到文件 {file_name}]"
         if model_type == 'openai':

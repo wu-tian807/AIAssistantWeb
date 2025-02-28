@@ -128,8 +128,9 @@ def update_dark_theme_setting():
         db.session.rollback()
         print(f"更新夜间主题设置失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 #添加是否开启非视觉模型的OCR功能
-@user_settings.route('api/user/settings/ocr_model', methods=['GET'])
+@user_settings.route('/api/user/settings/ocr_model', methods=['GET'])
 @login_required
 def get_ocr_model_setting():
     """获取OCR模型设置"""
@@ -149,8 +150,9 @@ def get_ocr_model_setting():
     except Exception as e:
         print(f"获取OCR模型设置失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 #更新是否开启非视觉模型的OCR功能
-@user_settings.route('api/user/settings/ocr_model', methods=['PUT'])
+@user_settings.route('/api/user/settings/ocr_model', methods=['PUT'])
 @login_required
 def update_ocr_model_setting():
     """更新OCR模型设置"""
@@ -186,3 +188,4 @@ def update_ocr_model_setting():
     except Exception as e:
         db.session.rollback()
         print(f"更新OCR模型设置失败: {str(e)}")
+        return jsonify({'error': str(e)}), 500
