@@ -1308,7 +1308,8 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
         const messageActions = document.createElement('div');
         messageActions.className = 'message-actions';
         
-        createRegenerateButton(messageIndex, messageActions, false);
+        // 移除这行代码，不要在生成过程中添加重新生成按钮
+        // createRegenerateButton(messageIndex, messageActions, false);
         
         messageWrapper.appendChild(messageContent);
         messageWrapper.appendChild(messageActions);
@@ -1487,6 +1488,13 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
                         }],
                         currentVersion: 0
                     });
+                    
+                    // 生成完成后添加重新生成按钮
+                    const messageActions = messageDiv.querySelector('.message-actions');
+                    if (messageActions) {
+                        createRegenerateButton(messageIndex, messageActions, false);
+                    }
+                    
                     await saveConversation(currentConversation.id, 'update');
                 }
 

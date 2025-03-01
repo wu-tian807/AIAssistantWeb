@@ -28,6 +28,8 @@ export class EnhancedVisualToggle {
             this.listenForOcrSettingChanges();
             // 监听暗色模式变化
             this.listenForDarkModeChanges();
+            // 监听输入框内容变化
+            this.listenForInputChanges();
             this.initialized = true;
             console.log('增强视觉分析开关初始化完成');
         } catch (error) {
@@ -434,6 +436,52 @@ export class EnhancedVisualToggle {
             console.log('OCR设置状态检查完成:', this.ocrEnabled);
         } catch (error) {
             console.error('检查OCR设置状态时出错:', error);
+        }
+    }
+
+    /**
+     * 监听输入框内容变化
+     */
+    listenForInputChanges() {
+        try {
+            // 查找输入框元素
+            const userInput = document.getElementById('user-input');
+            if (!userInput) {
+                console.log('未找到用户输入框，无法监听输入变化');
+                return;
+            }
+            
+            // 监听输入事件 - 内容输入时触发
+            userInput.addEventListener('input', () => {
+                this.updatePosition();
+            });
+            
+            // 创建 ResizeObserver 监听输入框大小变化
+            const resizeObserver = new ResizeObserver(() => {
+                this.updatePosition();
+            });
+            
+            // 开始观察输入框大小变化
+            resizeObserver.observe(userInput);
+            
+            // 监听消息输入容器的变化
+            const messageInputContainer = document.querySelector('.message-input-container');
+            if (messageInputContainer) {
+                const containerObserver = new MutationObserver(() => {
+                    this.updatePosition();
+                });
+                
+                containerObserver.observe(messageInputContainer, { 
+                    attributes: true, 
+                    childList: true,
+                    subtree: true,
+                    characterData: true 
+                });
+            }
+            
+            console.log('已设置输入框变化监听器');
+        } catch (error) {
+            console.error('设置输入框变化监听器时出错:', error);
         }
     }
 }

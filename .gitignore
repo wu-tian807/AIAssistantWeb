@@ -54,3 +54,7 @@ Thumbs.db
 
 # 测试缓存
 test_cache/ 
+
+# __pycache__
+__pycache__/
+
