@@ -376,6 +376,7 @@ def chat():
     # 从数据库获取用户设置
     user = User.query.get(user_id)
     enable_ocr = user.get_setting('enable_ocr', DEFAULT_USER_SETTINGS['enable_ocr']) if user else DEFAULT_USER_SETTINGS['enable_ocr']
+    enhanced_visual = user.get_setting('enhanced_visual', DEFAULT_USER_SETTINGS['enhanced_visual']) if user else DEFAULT_USER_SETTINGS['enhanced_visual']
 
     print(f"\n=== 聊天请求信息 ===")
     print(f"模型ID: {model_id}")
@@ -409,11 +410,12 @@ def chat():
     if not model_type:
         return jsonify({'error': '不支持的模型'}), 400
 
-    def process_message_with_attachments(message, model_type, model_support_list, user_id,enable_ocr):
+    def process_message_with_attachments(message, model_type, model_support_list, user_id,enable_ocr,enhanced_visual):
         # 从配置中获取支持的图片类型
         from utils.files.file_config import MIME_TYPE_MAPPING, ATTACHMENT_TYPES, AttachmentType
         from utils.attachment_handler.image_handler import get_base64_by_id
         
+        image_ocr_tokens = (0.0,0.0)
         # 创建新的消息对象，只复制必要的字段
         processed_message = {
             'role': message.get('role', ''),
@@ -501,12 +503,13 @@ def chat():
                                 )
                         else:
                             print("模型不支持图片处理，使用OCR提取文本")
-                            process_image_attachment_by_ocr(
+                            image_ocr_tokens = process_image_attachment_by_ocr(
                                 attachment,
                                 model_type,
                                 processed_message,
                                 user_id,  # 传递用户ID
-                                enable_ocr  # 传递OCR功能状态
+                                enable_ocr,  # 传递OCR功能状态
+                                enhanced_visual  # 传递增强视觉分析状态
                             )
                         continue
                         
@@ -590,22 +593,25 @@ def chat():
                 "text": ""
             })
         
-        return processed_message
+        return processed_message,image_ocr_tokens
 
     def generate():
+        total_image_ocr_tokens = [0.0,0.0]
         try:
             # 处理消息列表
             processed_messages = []
             for msg in messages:
-                processed_msg = process_message_with_attachments(
+                processed_msg,image_ocr_tokens = process_message_with_attachments(
                     msg, 
                     model_type, 
                     model_support_list, 
                     user_id,
-                    enable_ocr
+                    enable_ocr,
+                    enhanced_visual
                 )
                 processed_messages.append(processed_msg)
-            
+                total_image_ocr_tokens[0] += image_ocr_tokens[0]
+                total_image_ocr_tokens[1] += image_ocr_tokens[1]
             # 初始化token计数器和累积输出
             token_counter = TokenCounter()
             accumulated_output = []
@@ -860,7 +866,9 @@ def chat():
                         model_name=model_id,
                         tokens_in=input_tokens,
                         cached_input_tokens=cached_input_tokens,
-                        tokens_out=output_tokens
+                        tokens_out=output_tokens,
+                        image_ocr_input_tokens=total_image_ocr_tokens[0],
+                        image_ocr_output_tokens=total_image_ocr_tokens[1]
                     )
                     usage.calculate_cost()
                     db.session.add(usage)
@@ -870,6 +878,7 @@ def chat():
                     print(f"Token计数方式: {'tiktoken预估' if use_estimated else '模型实际值'}")
                     print(f"输入token数: {input_tokens}, 命中缓存token数: {cached_input_tokens}, 成本: ${usage.input_cost:.6f}")
                     print(f"输出token数: {output_tokens}, 成本: ${usage.output_cost:.6f}")
+                    print(f"图片OCR输入token数: {total_image_ocr_tokens[0]}, 图片OCR输出token数: {total_image_ocr_tokens[1]}, 成本: ${usage.image_ocr_cost:.6f}")
                     print(f"总成本: ${usage.total_cost:.6f}")
                     
                     usage_info = {
@@ -877,6 +886,7 @@ def chat():
                         'input_tokens': input_tokens,
                         'output_tokens': output_tokens,
                         'total_tokens': input_tokens + output_tokens,
+                        'image_ocr_cost': usage.image_ocr_cost,
                         'input_cost': usage.input_cost,
                         'output_cost': usage.output_cost,
                         'total_cost': usage.total_cost,

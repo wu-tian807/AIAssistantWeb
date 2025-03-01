@@ -220,7 +220,11 @@ class ReasoningBox {
         setTimeout(() => {
             if (wasAtBottom) {
                 // 如果之前在底部，则滚动到新的底部
-                chatMessages.scrollTop = chatMessages.scrollHeight;
+                if (window.scrollToBottom) {
+                    window.scrollToBottom(false);
+                } else {
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
             } else {
                 // 计算内容高度变化
                 const newContentHeight = this.contentContainer.scrollHeight;
@@ -253,7 +257,11 @@ class ReasoningBox {
         setTimeout(() => {
             if (wasAtBottom) {
                 // 如果之前在底部，则滚动到新的底部
-                chatMessages.scrollTop = chatMessages.scrollHeight;
+                if (window.scrollToBottom) {
+                    window.scrollToBottom(false);
+                } else {
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
             }
         }, 50);
     }
@@ -474,7 +482,20 @@ class ReasoningBox {
     scrollIntoViewIfNeeded() {
         const chatMessages = document.getElementById('chat-messages');
         if (this.shouldAutoScroll(chatMessages)) {
-            this.container.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            // 使用更加平滑的滚动
+            setTimeout(() => {
+                if (window.scrollToBottom) {
+                    // 使用全局滚动函数
+                    window.scrollToBottom(true);
+                } else {
+                    // 后备方案
+                    this.container.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'end',
+                        inline: 'nearest'
+                    });
+                }
+            }, 10);
         }
     }
 

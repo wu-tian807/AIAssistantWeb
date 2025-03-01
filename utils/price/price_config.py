@@ -78,5 +78,9 @@ PRICE_CONFIG = {
     "deepseek-ai/DeepSeek-R1":{
         "input": 0.55,
         "output": 2.19
+    },
+    "qwen2.5-vl-72b-instruct":{
+        "input": 2.20,
+        "output": 6.59
     }
 }

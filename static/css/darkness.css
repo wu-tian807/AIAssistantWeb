@@ -571,3 +571,21 @@ body.dark-theme .version-btn:disabled {
     color: var(--dark-text-secondary);
     background-color: var(--dark-bg-primary);
 }
+
+/* 增强视觉分析开关暗色模式 */
+body.dark-theme .visual-tools-toolbar {
+    background: #2D3748;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+body.dark-theme .visual-tools-toolbar .toggle-label {
+    color: #e2e8f0;
+}
+
+body.dark-theme .visual-tools-toolbar .slider {
+    background-color: #4A5568;
+}
+
+body.dark-theme .visual-tools-toolbar input:checked + .slider {
+    background-color: #3182CE;
+}

@@ -1,4 +1,5 @@
 from utils.attachment_handler.image_handler import get_base64_by_id
+from utils.price.price_config import PRICE_CONFIG
 from initialization import aliyun_client
 DESCIRPTION_PROMPT = r"""
 你是一个图像分析专家，负责分析图片并生成详细的JSON描述。JSON结构必须包含以下字段：
@@ -271,5 +272,9 @@ def generate_image_summary(base_64_id, user_id,mime_type):
     summary = aliyun_client.chat.completions.create(
         model="qwen2.5-vl-72b-instruct",
         messages=contents)
-    return summary.choices[0].message.content
-print(DESCIRPTION_PROMPT)
+    #计算价格
+    print(summary.usage)
+    image_ocr_input_tokens = summary.usage.prompt_tokens
+    image_ocr_output_tokens = summary.usage.completion_tokens
+    return summary.choices[0].message.content,(image_ocr_input_tokens,image_ocr_output_tokens)
+#print(DESCIRPTION_PROMPT)

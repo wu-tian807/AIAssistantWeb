@@ -49,6 +49,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/latex.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/error-message.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/reasoning-box.css') }}">
+    <!-- 添加增强视觉分析开关样式 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/enhanced-visual-toggle.css') }}">
     <!-- 添加常用语言包 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/javascript.min.js"></script>
@@ -124,6 +126,7 @@
             </div>
             <div id="chat-messages" class="chat-messages"></div>
             <div id="message-input-container" class="message-input-container">
+                <!-- 视觉工具栏将由JS动态插入到这里 -->
                 <div id="attachment-preview" class="attachment-preview">
                     <!-- 附件预览将在这里动态添加 -->
                 </div>
@@ -141,6 +144,8 @@
     </div>
     <script type="module" src="{{ url_for('static', filename='js/script.js') }}"></script>
     <script type="module" src="{{ url_for('static', filename='js/inputRenderer.js') }}"></script>
+    <!-- 添加增强视觉分析开关脚本 -->
+    <script type="module" src="{{ url_for('static', filename='js/components/enhanced_visual_toggle.js') }}"></script>
     <script>
         // 移除原有的logout事件监听
     </script>

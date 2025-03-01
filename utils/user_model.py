@@ -7,6 +7,7 @@ DEFAULT_USER_SETTINGS = {
     'image_compression': True,  # 默认开启图片压缩
     'dark_theme': False,  # 默认关闭夜间主题
     'enable_ocr': True,  # 默认开启非视觉模型的OCR功能
+    'enhanced_visual': False,  # 默认关闭增强视觉分析
 }
 
 # 用户模型

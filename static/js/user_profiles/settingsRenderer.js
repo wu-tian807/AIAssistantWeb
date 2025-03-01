@@ -326,6 +326,15 @@ export class SettingsRenderer {
                         // 更新本地状态
                         this.settings.enable_ocr = data.enable_ocr;
                         showToast('OCR功能设置已更新', 'success');
+                        
+                        // 触发设置更新事件，通知其他组件（如增强视觉分析开关）
+                        const settingsEvent = new CustomEvent('settings-updated', {
+                            detail: {
+                                setting: 'enable_ocr',
+                                value: data.enable_ocr
+                            }
+                        });
+                        document.dispatchEvent(settingsEvent);
                     } else {
                         throw new Error('更新设置失败');
                     }

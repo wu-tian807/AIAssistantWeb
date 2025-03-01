@@ -189,3 +189,63 @@ def update_ocr_model_setting():
         db.session.rollback()
         print(f"更新OCR模型设置失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
+    
+#开启基于阿里云的Qwen2.5VL的视觉分析能力
+@user_settings.route('/api/user/settings/enhanced_visual', methods=['GET'])
+@login_required
+def get_enhanced_visual_setting():
+    """获取增强视觉分析设置"""
+    try:
+        if not verify_user_access(session['user_id']):
+            return jsonify({'error': '无权访问'}), 403
+        
+        user = User.query.get(session['user_id'])
+        if not user:
+            return jsonify({'error': '用户未找到'}), 404
+            
+        enhanced_visual = user.get_setting('enhanced_visual', DEFAULT_USER_SETTINGS['enhanced_visual'])
+        return jsonify({
+            'enhanced_visual': enhanced_visual
+        }), 200
+        
+    except Exception as e:
+        print(f"获取增强视觉分析设置失败: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@user_settings.route('/api/user/settings/enhanced_visual', methods=['PUT'])
+@login_required
+def update_enhanced_visual_setting():
+    """更新增强视觉分析设置"""
+    try:
+        if not verify_user_access(session['user_id']):
+            return jsonify({'error': '无权访问'}), 403
+        
+        # 验证CSRF Token
+        if request.headers.get('X-CSRF-Token') != session.get('csrf_token'):
+            return jsonify({'error': 'CSRF验证失败'}), 403
+        
+        user = User.query.get(session['user_id'])
+        if not user:
+            return jsonify({'error': '用户未找到'}), 404
+            
+        data = request.get_json()
+        if not isinstance(data, dict) or 'enhanced_visual' not in data:
+            return jsonify({'error': '无效的请求数据'}), 400
+            
+        enhanced_visual = bool(data['enhanced_visual'])
+        user.set_setting('enhanced_visual', enhanced_visual)
+        db.session.commit()
+
+        # 刷新用户数据以确保更新成功
+        db.session.refresh(user)
+        current_setting = user.get_setting('enhanced_visual')
+        
+        return jsonify({
+            'message': '增强视觉分析设置更新成功',
+            'enhanced_visual': current_setting
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"更新增强视觉分析设置失败: {str(e)}")
+        return jsonify({'error': str(e)}), 500

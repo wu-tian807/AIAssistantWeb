@@ -95,21 +95,22 @@
     margin-top: 0.25rem;
 }
 
-/* 开关按钮样式 */
-.switch {
+/* 设置模态框中的开关按钮样式 */
+.settings-container .switch {
     position: relative;
     display: inline-block;
     width: 60px;
     height: 34px;
+    margin-left: 10px;
 }
 
-.switch input {
+.settings-container .switch input {
     opacity: 0;
     width: 0;
     height: 0;
 }
 
-.slider {
+.settings-container .slider {
     position: absolute;
     cursor: pointer;
     top: 0;
@@ -121,7 +122,7 @@
     border-radius: 34px;
 }
 
-.slider:before {
+.settings-container .slider:before {
     position: absolute;
     content: "";
     height: 26px;
@@ -131,13 +132,18 @@
     background-color: white;
     transition: .4s;
     border-radius: 50%;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
-input:checked + .slider {
+.settings-container input:checked + .slider {
     background-color: var(--primary-color, #007AFF);
 }
 
-input:checked + .slider:before {
+.settings-container input:focus + .slider {
+    box-shadow: 0 0 2px var(--primary-color, #007AFF);
+}
+
+.settings-container input:checked + .slider:before {
     transform: translateX(26px);
 }
 
@@ -160,6 +166,15 @@ input:checked + .slider:before {
     background-color: var(--hover-color, rgba(0, 0, 0, 0.1));
 }
 
+/* 夜间模式下的开关样式 */
+.dark-mode .settings-container .slider {
+    background-color: #555;
+}
+
+.dark-mode .settings-container input:checked + .slider {
+    background-color: #0a84ff;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
     .settings-container {
@@ -180,5 +195,20 @@ input:checked + .slider:before {
     
     .settings-content {
         padding: 1rem;
+    }
+    
+    /* 移动端开关样式调整 */
+    .settings-container .switch {
+        width: 52px;
+        height: 30px;
+    }
+    
+    .settings-container .slider:before {
+        height: 22px;
+        width: 22px;
+    }
+    
+    .settings-container input:checked + .slider:before {
+        transform: translateX(22px);
     }
 }

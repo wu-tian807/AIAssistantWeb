@@ -2,22 +2,62 @@
 .error-message {
     border-left: 4px solid #ff4444 !important;
     background-color: #fff5f5;
+    padding: 15px !important;
+    border-radius: 8px;
+    text-align: center;
 }
 
 .error-message .message-content {
     color: #e53e3e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 10px;
+}
+
+.error-message .message-content .text-content {
+    margin-bottom: 20px;
+    font-size: 15px;
+    max-width: 80%;
 }
 
 .error-message .regenerate-btn {
     background-color: #ff4444;
     color: white;
     border: none;
-    padding: 5px 10px;
-    border-radius: 4px;
+    padding: 12px 24px;
+    border-radius: 8px;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: all 0.3s ease;
+    font-size: 16px;
+    font-weight: bold;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
 }
 
 .error-message .regenerate-btn:hover {
+    background-color: #e53e3e;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+/* 暗色模式适配 */
+body.dark-theme .error-message {
+    background-color: #2D3748;
+    border-left: 4px solid #ff4444 !important;
+}
+
+body.dark-theme .error-message .message-content {
+    color: #FEB2B2;
+}
+
+body.dark-theme .error-message .regenerate-btn {
+    background-color: #ff4444;
+}
+
+body.dark-theme .error-message .regenerate-btn:hover {
     background-color: #e53e3e;
 }

@@ -591,7 +591,8 @@ def process_image_attachment_by_ocr(
     model_type: str,
     processed_message: Dict[str, Any],
     user_id: str = None,
-    enable_ocr: bool = True
+    enable_ocr: bool = True,
+    enhanced_visual: bool = False
 ) -> None:
     """
     使用OCR处理图片附件，提取文本内容并添加到消息中
@@ -601,10 +602,13 @@ def process_image_attachment_by_ocr(
         model_type: 模型类型 ('openai' 或 'google')
         processed_message: 要处理的消息字典
         user_id: 用户ID，用于缓存OCR结果
+        enable_ocr: 是否开启OCR功能
+        enhanced_visual: 是否开启增强视觉分析
     """
     from utils.ocr.image_ocr import ImageOCR
     from utils.ocr.ocr_cache import OCRCache
     import os
+    image_ocr_tokens = (0.0,0.0)
     
     file_name = attachment.get('fileName', '未命名文件')
     file_path = attachment.get('file_path')
@@ -620,7 +624,7 @@ def process_image_attachment_by_ocr(
             processed_message['parts'].append({
                 "text": "[图片OCR结果 - "+file_name+"]\nOCR功能未开启，跳过OCR处理"
             })
-        return
+        return image_ocr_tokens
     #如果文件不存在，添加错误信息
     if not file_path or not os.path.exists(file_path):
         error_text = f"[图片OCR失败：找不到文件 {file_name}]"
@@ -633,7 +637,7 @@ def process_image_attachment_by_ocr(
             processed_message['parts'].append({
                 "text": error_text
             })
-        return
+        return image_ocr_tokens
         
     try:
         # 初始化OCR缓存
@@ -649,12 +653,11 @@ def process_image_attachment_by_ocr(
             print("使用缓存的OCR结果")
             extracted_text = cached_result
         else:
-            enable_ai_enhance = True#暂定为True，到时候会传参处理
             #如果开启了AI增强图片分析功能，则进入新的一层处理
-            if enable_ai_enhance:#暂定为True，到时候会传参处理
+            if enhanced_visual:
                 from utils.chat.picture_describer import generate_image_summary
                 mime_type = attachment.get('mime_type')#mime_type = attachment.get('mime_type')
-                extracted_text = generate_image_summary(attachment['base64_id'], user_id,mime_type)
+                extracted_text,image_ocr_tokens = generate_image_summary(attachment['base64_id'], user_id,mime_type)
                 print("执行基于Qwen2.5VL的OCR处理")
                 print("提取结果："+extracted_text)
                 # 保存OCR结果到缓存
@@ -670,7 +673,7 @@ def process_image_attachment_by_ocr(
                     processed_message['parts'].append({
                         "text": "[图片AI分析结果 - "+file_name+"]\n"+extracted_text
                     })
-                return
+                return image_ocr_tokens
             print("执行新的OCR处理")
             # 创建OCR实例并处理图片
             ocr = ImageOCR()
@@ -735,3 +738,4 @@ def process_image_attachment_by_ocr(
             processed_message['parts'].append({
                 "text": error_text
             })
+    return image_ocr_tokens

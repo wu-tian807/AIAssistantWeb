@@ -75,57 +75,102 @@ sendButton.addEventListener('click', () => {
 // 修改 stopGeneration 函数
 function stopGeneration() {
     if (currentReader) {
-        try {
-            currentReader.cancel(); // 取消读取流
-            // 设置标记表示生成已被手动停止
-            generationStopped = true;
-        } catch (error) {
-            console.log('Stream already closed or cancelled:', error);
-        }
+        generationStopped = true;
+        currentReader.cancel();
         currentReader = null;
-    }
-    
-    // 重置界面状态
-    sendButton.textContent = '发送';
-    sendButton.classList.remove('stop');
-    sendButton.disabled = !canSendMessage();
-    userInput.disabled = false;
-    
-    // 如果当前正在处理消息中，添加一个"[已停止]"标记
-    const pendingMessage = document.querySelector('.assistant-message:last-child .message-content');
-    if (pendingMessage && sendButton.textContent === '发送' && pendingMessage.parentElement.classList.contains('loading')) {
-        pendingMessage.parentElement.classList.remove('loading');
-        pendingMessage.innerHTML += '<p><em>[生成已停止]</em></p>';
         
-        // 停止生成后滚动到底部
-        const chatMessages = document.getElementById('chat-messages');
-        if (shouldAutoScroll(chatMessages)) {
-            setTimeout(() => {
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            }, 0);
+        // 更新UI状态
+        const sendButton = document.getElementById('send-button');
+        sendButton.textContent = '发送';
+        sendButton.classList.remove('stop');
+        sendButton.disabled = false;
+        
+        // 找到正在生成的消息
+        const regeneratingMessage = document.querySelector('.message.regenerating');
+        if (regeneratingMessage) {
+            // 移除regenerating标记
+            regeneratingMessage.classList.remove('regenerating');
+            
+            // 重新添加重新生成按钮
+            const messageActions = regeneratingMessage.querySelector('.message-actions');
+            if (messageActions) {
+                const messageIndex = regeneratingMessage.getAttribute('data-message-index');
+                if (messageIndex) {
+                    messageActions.innerHTML = '';
+                    createRegenerateButton(parseInt(messageIndex), messageActions, false);
+                }
+            }
         }
+        
+        // 重置生成状态
+        window.isGenerating = false;
     }
 }
 
 
 
-// 在文件开头添加一个新的变量来跟踪用户是否正在滚动
+// 改进滚动检测和控制
 let userScrolling = false;
 let lastScrollTop = 0;
+let scrollTimeout = null;
 // 添加内容生成状态标志
 window.isGenerating = false;
 
-// 在文件开头添加这个函数
-window.shouldAutoScroll = function(container) {
-    // 如果用户正在滚动，即使在内容生成中也不自动滚动
-    if (userScrolling) return false;
+// 初始化滚动监听
+document.addEventListener('DOMContentLoaded', function() {
+    const chatMessages = document.getElementById('chat-messages');
     
+    // 监听滚动事件
+    chatMessages.addEventListener('scroll', function() {
+        clearTimeout(scrollTimeout);
+        
+        // 检测用户是否主动滚动（向上滚动或非自动滚动导致的变化）
+        const currentScrollTop = chatMessages.scrollTop;
+        if (currentScrollTop < lastScrollTop) {
+            userScrolling = true;
+        }
+        
+        lastScrollTop = currentScrollTop;
+        
+        // 设置一个滚动停止检测定时器
+        scrollTimeout = setTimeout(function() {
+            // 如果滚动到接近底部，重置用户滚动状态
+            const scrollPosition = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight;
+            if (scrollPosition < 50) {
+                userScrolling = false;
+            }
+        }, 300);
+    });
+});
+
+// 改进的shouldAutoScroll函数
+window.shouldAutoScroll = function(container) {
     // 检查是否已经滚动到接近底部（距离底部100px以内）
     const scrollPosition = container.scrollHeight - container.scrollTop - container.clientHeight;
     const isNearBottom = scrollPosition < 100;
     
-    // 如果已在底部或内容生成中且不是用户主动滚动，则自动滚动
-    return isNearBottom || (window.isGenerating && !userScrolling);
+    // 正在生成内容且用户未主动滚动上方，或已经在底部附近，则允许自动滚动
+    if ((window.isGenerating && !userScrolling) || isNearBottom) {
+        return true;
+    }
+    
+    return false;
+};
+
+// 重置用户滚动状态的函数
+window.resetScrollState = function() {
+    userScrolling = false;
+    const chatMessages = document.getElementById('chat-messages');
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+};
+
+// 强制滚动到底部的函数
+window.scrollToBottom = function(smooth = true) {
+    const chatMessages = document.getElementById('chat-messages');
+    chatMessages.scrollTo({
+        top: chatMessages.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto'
+    });
 };
 
 // 向后兼容的函数引用
@@ -142,13 +187,43 @@ function createVersionControl(messageIndex, messageActions, message) {
     prevButton.className = 'version-btn';
     prevButton.textContent = '←';
     prevButton.disabled = message.currentVersion === 0;
-    prevButton.onclick = () => switchVersion(messageIndex, message.currentVersion - 1);
+    prevButton.onclick = (e) => {
+        e.preventDefault();
+        if (window.isGenerating || currentReader) {
+            showToast('正在生成内容，无法切换版本');
+            return;
+        }
+        if (message.currentVersion > 0) {
+            // 禁用按钮，防止重复点击
+            prevButton.disabled = true;
+            nextButton.disabled = true;
+            switchVersion(messageIndex, message.currentVersion - 1)
+                .finally(() => {
+                    // 操作完成后，按钮状态会在createVersionControl中重新设置
+                });
+        }
+    };
 
     const nextButton = document.createElement('button');
     nextButton.className = 'version-btn';
     nextButton.textContent = '→';
     nextButton.disabled = message.currentVersion === message.versions.length - 1;
-    nextButton.onclick = () => switchVersion(messageIndex, message.currentVersion + 1);
+    nextButton.onclick = (e) => {
+        e.preventDefault();
+        if (window.isGenerating || currentReader) {
+            showToast('正在生成内容，无法切换版本');
+            return;
+        }
+        if (message.currentVersion < message.versions.length - 1) {
+            // 禁用按钮，防止重复点击
+            prevButton.disabled = true;
+            nextButton.disabled = true;
+            switchVersion(messageIndex, message.currentVersion + 1)
+                .finally(() => {
+                    // 操作完成后，按钮状态会在createVersionControl中重新设置
+                });
+        }
+    };
 
     const versionText = document.createElement('span');
     versionText.className = 'version-text';
@@ -160,11 +235,14 @@ function createVersionControl(messageIndex, messageActions, message) {
 
     // 控制版本控制区域显示状态的函数
     const updateVisibility = () => {
-        const isGenerating = currentReader || sendButton.classList.contains('stop');
+        const isGenerating = window.isGenerating || currentReader || sendButton.classList.contains('stop');
         if (isGenerating) {
             versionControl.style.display = 'none';
         } else {
             versionControl.style.display = 'block';
+            // 更新按钮状态
+            prevButton.disabled = message.currentVersion === 0;
+            nextButton.disabled = message.currentVersion === message.versions.length - 1;
         }
     };
 
@@ -180,7 +258,6 @@ function createVersionControl(messageIndex, messageActions, message) {
     }, 100);
 
     messageActions.appendChild(versionControl);
-    return versionControl;
 }
 
 function createRegenerateButton(messageIndex, messageActions, isError = false) {
@@ -188,32 +265,55 @@ function createRegenerateButton(messageIndex, messageActions, isError = false) {
     regenerateBtn.className = 'regenerate-btn';
     regenerateBtn.innerHTML = '🔄 重新生成';
     
-    // 根据是否是错误消息选择不同的重新生成函数
-    regenerateBtn.onclick = isError ? 
-        () => regenerateErrorMessage(messageIndex) : 
-        () => regenerateMessage(messageIndex);
-    
-    // 控制按钮显示状态的函数
-    const updateButtonVisibility = () => {
-        // 检查是否正在生成（currentReader存在）或发送按钮处于停止状态
-        const isGenerating = currentReader || sendButton.classList.contains('stop');
-        regenerateBtn.style.display = isGenerating ? 'none' : 'inline-block';
+    regenerateBtn.onclick = () => {
+        const messageDiv = document.querySelector(`[data-message-index="${messageIndex}"]`);
+        if (!messageDiv) return;
+        
+        const messageContent = messageDiv.querySelector('.message-content');
+        if (!messageContent) return;
+        
+        // 禁用按钮，防止重复点击
+        regenerateBtn.disabled = true;
+        
+        // 清空现有内容
+        messageContent.innerHTML = '';
+        
+        // 移除错误状态
+        messageDiv.classList.remove('error-message');
+        
+        // 添加regenerating标记
+        messageDiv.classList.add('regenerating');
+        
+        // 隐藏重新生成按钮
+        regenerateBtn.style.display = 'none';
+        
+        // 如果是错误消息，获取实际需要使用的消息索引
+        let targetIndex = messageIndex;
+        if (isError) {
+            // 针对错误消息，我们需要确保使用正确的索引
+            // 如果是在 switchConversation 中自动添加的错误消息，
+            // 直接使用当前传入的 messageIndex，因为我们已经确保它是正确的值
+            const currentConversation = conversations.find(c => c.id === currentConversationId);
+            if (currentConversation && messageIndex >= currentConversation.messages.length) {
+                // 这是一个自动添加的错误消息，保持索引不变
+                targetIndex = messageIndex;
+            }
+        }
+        
+        // 根据是否是错误消息，决定调用哪个函数
+        (isError ? regenerateErrorMessage(targetIndex) : regenerateMessage(targetIndex))
+            .catch(err => {
+                console.error('重新生成消息失败:', err);
+                // 恢复按钮状态
+                regenerateBtn.disabled = false;
+                regenerateBtn.style.display = 'block';
+                messageDiv.classList.remove('regenerating');
+                messageDiv.classList.add('error-message');
+                messageContent.innerHTML = `<p>重新生成失败: ${err.message}</p>`;
+            });
     };
     
-    // 初始状态设置
-    updateButtonVisibility();
-    
-    // 定期检查状态
-    const visibilityInterval = setInterval(() => {
-        updateButtonVisibility();
-        // 如果按钮已被移除，清除定时器
-        if (!regenerateBtn.isConnected) {
-            clearInterval(visibilityInterval);
-        }
-    }, 100);
-    
     messageActions.appendChild(regenerateBtn);
-    return regenerateBtn;
 }
 
 // 从思考内容提取摘要，如果有
@@ -236,7 +336,7 @@ function extractSummaryFromThinking(reasoningData) {
 }
 
 // 修改后的 appendMessage 函数
-function appendMessage(content, isUser = false, messageIndex = null, attachments = [], modelInfo = null,error = false) {
+function appendMessage(content, isUser = false, messageIndex = null, attachments = [], modelInfo = null, error = false) {
     const messageDiv = document.createElement('div');
     // 先设置基本类名
     messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
@@ -250,13 +350,21 @@ function appendMessage(content, isUser = false, messageIndex = null, attachments
         if (!iconInfo && messageIndex !== null) {
             const currentConversation = conversations.find(c => c.id === currentConversationId);
             if (currentConversation && currentConversation.messages[messageIndex]) {
-                iconInfo = currentConversation.messages[messageIndex].modelIcon;
+                const message = currentConversation.messages[messageIndex];
+                iconInfo = {
+                    icon: message.modelIcon,
+                    id: message.modelId
+                };
             }
         }
-        const iconRenderer = new IconRenderer(iconInfo);
+        
+        // 确保iconInfo是一个对象，包含icon属性
+        let iconData = (iconInfo && iconInfo.icon) ? iconInfo.icon : iconInfo;
+        
+        const iconRenderer = new IconRenderer(iconData);
         const iconWrapper = document.createElement('div');
         iconWrapper.className = 'model-icon-wrapper';
-        iconWrapper.setAttribute('data-model-icon', iconInfo);
+        iconWrapper.setAttribute('data-model-icon', iconData);
         iconWrapper.appendChild(iconRenderer.modelIcon);
         messageDiv.appendChild(iconWrapper);
     }
@@ -407,22 +515,26 @@ function appendMessage(content, isUser = false, messageIndex = null, attachments
     //     hljs.highlightElement(block);
     // });
 
-    // 如果在底部，自动滚动
+    // 获取消息容器
     const chatMessages = document.getElementById('chat-messages');
-    if (shouldAutoScroll(chatMessages)) {
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
+    
     // 添加到消息容器
     chatMessages.appendChild(messageDiv);
     
-    // 再次检查并滚动到底部（确保在DOM更新后滚动到最新位置）
-    if (shouldAutoScroll(chatMessages) || isUser) {
-        // 对于用户消息，始终滚动到底部
-        // 使用setTimeout确保在DOM完全更新后执行滚动
+    // 使用增强的滚动函数确保滚动到底部且内容完全可见
+    ensureScrollToBottom(chatMessages);
+    
+    // 对于用户消息或强制滚动的情况，添加一个延迟滚动以确保内容完全加载后可见
+    if (isUser || window.isGenerating) {
         setTimeout(() => {
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }, 0);
+            ensureScrollToBottom(chatMessages);
+        }, 100);
+    }
+    
+    // 在所有消息完成渲染后，如果是机器人回复结束，重置生成状态
+    if (!isUser && !messageDiv.classList.contains('loading')) {
+        // 消息处理完成，重置生成状态
+        window.isGenerating = false;
     }
 }
 
@@ -682,6 +794,29 @@ async function loadConversations() {
         const data = await response.json();
         conversations = data.conversations || [];
         
+        // 修复数据结构：确保每个消息和版本都有正确的字段
+        conversations.forEach(conversation => {
+            if (conversation.messages) {
+                // 遍历所有消息
+                conversation.messages.forEach((message, index) => {
+                    // 处理版本数据
+                    if (message.versions && message.versions.length > 0) {
+                        // 确保每个版本都有subsequentMessages字段
+                        message.versions.forEach((version, versionIndex) => {
+                            if (!version.subsequentMessages) {
+                                version.subsequentMessages = [];
+                                
+                                // 如果是当前版本，保存之后的消息作为后续消息
+                                if (versionIndex === message.currentVersion) {
+                                    version.subsequentMessages = conversation.messages.slice(index + 1);
+                                }
+                            }
+                        });
+                    }
+                });
+            }
+        });
+        
         if (currentConversationId) {
             const currentConversation = conversations.find(c => c.id === currentConversationId);
             if (currentConversation) {
@@ -851,6 +986,61 @@ async function switchConversation(conversationId) {
         }
     });
     
+    // 检查最后一条消息是否为用户消息，如果是，则添加一个错误消息占位符并提供重新生成按钮
+    if (conversation.messages.length > 0) {
+        const lastMessage = conversation.messages[conversation.messages.length - 1];
+        if (lastMessage.role === 'user') {
+            // 创建一个错误消息占位符
+            const chatMessages = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message assistant-message error-message';
+            // 将索引设置为实际消息数量，而不是最后一条消息的索引
+            // 这样可以确保新生成的消息添加在用户消息之后，而不是覆盖用户消息
+            messageDiv.setAttribute('data-message-index', conversation.messages.length);
+            
+            // 添加模型图标元素
+            const modelSelect = document.getElementById('model-select');
+            const selectedOption = modelSelect.selectedOptions[0];
+            const modelIcon = selectedOption.getAttribute('data-model-icon');
+            const iconRenderer = new IconRenderer(modelIcon);
+            const iconWrapper = document.createElement('div');
+            iconWrapper.className = 'model-icon-wrapper';
+            iconWrapper.setAttribute('data-model-icon', modelIcon);
+            iconWrapper.appendChild(iconRenderer.modelIcon);
+            messageDiv.appendChild(iconWrapper);
+            
+            // 创建消息包装器
+            const messageWrapper = document.createElement('div');
+            messageWrapper.className = 'message-wrapper';
+            
+            // 创建消息内容
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-content';
+            
+            // 创建文本内容
+            const textContent = document.createElement('div');
+            textContent.className = 'text-content';
+            textContent.innerHTML = '<p>上次响应可能未完成或发生错误，点击重新生成按钮重新生成回复</p>';
+            messageContent.appendChild(textContent);
+            
+            // 创建操作按钮区域
+            const messageActions = document.createElement('div');
+            messageActions.className = 'message-actions';
+            messageActions.style.display = 'flex';
+            messageActions.style.justifyContent = 'center';
+            
+            // 创建重新生成按钮 - 确保使用正确的 messageIndex 参数
+            // 传递当前消息数量而不是用户消息的索引，确保新回复不会覆盖用户消息
+            createRegenerateButton(conversation.messages.length, messageActions, true);
+            
+            // 组装DOM结构
+            messageWrapper.appendChild(messageContent);
+            messageWrapper.appendChild(messageActions);
+            messageDiv.appendChild(messageWrapper);
+            chatMessages.appendChild(messageDiv);
+        }
+    }
+    
     // 重新应用代码高亮，确保所有代码块正确渲染
     document.querySelectorAll('.text-content').forEach(textContent => {
         // 重新应用代码高亮，但是只对包含code-block-wrapper的容器
@@ -953,10 +1143,13 @@ function clearAttachmentPreview() {
 }
 
 // 修改现有的sendMessage函数
-async function sendMessage(retryCount = 3, retryDelay = 1000) {
+async function sendMessage(retryCount = 1, retryDelay = 1000) {
     if (!canSendMessage()) return;
     
-    // 设置内容生成状态为true
+    // 重置滚动状态，确保新消息可以自动滚动
+    window.resetScrollState();
+    
+    // 设置状态为正在生成内容
     window.isGenerating = true;
     
     try {
@@ -1188,6 +1381,13 @@ async function sendMessage(retryCount = 3, retryDelay = 1000) {
                                         console.error('解析SSE数据出错:', data.error);
                                         messageDiv.classList.add('error-message');
                                         messageContent.innerHTML = md.render('发生错误，请重试\n'+data.error);
+                                        
+                                        // 添加重新生成按钮
+                                        const messageWrapper = messageDiv.querySelector('.message-wrapper');
+                                        const messageActions = messageWrapper.querySelector('.message-actions');
+                                        messageActions.innerHTML = '';
+                                        createRegenerateButton(messageIndex, messageActions, true);
+                                        
                                         throw new Error(data.error);
                                     }
                                     
@@ -1235,6 +1435,12 @@ async function sendMessage(retryCount = 3, retryDelay = 1000) {
                                     console.error('解析SSE数据出错:', error, '原始数据:', line);
                                     messageDiv.classList.add('error-message');
                                     messageContent.innerHTML = md.render('发生错误，请重试\n'+error.message);
+
+                                    // 添加重新生成按钮
+                                    const messageWrapper = messageDiv.querySelector('.message-wrapper');
+                                    const messageActions = messageWrapper.querySelector('.message-actions');
+                                    messageActions.innerHTML = '';
+                                    createRegenerateButton(messageIndex, messageActions, true);
 
                                     if (reasoningBox) {
                                         reasoningBox.markGenerationComplete();
@@ -1666,19 +1872,26 @@ async function regenerateMessage(messageIndex) {
     try {
         // 获取当前消息元素
         const messageDiv = chatMessages.children[messageIndex];
-        // 添加regenerating标记
+        if (!messageDiv) {
+            console.error('找不到消息元素');
+            return;
+        }
+        
+        // 立即移除错误状态并添加regenerating标记
+        messageDiv.classList.remove('error-message');
         messageDiv.classList.add('regenerating');
         
-        // 移除错误状态
-        messageDiv.classList.remove('error-message');
-        
-        // 隐藏重新生成按钮
+        // 找到重新生成按钮并隐藏
         const regenerateBtn = messageDiv.querySelector('.regenerate-btn');
         if (regenerateBtn) {
             regenerateBtn.style.display = 'none';
         }
         
         const messageContent = messageDiv.querySelector('.message-content');
+        if (!messageContent) {
+            console.error('找不到消息内容元素');
+            return;
+        }
         
         // 清空所有内容
         messageContent.innerHTML = '';
@@ -1691,13 +1904,29 @@ async function regenerateMessage(messageIndex) {
         textContent.className = 'text-content';
         messageContent.appendChild(textContent);
         
-        if (!currentConversationId) return;
+        if (!currentConversationId) {
+            showError('当前对话ID不存在');
+            return;
+        }
         
         const currentConversation = conversations.find(c => c.id === currentConversationId);
-        if (!currentConversation) return;
+        if (!currentConversation) {
+            showError('未找到当前对话');
+            return;
+        }
         
         const message = currentConversation.messages[messageIndex];
-        if (!message || message.role !== 'assistant') return;
+        if (!message || message.role !== 'assistant') {
+            showError('无法重新生成非助手消息');
+            // 移除regenerating标记
+            messageDiv.classList.remove('regenerating');
+            // 恢复重新生成按钮
+            if (regenerateBtn) {
+                regenerateBtn.disabled = false;
+                regenerateBtn.style.display = 'block';
+            }
+            return;
+        }
         
         // 保存后续消息
         const subsequentMessages = currentConversation.messages.slice(messageIndex + 1);
@@ -1712,6 +1941,16 @@ async function regenerateMessage(messageIndex) {
                 modelId: message.modelId
             }];
             message.currentVersion = 0;
+        } else {
+            // 确保当前版本保存了后续消息
+            if (message.versions[message.currentVersion]) {
+                message.versions[message.currentVersion].subsequentMessages = subsequentMessages;
+            }
+        }
+        
+        // 先清除UI中的后续消息
+        while (chatMessages.children.length > messageIndex + 1) {
+            chatMessages.removeChild(chatMessages.lastChild);
         }
         
         // 获取到指定消息之前的所有消息，包括附件
@@ -1808,6 +2047,16 @@ async function regenerateMessage(messageIndex) {
                             try {
                                 const data = JSON.parse(line.slice(6));
                                 if (data.error) {
+                                    console.error('重新生成时发生错误:', data.error);
+                                    messageDiv.classList.add('error-message');
+                                    messageContent.innerHTML = md.render('发生错误，请重试\n'+data.error);
+                                    
+                                    // 重新创建重新生成按钮
+                                    const messageWrapper = messageDiv.querySelector('.message-wrapper');
+                                    const messageActions = messageWrapper.querySelector('.message-actions');
+                                    messageActions.innerHTML = '';
+                                    createRegenerateButton(messageIndex, messageActions, true);
+                                    
                                     throw new Error(data.error);
                                 }
                                 
@@ -1841,6 +2090,16 @@ async function regenerateMessage(messageIndex) {
                                 if (reasoningBox) {
                                     reasoningBox.markGenerationComplete();
                                 }
+                                console.error('解析SSE数据出错:', error);
+                                messageDiv.classList.add('error-message');
+                                messageContent.innerHTML = md.render('发生错误，请重试\n'+error.message);
+                                
+                                // 重新创建重新生成按钮
+                                const messageWrapper = messageDiv.querySelector('.message-wrapper');
+                                const messageActions = messageWrapper.querySelector('.message-actions');
+                                messageActions.innerHTML = '';
+                                createRegenerateButton(messageIndex, messageActions, true);
+                                
                                 throw error;
                             }
                         }
@@ -1850,8 +2109,17 @@ async function regenerateMessage(messageIndex) {
                         if (reasoningBox) {
                             reasoningBox.markGenerationComplete();
                         }
-                        messageDiv.classList.add('error-message');
                         console.log('Stream reading cancelled');
+                        
+                        // 不要添加错误状态，只是取消了生成
+                        messageDiv.classList.remove('regenerating');
+                        
+                        // 重新创建重新生成按钮
+                        const messageWrapper = messageDiv.querySelector('.message-wrapper');
+                        const messageActions = messageWrapper.querySelector('.message-actions');
+                        messageActions.innerHTML = '';
+                        createRegenerateButton(messageIndex, messageActions, true);
+                        
                         break;
                     }
                     throw error;
@@ -1866,7 +2134,7 @@ async function regenerateMessage(messageIndex) {
                     reasoning_summary: reasoningBox ? reasoningBox.getSummary() : null, // 保存摘要到版本历史
                     thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,  // 保存思考时间到版本历史
                     attachments: [],
-                    subsequentMessages: message.versions[message.currentVersion].subsequentMessages,
+                    subsequentMessages: [], // 新版本不应该有后续消息，因为重新生成时已经清空了后续消息
                     modelIcon: modelIcon, // 使用当前选择的模型图标
                     modelId: selectedModel // 使用当前选择的模型ID
                 };
@@ -1886,11 +2154,6 @@ async function regenerateMessage(messageIndex) {
                 
                 // 清除当前对话中这条消息后的所有消息
                 currentConversation.messages = currentConversation.messages.slice(0, messageIndex + 1);
-                
-                // 清除UI中的消息
-                while (chatMessages.children.length > messageIndex + 1) {
-                    chatMessages.removeChild(chatMessages.lastChild);
-                }
                 
                 // 更新UI，添加版本控制
                 const messageWrapper = messageDiv.querySelector('.message-wrapper');
@@ -1943,31 +2206,23 @@ async function regenerateMessage(messageIndex) {
             messageActions.innerHTML = '';
             createRegenerateButton(messageIndex, messageActions, true);
             throw error;
-        } finally {
-            // 清理状态
-            if (currentReader) {
-                try {
-                    await currentReader.cancel();
-                } catch (e) {
-                    console.log('Error cancelling stream:', e);
-                }
-                currentReader = null;
-            }
-            userInput.disabled = false;
-            sendButton.textContent = '发送';
-            sendButton.classList.remove('stop');
-            sendButton.disabled = false;
-            
-            // 移除regenerating标记
-            const messageDiv = chatMessages.children[messageIndex];
-            if (messageDiv) {
-                messageDiv.classList.remove('regenerating');
-            }
-            
-            // 不再重复创建重新生成按钮，因为已经在前面创建过了
         }
     } finally {
-        // 确保在所有情况下都将生成状态设为false
+        // 清理状态
+        if (currentReader) {
+            try {
+                await currentReader.cancel();
+            } catch (e) {
+                console.log('Error cancelling stream:', e);
+            }
+            currentReader = null;
+        }
+        userInput.disabled = false;
+        sendButton.textContent = '发送';
+        sendButton.classList.remove('stop');
+        sendButton.disabled = false;
+        
+        // 重置内容生成状态
         window.isGenerating = false;
     }
 }
@@ -2405,105 +2660,173 @@ async function editUserMessage(messageIndex, originalContent) {
 
 // 添加切换版本的函数
 async function switchVersion(messageIndex, newVersion) {
+    // 如果正在生成内容，不允许切换版本
+    if (window.isGenerating || currentReader) {
+        console.log('正在生成内容，无法切换版本');
+        return;
+    }
+    
     const messageDiv = document.querySelector(`[data-message-index="${messageIndex}"]`);
     if (!messageDiv) return;
 
     const messageContent = messageDiv.querySelector('.message-content');
     if (!messageContent) return;
-
-    // 清除原有的思考框
-    const existingReasoningBox = messageContent.querySelector('.reasoning-box');
-    if (existingReasoningBox) {
-        messageContent.removeChild(existingReasoningBox);
-    }
-
-    // 获取当前消息
-    const currentConversation = conversations.find(c => c.id === currentConversationId);
-    if (!currentConversation) return;
-
-    const message = currentConversation.messages[messageIndex];
-    if (!message) return;
-
-    // 更新版本
-    message.currentVersion = newVersion;
-    const version = message.versions[newVersion];
-
-    // 更新模型图标
-    if (version.modelIcon) {
-        const iconWrapper = messageDiv.querySelector('.model-icon-wrapper');
-        if (iconWrapper) {
-            // 更新 data-model-icon 属性
-            iconWrapper.setAttribute('data-model-icon', version.modelIcon);
-            
-            // 清空现有图标
-            iconWrapper.innerHTML = '';
-            
-            // 创建新图标
-            const iconRenderer = new IconRenderer(version.modelIcon);
-            iconWrapper.appendChild(iconRenderer.modelIcon);
+    
+    try {
+        // 添加加载状态
+        messageDiv.classList.add('switching-version');
+        
+        // 清除原有的思考框
+        const existingReasoningBox = messageContent.querySelector('.reasoning-box');
+        if (existingReasoningBox) {
+            messageContent.removeChild(existingReasoningBox);
         }
-    }
 
-    // 清空现有内容
-    messageContent.innerHTML = '';
+        // 获取当前消息
+        const currentConversation = conversations.find(c => c.id === currentConversationId);
+        if (!currentConversation) return;
 
-    // 如果有思考内容，创建新的思考框
-    if (version.reasoning_content) {
-        // 检查该消息使用的模型是否支持推理
-        const modelId = version.modelId;
-        // 只有当模型支持推理时才创建推理框
-        if (modelId && isReasonerModel(modelId)) {
-            const reasoningBox = new ReasoningBox(messageContent, md);
-            // 使用loadFromSerializedData加载数据
-            reasoningBox.loadFromSerializedData({
-                reasoning_content: version.reasoning_content,
-                reasoning_summary: version.reasoning_summary,
-                reasoning_time: version.thinking_time
+        const message = currentConversation.messages[messageIndex];
+        if (!message) return;
+
+        // 获取当前版本和新版本信息
+        const currentVersionIndex = message.currentVersion;
+        const currentVersion = message.versions[currentVersionIndex];
+        const newVersionData = message.versions[newVersion];
+        if (!newVersionData) return;
+
+        // 始终保存当前的后续消息到当前版本
+        currentVersion.subsequentMessages = currentConversation.messages.slice(messageIndex + 1);
+        
+        // 显示调试信息
+        console.log(`从版本 ${currentVersionIndex} 切换到版本 ${newVersion}`);
+        console.log('当前版本后续消息:', currentVersion.subsequentMessages);
+        console.log('新版本后续消息:', newVersionData.subsequentMessages);
+
+        // 更新版本
+        message.currentVersion = newVersion;
+        const version = message.versions[newVersion];
+
+        // 更新模型图标
+        if (version.modelIcon) {
+            const iconWrapper = messageDiv.querySelector('.model-icon-wrapper');
+            if (iconWrapper) {
+                // 更新 data-model-icon 属性
+                iconWrapper.setAttribute('data-model-icon', version.modelIcon);
+                
+                // 清空现有图标
+                iconWrapper.innerHTML = '';
+                
+                // 创建新图标
+                const iconRenderer = new IconRenderer(version.modelIcon);
+                iconWrapper.appendChild(iconRenderer.modelIcon);
+            }
+        }
+        
+        // 更新消息模型ID
+        message.modelIcon = version.modelIcon;
+        message.modelId = version.modelId;
+
+        // 清空现有内容
+        messageContent.innerHTML = '';
+
+        // 如果有思考内容，创建新的思考框
+        if (version.reasoning_content) {
+            // 检查该消息使用的模型是否支持推理
+            const modelId = version.modelId;
+            // 只有当模型支持推理时才创建推理框
+            if (modelId && isReasonerModel(modelId)) {
+                const reasoningBox = new ReasoningBox(messageContent, md);
+                // 使用loadFromSerializedData加载数据
+                reasoningBox.loadFromSerializedData({
+                    reasoning_content: version.reasoning_content,
+                    reasoning_summary: version.reasoning_summary,
+                    reasoning_time: version.thinking_time
+                });
+            }
+        }
+
+        // 创建文本内容容器
+        const textContent = document.createElement('div');
+        textContent.className = 'text-content';
+        textContent.innerHTML = md.render(version.content);
+        messageContent.appendChild(textContent);
+
+        // 应用代码高亮
+        initializeCodeBlocks(textContent);
+
+        // 如果在底部，自动滚动
+        const chatMessages = document.getElementById('chat-messages');
+        if (shouldAutoScroll(chatMessages)) {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // 更新附件
+        const attachmentsContainer = messageDiv.querySelector('.message-attachments-container');
+        if (attachmentsContainer) {
+            attachmentsContainer.innerHTML = '';
+            if (version.attachments && version.attachments.length > 0) {
+                attachmentsContainer.style.display = 'flex';
+                version.attachments.forEach(attachment => {
+                    const attachmentElement = createAttachmentElement(attachment);
+                    attachmentsContainer.appendChild(attachmentElement);
+                });
+            } else {
+                attachmentsContainer.style.display = 'none';
+            }
+        }
+
+        // 更新版本控制
+        const messageActions = messageDiv.querySelector('.message-actions');
+        if (messageActions) {
+            messageActions.innerHTML = '';
+            // 先添加重新生成按钮
+            createRegenerateButton(messageIndex, messageActions);
+            // 再添加版本控制
+            if (message.versions.length > 1) {
+                createVersionControl(messageIndex, messageActions, message);
+            }
+        }
+        
+        // 恢复后续消息
+        // 1. 清除当前对话中从这条消息之后的所有消息
+        currentConversation.messages = currentConversation.messages.slice(0, messageIndex + 1);
+        
+        // 2. 清除UI中从这条消息之后的所有消息
+        while (chatMessages.children.length > messageIndex + 1) {
+            chatMessages.removeChild(chatMessages.lastChild);
+        }
+        
+        // 3. 如果当前版本有存储的后续消息，恢复它们
+        if (version.subsequentMessages && version.subsequentMessages.length > 0) {
+            // 恢复到数据模型中
+            currentConversation.messages = [
+                ...currentConversation.messages,
+                ...version.subsequentMessages
+            ];
+            
+            // 恢复到UI中
+            version.subsequentMessages.forEach((msg, idx) => {
+                const totalIndex = messageIndex + 1 + idx;
+                appendMessage(
+                    msg.content,
+                    msg.role === 'user',
+                    totalIndex,
+                    msg.attachments || [],
+                    msg.role === 'assistant' ? { icon: msg.modelIcon, id: msg.modelId } : null,
+                    msg.error || false
+                );
             });
         }
-    }
-
-    // 创建文本内容容器
-    const textContent = document.createElement('div');
-    textContent.className = 'text-content';
-    textContent.innerHTML = md.render(version.content);
-    messageContent.appendChild(textContent);
-
-    // 应用代码高亮
-    // 使用applyCodeHighlight函数而不是直接高亮，防止破坏代码块结构
-    initializeCodeBlocks(textContent);
-
-    // 如果在底部，自动滚动
-    const chatMessages = document.getElementById('chat-messages');
-    if (shouldAutoScroll(chatMessages)) {
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
-    // 更新附件
-    const attachmentsContainer = messageDiv.querySelector('.message-attachments-container');
-    if (attachmentsContainer) {
-        attachmentsContainer.innerHTML = '';
-        if (version.attachments && version.attachments.length > 0) {
-            attachmentsContainer.style.display = 'flex';
-            version.attachments.forEach(attachment => {
-                const attachmentElement = createAttachmentElement(attachment);
-                attachmentsContainer.appendChild(attachmentElement);
-            });
-        } else {
-            attachmentsContainer.style.display = 'none';
-        }
-    }
-
-    // 更新版本控制
-    const messageActions = messageDiv.querySelector('.message-actions');
-    if (messageActions) {
-        messageActions.innerHTML = '';
-        // 先添加重新生成按钮
-        createRegenerateButton(messageIndex, messageActions);
-        // 再添加版本控制
-        if (message.versions.length > 1) {
-            createVersionControl(messageIndex, messageActions, message);
-        }
+        
+        // 保存对话
+        await saveConversation(currentConversation.id, 'update');
+    } catch (error) {
+        console.error('切换版本失败:', error);
+        showError('切换版本失败: ' + error.message);
+    } finally {
+        // 移除加载状态
+        messageDiv.classList.remove('switching-version');
     }
 }
 
@@ -2654,62 +2977,90 @@ async function regenerateErrorMessage(messageIndex) {
     if (sendButton.classList.contains('stop')) {
         sendButton.disabled = false;
     }
-    // 获取当前对话
-    if (!currentConversationId) return;
-    const currentConversation = conversations.find(c => c.id === currentConversationId);
-    if (!currentConversation) return;
-    
-    // 获取聊天消息容器
-    const chatMessages = document.getElementById('chat-messages');
-    if (!chatMessages) {
-        console.error('找不到聊天消息容器');
-        return;
-    }
 
-    // 检查是否已经存在助手消息
-    const existingMessage = currentConversation.messages[messageIndex];
-    if (existingMessage && existingMessage.role === 'assistant') {
-        // 如果已经存在助手消息，使用普通的regenerateMessage
-        return regenerateMessage(messageIndex);
-    }
-    
-    // 获取到指定消息之前的所有消息
-    const messagesUntilIndex = currentConversation.messages.slice(0, messageIndex);
-    
-    // 设置messages数组用于API请求
-    messages = [
-        {"role": "system", "content": currentConversation.systemPrompt || default_system_prompt},
-        ...messagesUntilIndex
-    ];
-    
-    // 禁用发送按钮，显示停止按钮
-    sendButton.textContent = '停止';
-    sendButton.classList.add('stop');
-
-    // 创建新的消息元素
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'message assistant-message';
-    messageDiv.setAttribute('data-message-index', messageIndex);
+    // 设置内容生成状态为true
+    window.isGenerating = true;
     
     try {
-        // 获取选中的模型ID和图标信息
-        const modelSelect = document.getElementById('model-select');
-        const selectedOption = modelSelect.options[modelSelect.selectedIndex];
-        const selectedModel = modelSelect.value;
-        const modelIcon = selectedOption.getAttribute('data-model-icon');
-        // 获取模型设置参数
-        const modelSettings = window.modelSettingRenderer.getSettings();
-        
-        if (!selectedModel) {
-            alert('请选择一个模型');
+        // 获取当前消息元素
+        const messageDiv = chatMessages.children[messageIndex];
+        if (!messageDiv) {
+            console.error('找不到消息元素');
             return;
         }
+        
+        // 立即移除错误状态并添加regenerating标记
+        messageDiv.classList.remove('error-message');
+        messageDiv.classList.add('regenerating');
+        
+        // 找到重新生成按钮并隐藏
+        const regenerateBtn = messageDiv.querySelector('.regenerate-btn');
+        if (regenerateBtn) {
+            regenerateBtn.style.display = 'none';
+        }
+        
+        const messageContent = messageDiv.querySelector('.message-content');
+        if (!messageContent) {
+            console.error('找不到消息内容元素');
+            return;
+        }
+        
+        // 清空所有内容
+        messageContent.innerHTML = '';
+        
+        // 创建思考框
+        const reasoningBox = new ReasoningBox(messageContent, md);
+        
+        // 创建文本内容容器
+        const textContent = document.createElement('div');
+        textContent.className = 'text-content';
+        messageContent.appendChild(textContent);
+        
+        if (!currentConversationId) {
+            showError('当前对话ID不存在');
+            return;
+        }
+        
+        const currentConversation = conversations.find(c => c.id === currentConversationId);
+        if (!currentConversation) {
+            showError('未找到当前对话');
+            return;
+        }
+        
+        // 确保我们只使用到用户的最后一条消息
+        // 如果 messageIndex 大于实际消息数量，说明这是自动添加的错误消息
+        // 这种情况下，我们应该使用到最后一条用户消息为止的所有消息
+        const actualMessages = currentConversation.messages;
+        const messagesUntilIndex = actualMessages;
+        console.log('Messages until index:', messagesUntilIndex); // 调试日志
+        
+        // 设置messages数组用于API请求
+        messages = [
+            {"role": "system", "content": currentConversation.systemPrompt || default_system_prompt},
+            ...messagesUntilIndex
+        ];
+        
+        // 禁用发送按钮，显示停止按钮
+        sendButton.textContent = '停止';
+        sendButton.classList.add('stop');
+        sendButton.disabled = false;  // 确保停止按钮可点击
+        userInput.disabled = false;  // 禁用输入框
+        
+        try {
+            // 获取选中的模型ID和图标信息
+            const modelSelect = document.getElementById('model-select');
+            const selectedOption = modelSelect.options[modelSelect.selectedIndex];
+            const selectedModel = modelSelect.value;
+            const modelIcon = selectedOption.getAttribute('data-model-icon');
+            // 获取模型设置参数
+            const modelSettings = window.modelSettingRenderer.getSettings();
+            if (!selectedModel) {
+                alert('请选择一个模型');
+                return;
+            }
 
-        // 移除旧的错误消息（如果存在）
-        const oldMessageDiv = chatMessages.querySelector(`[data-message-index="${messageIndex}"]`);
-        if (oldMessageDiv) {
-            // 更新消息元素中的模型图标，而不是删除整个消息
-            const iconWrapper = oldMessageDiv.querySelector('.model-icon-wrapper');
+            // 更新消息元素中的模型图标
+            const iconWrapper = messageDiv.querySelector('.model-icon-wrapper');
             if (iconWrapper) {
                 // 更新 data-model-icon 属性
                 iconWrapper.setAttribute('data-model-icon', modelIcon);
@@ -2721,68 +3072,215 @@ async function regenerateErrorMessage(messageIndex) {
                 const iconRenderer = new IconRenderer(modelIcon);
                 iconWrapper.appendChild(iconRenderer.modelIcon);
             }
+
+            const response = await fetch('/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    messages: messages,
+                    conversation_id: currentConversationId,
+                    model_id: selectedModel,
+                    temperature: modelSettings.temperature,
+                    max_tokens: modelSettings.current_output_tokens
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            // 保存 reader 对象以便能够中断它
+            const reader = response.body.getReader();
+            currentReader = reader;
+            const decoder = new TextDecoder();
             
-            // 清空消息内容，准备重新生成
-            const messageContent = oldMessageDiv.querySelector('.message-content');
-            if (messageContent) {
-                messageContent.innerHTML = '';
+            let assistantMessage = '';
+
+            // 循环读取响应流
+            while (true) {
+                try {
+                    // 检查是否已手动停止生成
+                    if (generationStopped) {
+                        // 重置标志
+                        generationStopped = false;
+                        break;
+                    }
+                    
+                    const { value, done } = await reader.read();
+                    if (done) {
+                        if (reasoningBox) {
+                            reasoningBox.markGenerationComplete();
+                        }
+                        break;
+                    }
+                    
+                    const text = decoder.decode(value);
+                    const lines = text.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                if (data.error) {
+                                    console.error('重新生成时发生错误:', data.error);
+                                    messageDiv.classList.add('error-message');
+                                    messageContent.innerHTML = md.render('发生错误，请重试\n'+data.error);
+                                    
+                                    // 重新创建重新生成按钮
+                                    const messageWrapper = messageDiv.querySelector('.message-wrapper');
+                                    const messageActions = messageWrapper.querySelector('.message-actions');
+                                    messageActions.innerHTML = '';
+                                    createRegenerateButton(messageIndex, messageActions, true);
+                                    
+                                    throw new Error(data.error);
+                                }
+                                
+                                // 处理思考内容
+                                if (data.reasoning_content) {
+                                    if (!reasoningBox) {
+                                        reasoningBox = new ReasoningBox(messageContent, md);
+                                    }
+                                    reasoningBox.appendContent(data.reasoning_content);
+                                } 
+                                // 处理正常内容
+                                else if (data.content) {
+                                    if (assistantMessage === '' && reasoningBox) {
+                                        reasoningBox.markGenerationComplete();
+                                    }
+                                    assistantMessage += data.content;
+                                    // 创建或更新普通内容的容器
+                                    let textContentDiv = messageContent.querySelector('.text-content');
+                                    if (!textContentDiv) {
+                                        textContentDiv = document.createElement('div');
+                                        textContentDiv.className = 'text-content';
+                                        messageContent.appendChild(textContentDiv);
+                                    }
+                                    textContentDiv.innerHTML = md.render(assistantMessage);
+                                    initializeCodeBlocks(textContentDiv);
+                                    if (shouldAutoScroll(chatMessages)) {
+                                        textContentDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                                    }
+                                }
+                            } catch (error) {
+                                if (reasoningBox) {
+                                    reasoningBox.markGenerationComplete();
+                                }
+                                console.error('解析SSE数据出错:', error);
+                                messageDiv.classList.add('error-message');
+                                messageContent.innerHTML = md.render('发生错误，请重试\n'+error.message);
+                                
+                                // 重新创建重新生成按钮
+                                const messageWrapper = messageDiv.querySelector('.message-wrapper');
+                                const messageActions = messageWrapper.querySelector('.message-actions');
+                                messageActions.innerHTML = '';
+                                createRegenerateButton(messageIndex, messageActions, true);
+                                
+                                throw error;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    if (error.name === 'AbortError' || error.name === 'CancelError') {
+                        if (reasoningBox) {
+                            reasoningBox.markGenerationComplete();
+                        }
+                        console.log('Stream reading cancelled');
+                        
+                        // 不要添加错误状态，只是取消了生成
+                        messageDiv.classList.remove('regenerating');
+                        
+                        // 重新创建重新生成按钮
+                        const messageWrapper = messageDiv.querySelector('.message-wrapper');
+                        const messageActions = messageWrapper.querySelector('.message-actions');
+                        messageActions.innerHTML = '';
+                        createRegenerateButton(messageIndex, messageActions, true);
+                        
+                        break;
+                    }
+                    throw error;
+                }
             }
             
-            // 移除错误状态
-            oldMessageDiv.classList.remove('error-message');
-            
-            // 使用现有的消息div而不是创建新的
-            messageDiv = oldMessageDiv;
-        } else {
-            // 如果没有找到旧消息，创建并添加新的模型图标
-            const iconWrapper = document.createElement('div');
-            iconWrapper.className = 'model-icon-wrapper';
-            iconWrapper.setAttribute('data-model-icon', modelIcon);
-            const iconRenderer = new IconRenderer(modelIcon);
-            iconWrapper.appendChild(iconRenderer.modelIcon);
-            messageDiv.appendChild(iconWrapper);
-
-            // 创建消息包装器
-            const messageWrapper = document.createElement('div');
-            messageWrapper.className = 'message-wrapper';
-            
-            const messageContent = document.createElement('div');
-            messageContent.className = 'message-content';
-            messageContent.innerHTML = ''; // 初始化为空内容
-            
-            const messageActions = document.createElement('div');
-            messageActions.className = 'message-actions';
-            
-            // 添加重新生成按钮
-            createRegenerateButton(messageIndex, messageActions, false);
-            
-            messageWrapper.appendChild(messageContent);
-            messageWrapper.appendChild(messageActions);
-            messageDiv.appendChild(messageWrapper);
-            
-            // 插入到正确的位置
-            if (messageIndex < chatMessages.children.length) {
-                chatMessages.insertBefore(messageDiv, chatMessages.children[messageIndex]);
-            } else {
-                chatMessages.appendChild(messageDiv);
+            if (assistantMessage.trim()) {
+                // 获取当前消息对象，如果不存在则创建一个新的
+                let message = currentConversation.messages[messageIndex];
+                if (!message) {
+                    message = {
+                        role: 'assistant',
+                        content: '',
+                        versions: []
+                    };
+                    currentConversation.messages[messageIndex] = message;
+                }
+                
+                // 确保消息角色是assistant
+                message.role = 'assistant';
+                
+                // 创建新版本
+                const newVersion = {
+                    content: assistantMessage,
+                    reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
+                    reasoning_summary: reasoningBox ? reasoningBox.getSummary() : null,
+                    thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,
+                    attachments: [],
+                    subsequentMessages: [],
+                    modelIcon: modelIcon,
+                    modelId: selectedModel
+                };
+                
+                // 初始化versions数组(如果不存在)
+                if (!message.versions) {
+                    message.versions = [];
+                }
+                
+                // 添加到版本历史
+                message.versions.push(newVersion);
+                message.currentVersion = message.versions.length - 1;
+                
+                // 更新主消息
+                message.content = assistantMessage;
+                message.modelIcon = modelIcon;
+                message.modelId = selectedModel;
+                message.reasoning_content = reasoningBox ? reasoningBox.getContent() : null;
+                message.reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null;
+                message.thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : null;
+                message.attachments = newVersion.attachments;
+                
+                // 清除当前对话中这条消息后的所有消息
+                currentConversation.messages = currentConversation.messages.slice(0, messageIndex + 1);
+                
+                // 更新UI，添加版本控制
+                const messageWrapper = messageDiv.querySelector('.message-wrapper');
+                const messageActions = messageWrapper.querySelector('.message-actions');
+                messageActions.innerHTML = '';
+                
+                // 先添加重新生成按钮
+                createRegenerateButton(messageIndex, messageActions, false);
+                
+                // 再添加版本控制
+                if (message.versions.length > 1) {
+                    createVersionControl(messageIndex, messageActions, message);
+                }
+                
+                // 保存对话
+                await saveConversation(currentConversation.id, 'update');
             }
-        }
-
-        const response = await fetch('/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-                messages: messages,
-                conversation_id: currentConversationId,
-                model_id: selectedModel,
-                temperature: modelSettings.temperature,
-                max_tokens: modelSettings.current_output_tokens
-            })
-        });
-
-        if (!response.ok) {
+            
+            // 清理状态
+            if (currentReader) {
+                currentReader = null;
+            }
+            userInput.disabled = false;
+            sendButton.textContent = '发送';
+            sendButton.classList.remove('stop');
+            sendButton.disabled = false;
+            
+            // 移除regenerating标记
+            messageDiv.classList.remove('regenerating');
+            
+        } catch (error) {
             // 清理状态
             if (currentReader) {
                 await currentReader.cancel();
@@ -2794,182 +3292,17 @@ async function regenerateErrorMessage(messageIndex) {
             sendButton.disabled = false;
             
             messageDiv.classList.add('error-message');
-            messageContent.innerHTML = md.render('发生错误，请重试\n'+response.status);
+            // 移除regenerating标记
+            messageDiv.classList.remove('regenerating');
+            messageContent.innerHTML = md.render('发生错误，请重试\n'+error.message);
             
             // 重新创建重新生成按钮
-            messageActions.innerHTML = '';
-            createRegenerateButton(messageIndex, messageActions, true);
-            return;
-        }
-
-        const reader = response.body.getReader();
-        currentReader = reader;
-        const decoder = new TextDecoder();
-        let assistantMessage = '';
-        let reasoningBox = null;
-
-        // 循环读取响应流
-        while (true) {
-            try {
-                // 检查是否已手动停止生成
-                if (generationStopped) {
-                    // 重置标志
-                    generationStopped = false;
-                    break;
-                }
-                
-                const { value, done } = await reader.read();
-                if (done) {
-                    if (reasoningBox) {
-                        reasoningBox.markGenerationComplete();
-                    }
-                    break;
-                }
-                
-                const text = decoder.decode(value);
-                const lines = text.split('\n');
-                
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        try {
-                            const data = JSON.parse(line.slice(6));
-                            if (data.error) {
-                                throw new Error(data.error);
-                            }
-                            
-                            // 处理思考内容
-                            if (data.reasoning_content) {
-                                if (!reasoningBox) {
-                                    reasoningBox = new ReasoningBox(messageContent, md);
-                                }
-                                reasoningBox.appendContent(data.reasoning_content);
-                            } 
-                            // 处理正常内容
-                            else if (data.content) {
-                                if (assistantMessage === '' && reasoningBox) {
-                                    reasoningBox.markGenerationComplete();
-                                }
-                                assistantMessage += data.content;
-                                // 创建或更新普通内容的容器
-                                let textContentDiv = messageContent.querySelector('.text-content');
-                                if (!textContentDiv) {
-                                    textContentDiv = document.createElement('div');
-                                    textContentDiv.className = 'text-content';
-                                    messageContent.appendChild(textContentDiv);
-                                }
-                                textContentDiv.innerHTML = md.render(assistantMessage);
-                                initializeCodeBlocks(textContentDiv);
-                                if (shouldAutoScroll(chatMessages)) {
-                                    textContentDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                                }
-                            }
-                        } catch (error) {
-                            if (reasoningBox) {
-                                reasoningBox.markGenerationComplete();
-                            }
-                            throw error;
-                        }
-                    }
-                }
-            } catch (error) {
-                if (error.name === 'AbortError' || error.name === 'CancelError') {
-                    if (reasoningBox) {
-                        reasoningBox.markGenerationComplete();
-                    }
-                    messageDiv.classList.add('error-message');
-                    console.log('Stream reading cancelled');
-                    break;
-                }
-                throw error;
-            }
-        }
-
-        // 成功接收到内容，保存到消息历史
-        if (assistantMessage.trim()) {
-            // 创建新版本
-            const newVersion = {
-                content: assistantMessage,
-                reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
-                reasoning_summary: reasoningBox ? reasoningBox.getSummary() : null, // 保存摘要到版本历史
-                thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,  // 保存思考时间到版本历史
-                attachments: [],
-                subsequentMessages: message.versions[message.currentVersion].subsequentMessages,
-                modelIcon: modelIcon, // 使用当前选择的模型图标
-                modelId: selectedModel // 使用当前选择的模型ID
-            };
-            
-            // 添加到版本历史
-            message.versions.push(newVersion);
-            message.currentVersion = message.versions.length - 1;
-            
-            // 更新主消息
-            message.content = assistantMessage;
-            message.modelIcon = modelIcon; // 更新主消息的模型信息
-            message.modelId = selectedModel; // 更新主消息的模型ID
-            message.reasoning_content = reasoningBox ? reasoningBox.getContent() : null; // 保存思考内容
-            message.reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null; // 保存摘要
-            message.thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : null;  // 添加空值检查
-            message.attachments = newVersion.attachments;
-            
-            // 清除当前对话中这条消息后的所有消息
-            currentConversation.messages = currentConversation.messages.slice(0, messageIndex + 1);
-            
-            // 清除UI中的消息
-            while (chatMessages.children.length > messageIndex + 1) {
-                chatMessages.removeChild(chatMessages.lastChild);
-            }
-            
-            // 更新UI，添加版本控制
             const messageWrapper = messageDiv.querySelector('.message-wrapper');
             const messageActions = messageWrapper.querySelector('.message-actions');
             messageActions.innerHTML = '';
-            
-            // 先添加重新生成按钮
-            createRegenerateButton(messageIndex, messageActions, false);
-            
-            // 再添加版本控制
-            if (message.versions.length > 1) {
-                createVersionControl(messageIndex, messageActions, message);
-            }
-            
-            // 保存对话
-            await saveConversation(currentConversation.id, 'update');
+            createRegenerateButton(messageIndex, messageActions, true);
+            throw error;
         }
-        
-        // 清理状态
-        if (currentReader) {
-            currentReader = null;
-        }
-        userInput.disabled = false;
-        sendButton.textContent = '发送';
-        sendButton.classList.remove('stop');
-        sendButton.disabled = false;
-        
-        // 移除regenerating标记
-        messageDiv.classList.remove('regenerating');
-        
-    } catch (error) {
-        // 清理状态
-        if (currentReader) {
-            await currentReader.cancel();
-            currentReader = null;
-        }
-        userInput.disabled = false;
-        sendButton.textContent = '发送';
-        sendButton.classList.remove('stop');
-        sendButton.disabled = false;
-        
-        messageDiv.classList.add('error-message');
-        // 移除regenerating标记
-        messageDiv.classList.remove('regenerating');
-        messageContent.innerHTML = md.render('发生错误，请重试\n'+error.message);
-        
-        // 重新创建重新生成按钮
-        const messageWrapper = messageDiv.querySelector('.message-wrapper');
-        const messageActions = messageWrapper.querySelector('.message-actions');
-        messageActions.innerHTML = '';
-        createRegenerateButton(messageIndex, messageActions, true);
-        throw error;
     } finally {
         // 清理状态
         if (currentReader) {
@@ -2985,13 +3318,8 @@ async function regenerateErrorMessage(messageIndex) {
         sendButton.classList.remove('stop');
         sendButton.disabled = false;
         
-        // 移除regenerating标记
-        const messageDiv = chatMessages.children[messageIndex];
-        if (messageDiv) {
-            messageDiv.classList.remove('regenerating');
-        }
-        
-        // 不再重复创建重新生成按钮，因为已经在前面创建过了
+        // 重置内容生成状态
+        window.isGenerating = false;
     }
 }
 
@@ -3022,16 +3350,19 @@ function isReasonerModel(modelId) {
 // 添加一个确保滚动到底部的函数
 function ensureScrollToBottom(container) {
     if (shouldAutoScroll(container)) {
-        // 立即滚动
-        container.scrollTop = container.scrollHeight;
+        // 计算需要额外滚动的距离，确保内容不被工具栏覆盖
+        const extraScrollPadding = 40; // 添加额外的底部空间
         
-        // 设置较少的延时滚动，以处理不同类型内容的加载时间差异
-        const delays = [50, 150];  // 减少延迟次数和间隔时间
+        // 立即滚动，确保内容完全可见
+        container.scrollTop = container.scrollHeight + extraScrollPadding;
+        
+        // 设置多个延时滚动，以处理不同类型内容的加载时间差异
+        const delays = [50, 150, 300, 500];  // 增加更多的延迟检查点
         delays.forEach(delay => {
             setTimeout(() => {
                 // 再次检查是否应该滚动，以尊重用户可能的新滚动行为
                 if (shouldAutoScroll(container)) {
-                    container.scrollTop = container.scrollHeight;
+                    container.scrollTop = container.scrollHeight + extraScrollPadding;
                 }
             }, delay);
         });
