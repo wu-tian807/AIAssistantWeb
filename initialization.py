@@ -80,6 +80,7 @@ gemini_pool = GeminiAPIPool(API_KEYS['google'])
 xai_client = OpenAI(api_key=API_KEYS['xai'][0], base_url=API_BASE_URLS['xai'])
 deepseek_client = OpenAI(api_key=API_KEYS['deepseek'][0], base_url=API_BASE_URLS['deepseek'])
 siliconcloud_client = OpenAI(api_key=API_KEYS['siliconcloud'][0], base_url=API_BASE_URLS['siliconcloud'])
+aliyun_client = OpenAI(api_key=API_KEYS['aliyun'][0], base_url=API_BASE_URLS['aliyun'])
 
 # 初始化数据库迁移
 migrate = Migrate(app, db)

@@ -253,11 +253,29 @@ html, body {
     padding: 12px 24px;
     border-radius: 10px;
     line-height: 1.6;
-    width: fit-content; /* 让宽度适应内容 */
-    min-width: 10px; /* 设置最小宽度 */
+    width: 100%;         /* 填满父容器 */
+    max-width: 100%;     /* 确保不超出容器宽度 */
+    min-width: 10px;     /* 设置最小宽度 */
+    overflow: visible;   /* 允许内容超出容器显示，以便显示操作按钮 */
 }
 
+/* 确保代码块内容本身不会超出容器 */
+.assistant-message .message-content {
+    overflow-x: hidden;  /* 隐藏横向溢出 */
+    width: 100%;
+    max-width: 100%;
+}
 
+/* 保持代码块容器限制在消息宽度内 */
+.assistant-message .code-block-wrapper {
+    max-width: 100%;
+    overflow: hidden;    /* 隐藏代码块容器可能的溢出 */
+}
+
+/* 保持代码块内部的横向滚动 */
+.assistant-message .code-block-wrapper pre {
+    overflow-x: auto;    /* 保持代码块内部的横向滚动 */
+}
 
 .user-message .message-wrapper {
     background-color: #007AFF;
@@ -351,6 +369,7 @@ html, body {
     white-space: pre-wrap;   /* 保持换行但允许自动换行 */
     word-wrap: break-word;   /* 允许长单词断行 */
     word-break: break-word;  /* 更好的词断行控制 */
+    max-width: 100%;        /* 确保不会超出父容器 */
 }
 
 .code-block-wrapper {
@@ -360,9 +379,10 @@ html, body {
     border: 1px solid #e1e4e8;
     background-color: #f6f8fa;
     line-height: 1.4;
-    width: 100%;  /* 设置宽度为100% */
-    max-width: 850px;  /* 设置最大宽度 */
+    width: 100%;         /* 设置宽度为100% */
+    max-width: 100%;     /* 确保代码块不会超出父容器 */
     user-select: none;
+    display: block;      /* 确保作为块级元素 */
 }
 
 .code-block-wrapper .code-block-header {
@@ -379,7 +399,7 @@ html, body {
     padding: 1.2em;      /* 增加代码块内边距 */
     background: #282c34;
     width: 100%;
-    overflow-x: auto;  /* 添加横向滚动 */
+    overflow-x: auto;    /* 添加横向滚动 */
     border-radius: 8px;
     margin-bottom: -42px;
     user-select: none;
@@ -387,12 +407,13 @@ html, body {
 
 .code-block-wrapper pre code {
     display: inline-block;  /* 修改为inline-block */
-    min-width: 100%;
-    white-space: pre;
+    white-space: pre;      /* 保持原格式 */
     padding: 0;
     line-height: 1.5;
     font-size: 14px;
     user-select: text;
+    overflow-wrap: normal; /* 防止自动换行 */
+    word-break: keep-all;  /* 防止单词断开 */
 }
 
 .copy-button {

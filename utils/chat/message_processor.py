@@ -608,6 +608,7 @@ def process_image_attachment_by_ocr(
     
     file_name = attachment.get('fileName', '未命名文件')
     file_path = attachment.get('file_path')
+    # 如果OCR功能未开启，跳过OCR处理
     if not enable_ocr:
         print("OCR功能未开启，跳过OCR处理")
         if model_type == 'openai':
@@ -620,6 +621,7 @@ def process_image_attachment_by_ocr(
                 "text": "[图片OCR结果 - "+file_name+"]\nOCR功能未开启，跳过OCR处理"
             })
         return
+    #如果文件不存在，添加错误信息
     if not file_path or not os.path.exists(file_path):
         error_text = f"[图片OCR失败：找不到文件 {file_name}]"
         if model_type == 'openai':
@@ -647,6 +649,28 @@ def process_image_attachment_by_ocr(
             print("使用缓存的OCR结果")
             extracted_text = cached_result
         else:
+            enable_ai_enhance = True#暂定为True，到时候会传参处理
+            #如果开启了AI增强图片分析功能，则进入新的一层处理
+            if enable_ai_enhance:#暂定为True，到时候会传参处理
+                from utils.chat.picture_describer import generate_image_summary
+                mime_type = attachment.get('mime_type')#mime_type = attachment.get('mime_type')
+                extracted_text = generate_image_summary(attachment['base64_id'], user_id,mime_type)
+                print("执行基于Qwen2.5VL的OCR处理")
+                print("提取结果："+extracted_text)
+                # 保存OCR结果到缓存
+                if user_id and extracted_text:
+                    ocr_cache.save_ocr_result(user_id, file_path, extracted_text)
+                # 构建消息文本
+                if model_type == 'openai':
+                    processed_message['content'].append({
+                        "type": "text",
+                        "text": "[图片AI分析结果 - "+file_name+"]\n"+extracted_text
+                    })
+                else:
+                    processed_message['parts'].append({
+                        "text": "[图片AI分析结果 - "+file_name+"]\n"+extracted_text
+                    })
+                return
             print("执行新的OCR处理")
             # 创建OCR实例并处理图片
             ocr = ImageOCR()

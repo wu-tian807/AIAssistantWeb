@@ -70,3 +70,5 @@ def stream_chat_response_for_summary(messages, model_id='grok-2-latest'):
     except Exception as e:
         print(f"流式输出摘要内容时出错: {str(e)}")
         yield f"生成摘要时出错: {str(e)}" 
+
+        

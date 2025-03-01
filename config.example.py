@@ -13,6 +13,10 @@ SVG_TO_MODEL_TYPE = {
     'deepseek': {
         'icon_path': 'static/icons/models/deepseek.svg',
         'name': 'DeepSeek'
+    },
+    'siliconcloud':{
+        'icon_path': 'static/icons/models/siliconcloud.svg',
+        'name': 'SiliconCloud'
     }
 }
 # 模型配置
@@ -29,10 +33,10 @@ AVAILABLE_MODELS = {
     },
     'google': {
         'models': [
-            {'id': 'gemini-2.0', 'name': 'Gemini 2.0', 'description': '新一代功能、速度和多模态生成，适用于各种各样的任务','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 16384 },
+            {'id': 'gemini-2.0-flash-001', 'name': 'Gemini 2.0 Flash', 'description': '新一代功能、速度和多模态生成，适用于各种各样的任务','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 16384 },
             {'id': 'gemini-2.0-flash-lite-preview-02-05','name':'Gemini 2.0 Flash Lite Preview','description':'新一代功能、速度和多模态生成，适用于各种各样的任务','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 16384 },
             {'id': 'gemini-2.0-pro-exp-02-05','name':'Gemini 2.0 Pro Exp','description':'质量有所提升，尤其是对于世界知识、代码和长篇幅上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 32768 },
-            {'id': 'gemini-2.0-flash-thinking-exp-01-21','name':'Gemini 2.0 Flash Thinking Exp','description':'针对复杂问题进行推理，具备新的思考能力','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 16384 },
+            {'id': 'gemini-2.0-flash-thinking-exp-01-21','name':'Gemini 2.0 Flash Thinking Exp','description':'针对复杂问题进行推理，具备新的思考能力','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 16384 ,'reasoner':True},
             {'id': 'gemini-2.0-flash-exp', 'name': 'Gemini 2.0 Flash Exp', 'description': '新一代功能、卓越的速度、原生工具使用和多模态生成','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 15000 },
             {'id': 'gemini-1.5-flash', 'name': 'Gemini 1.5 Flash', 'description': '快速、多样化的性能','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens':15000},
             {'id': 'gemini-1.5-flash-8b', 'name': 'Gemini 1.5 Flash-8B', 'description': '量大且智能程度较低的任务','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens':15000},
@@ -43,9 +47,16 @@ AVAILABLE_MODELS = {
     },
     'deepseek':{
         'models':[
-            {'id':'deepseek-chat','name':'DeepSeek V3','description':'DeepSeek V3 是深度求索公司开发的智能助手，支持文本输入，64K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT],'max_output_tokens':8192}#8k
+            {'id':'deepseek-chat','name':'DeepSeek V3','description':'DeepSeek V3 是深度求索公司开发的智能助手，支持文本输入，64K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT],'max_output_tokens':8192},#8k
+            {'id':'deepseek-reasoner','name':'DeepSeek R1','description':'性能对标 OpenAI o1 正式版的推理模型，支持文本输入，64K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT],'max_output_tokens':8192,'reasoner':True}
         ],
         'api_type': 'openai'
+    },
+    'siliconcloud':{
+        'models':[
+            {'id':'deepseek-ai/DeepSeek-R1','name':'DeepSeek R1','description':'硅基流动部署的DeepSeekR1','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT],'max_output_tokens':8192,'reasoner':True}
+        ],
+        'api_type':'openai'
     }
 }
 
@@ -53,22 +64,27 @@ AVAILABLE_MODELS = {
 RATE_LIMIT_WINDOW = 60  # 60秒时间窗口
 MAX_EMAILS_PER_WINDOW = 3  # 每个时间窗口内最多发送3封邮件
 
+#设置AliYun API用于Qwen2.5VL模型，用于增强型OCR（计价）
 # API配置
 API_KEYS = {
     'google': ["YOUR_GOOGLE_API_KEY"],
     'xai': ["YOUR_XAI_API_KEY"],
-    'deepseek': ["YOUR_DEEPSEEK_API_KEY"]
+    'deepseek': ["YOUR_DEEPSEEK_API_KEY"],
+    'siliconcloud':["YOUR_SILICONCLOUD_API_KEY"],
+    'aliyun': ["YOUR_ALIYUN_API_KEY"]
 }
 
 API_BASE_URLS = {
     'google': "https://generativelanguage.googleapis.com/v1",
     'xai': "https://api.x.ai/v1",
-    'deepseek': "https://api.deepseek.com/v1"
+    'deepseek': "https://api.deepseek.com/v1",
+    'siliconcloud': "https://api.siliconflow.cn/v1",
+    'aliyun': "https://dashscope.aliyuncs.com/compatible-mode/v1"
 }
 
 #文字+latex公式图像ocr API和网址
 #感谢https://simpletex.cn
-OCR_API_KEY = "YOUR_OCR_API_KEY"
+OCR_API_KEY = "YOUR_API_KEY"
 # OCR_TURBO_LATEX_API_URL = "https://server.simpletex.cn/api/latex_ocr_turbo" #轻量级图像提取公式
 # OCR_STANDARD_LATEX_API_URL = "https://server.simpletex.cn/api/latex_ocr" #标准图像提取公式
 OCR_COMMON_API_URL = "https://server.simpletex.cn/api/simpletex_ocr" #通用图像提取
