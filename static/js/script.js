@@ -707,7 +707,7 @@ export async function saveConversation(conversationId, operation = 'update') {
 // 修改创建新对话函数
 async function createNewConversation() {
     if (currentReader) {
-        await stopGeneration();
+        stopGeneration();
     }
 
     clearAttachmentPreview();
@@ -1170,10 +1170,11 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
         // 清空输入框并重置高度
         userInput.value = '';
         userInput.style.height = 'auto'; // 重置输入框高度
-        // 如果存在adjustTextareaHeight函数，调用它以确保高度正确重置
-        if (typeof adjustTextareaHeight === 'function') {
-            adjustTextareaHeight(userInput);
-        }
+        userInput.disabled = true;
+        // // 如果存在adjustTextareaHeight函数，调用它以确保高度正确重置
+        // if (typeof adjustTextareaHeight === 'function') {
+        //     adjustTextareaHeight(userInput);
+        // }
 
         console.log('Model selection:', {
             selectedValue: modelSelect.value,
@@ -1315,7 +1316,6 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
         messageWrapper.appendChild(messageActions);
         messageDiv.appendChild(messageWrapper);
         chatMessages.appendChild(messageDiv);
-
         // 重试循环
         for (let attempt = 0; attempt < retryCount; attempt++) {
             try {
@@ -1346,135 +1346,18 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
 
-                const reader = response.body.getReader();
-                currentReader = reader;
-                const decoder = new TextDecoder();
-
-                // 在开始时声明 reasoningBox 变量
-                let reasoningBox = null;
-                
-                while (true) {
-                    try {
-                        // 检查是否已手动停止生成
-                        if (generationStopped) {
-                            // 重置标志
-                            generationStopped = false;
-                            break;
-                        }
-                        
-                        const { value, done } = await reader.read();
-                        if (done) {
-                            // 只有在存在 reasoningBox 时才标记完成
-                            if (reasoningBox) {
-                                reasoningBox.markGenerationComplete();
-                            }
-                            break;
-                        }
-                        
-                        const text = decoder.decode(value);
-                        const lines = text.split('\n');
-                        
-                        for (const line of lines) {
-                            if (line.startsWith('data: ')) {
-                                try {
-                                    const data = JSON.parse(line.slice(6));
-                                    console.log("data:", data);
-                                    if (data.error) {
-                                        console.error('解析SSE数据出错:', data.error);
-                                        messageDiv.classList.add('error-message');
-                                        messageContent.innerHTML = md.render('发生错误，请重试\n'+data.error);
-                                        
-                                        // 添加重新生成按钮
-                                        const messageWrapper = messageDiv.querySelector('.message-wrapper');
-                                        const messageActions = messageWrapper.querySelector('.message-actions');
-                                        messageActions.innerHTML = '';
-                                        createRegenerateButton(messageIndex, messageActions, true);
-                                        
-                                        throw new Error(data.error);
-                                    }
-                                    
-                                    // 处理思考内容
-                                    if (data.reasoning_content) {
-                                        // 如果还没有创建 reasoningBox，创建一个
-                                        if (!reasoningBox) {
-                                            reasoningBox = new ReasoningBox(messageContent, md);
-                                        }
-                                        reasoningBox.appendContent(data.reasoning_content);
-                                    } 
-                                    // 处理等待推理标志
-                                    else if (data.waiting_reasoning) {
-                                        console.log("第三处收到 waiting_reasoning 数据:", data);
-                                        // 如果收到waiting_reasoning为true，则表示模型正在思考，创建reasoningBox，提示用户等待
-                                        // 如果还没有创建 reasoningBox，创建一个
-                                        if (!reasoningBox) {
-                                            console.log("第三处创建 ReasoningBox 实例");
-                                            reasoningBox = new ReasoningBox(messageContent, md);
-                                            reasoningBox.appendContent("模型正在思考，请稍等...");
-                                            // 开始计时
-                                            reasoningBox.startTimer();
-                                        }
-                                    }
-                                    // 处理正常内容
-                                    else if (data.content) {
-                                        // 如果有 reasoningBox 且是第一次收到内容，标记思考完成
-                                        if (assistantMessage === '' && reasoningBox) {
-                                            reasoningBox.markGenerationComplete();
-                                        }
-                                        assistantMessage += data.content;
-                                        // 创建或更新普通内容的容器
-                                        let textContentDiv = messageContent.querySelector('.text-content');
-                                        if (!textContentDiv) {
-                                            textContentDiv = document.createElement('div');
-                                            textContentDiv.className = 'text-content';
-                                            messageContent.appendChild(textContentDiv);
-                                        }
-                                        textContentDiv.innerHTML = md.render(assistantMessage);
-                                        initializeCodeBlocks(textContentDiv);
-                                        
-                                        // 检查并处理图片加载完成后的滚动
-                                        const images = textContentDiv.querySelectorAll('img');
-                                        if (images.length > 0) {
-                                            images.forEach(img => {
-                                                if (!img.complete) {
-                                                    img.onload = function() {
-                                                        ensureScrollToBottom(chatMessages);
-                                                    };
-                                                }
-                                            });
-                                        }   
-                                        // 使用新函数确保滚动到底部
-                                        ensureScrollToBottom(chatMessages);
-                                    }
-                                } catch (error) {
-                                    console.error('解析SSE数据出错:', error, '原始数据:', line);
-                                    messageDiv.classList.add('error-message');
-                                    messageContent.innerHTML = md.render('发生错误，请重试\n'+error.message);
-
-                                    // 添加重新生成按钮
-                                    const messageWrapper = messageDiv.querySelector('.message-wrapper');
-                                    const messageActions = messageWrapper.querySelector('.message-actions');
-                                    messageActions.innerHTML = '';
-                                    createRegenerateButton(messageIndex, messageActions, true);
-
-                                    if (reasoningBox) {
-                                        reasoningBox.markGenerationComplete();
-                                    }
-                                    throw error;
-                                }
-                            }
-                        }
-                    } catch (error) {
-                        if (error.name === 'AbortError' || error.name === 'CancelError') {
-                            if (reasoningBox) {
-                                reasoningBox.markGenerationComplete();
-                            }
-                            messageDiv.classList.add('error-message');
-                            console.log('Stream reading cancelled');
-                            break;
-                        }
-                        throw error;
+                // 使用公共函数处理流响应
+                const { assistantMessage, reasoningBox } = await processStreamResponse(
+                    response, 
+                    messageDiv, 
+                    messageContent, 
+                    {
+                        messageIndex,
+                        md,
+                        chatMessages,
+                        shouldScrollToBottom: true
                     }
-                }
+                );
 
                 // 成功接收到内容，保存到消息历史
                 if (assistantMessage.trim()) {
@@ -1502,48 +1385,31 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
                         currentVersion: 0
                     });
                     
-                    // 生成完成后添加重新生成按钮
-                    const messageActions = messageDiv.querySelector('.message-actions');
-                    if (messageActions) {
-                        createRegenerateButton(messageIndex, messageActions, false);
-                    }
+                    // 添加重新生成按钮和版本控制
+                    const messageWrapper = messageDiv.querySelector('.message-wrapper');
+                    const messageActions = messageWrapper.querySelector('.message-actions');
+                    createRegenerateButton(messageIndex, messageActions, false);
                     
+                    // 保存对话
                     await saveConversation(currentConversation.id, 'update');
                 }
-
-                // 如果成功，跳出重试循环
+                
+                // 如果成功完成了请求，就跳出重试循环
                 break;
-
+                
             } catch (error) {
-                console.error(`[${new Date().toISOString()}] 发送消息失败 (尝试 ${attempt + 1}/${retryCount}):`, {
-                    error: error.message,
-                    stack: error.stack,
-                    networkStatus: navigator.onLine ? '在线' : '离线',
-                    readyState: document.readyState
-                });
-
-                // 清理状态
-                if (currentReader) {
-                    try {
-                        await currentReader.cancel();
-                    } catch (e) {
-                        console.log('Error cancelling stream:', e);
-                    }
-                    currentReader = null;
+                console.error('发送消息出错:', error);
+                
+                // 如果这是最后一次尝试，或者错误是手动取消，不再重试
+                if (attempt === retryCount - 1 || error.name === 'AbortError' || error.name === 'CancelError') {
+                    throw error;
                 }
-
-                // 如果是最后一次尝试，显示错误
-                if (attempt === retryCount - 1) {
-                    messageDiv.classList.add('error-message');
-                    messageContent.innerHTML = md.render('发生错误，请重试\n' + error.message);
-                    messageActions.innerHTML = '';
-                    createRegenerateButton(messageIndex, messageActions, true);
-                    error = true;
-                } else {
-                    // 等待一段时间后重试
-                    console.log(`[${new Date().toISOString()}] 等待 ${retryDelay}ms 后重试...`);
-                    await new Promise(resolve => setTimeout(resolve, retryDelay));
-                }
+                
+                // 否则等待一段时间后重试
+                console.log(`将在 ${retryDelay}ms 后重试 (${attempt + 2}/${retryCount})...`);
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                // 每次重试增加延迟时间
+                retryDelay *= 2;
             }
         }
 
@@ -1884,7 +1750,8 @@ window.copyCode = copyCode;
 async function regenerateMessage(messageIndex) {
     const sendButton = document.getElementById('send-button');
     if (sendButton.classList.contains('stop')) {
-        sendButton.disabled = false;
+        sendButton.disabled = true;
+        userInput.disabled = true;
     }
 
     // 设置内容生成状态为true
@@ -2035,132 +1902,34 @@ async function regenerateMessage(messageIndex) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            // 保存 reader 对象以便能够中断它
-            const reader = response.body.getReader();
-            currentReader = reader;
-            const decoder = new TextDecoder();
-            
-            let assistantMessage = '';
-
-            // 循环读取响应流
-            while (true) {
-                try {
-                    // 检查是否已手动停止生成
-                    if (generationStopped) {
-                        // 重置标志
-                        generationStopped = false;
-                        break;
-                    }
-                    
-                    const { value, done } = await reader.read();
-                    if (done) {
-                        if (reasoningBox) {
-                            reasoningBox.markGenerationComplete();
-                        }
-                        break;
-                    }
-                    
-                    const text = decoder.decode(value);
-                    const lines = text.split('\n');
-                    
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                const data = JSON.parse(line.slice(6));
-                                if (data.error) {
-                                    console.error('重新生成时发生错误:', data.error);
-                                    messageDiv.classList.add('error-message');
-                                    messageContent.innerHTML = md.render('发生错误，请重试\n'+data.error);
-                                    
-                                    // 重新创建重新生成按钮
-                                    const messageWrapper = messageDiv.querySelector('.message-wrapper');
-                                    const messageActions = messageWrapper.querySelector('.message-actions');
-                                    messageActions.innerHTML = '';
-                                    createRegenerateButton(messageIndex, messageActions, true);
-                                    
-                                    throw new Error(data.error);
-                                }
-                                
-                                // 处理思考内容
-                                if (data.reasoning_content) {
-                                    if (!reasoningBox) {
-                                        reasoningBox = new ReasoningBox(messageContent, md);
-                                    }
-                                    reasoningBox.appendContent(data.reasoning_content);
-                                } 
-                                // 处理等待推理标志
-                                else if (data.waiting_reasoning) {
-                                    console.log("重新生成时收到 waiting_reasoning 数据:", data);
-                                    // 如果收到waiting_reasoning为true，则表示模型正在思考，创建reasoningBox，提示用户等待
-                                    // 如果还没有创建 reasoningBox，创建一个
-                                    if (!reasoningBox) {
-                                        console.log("重新生成时创建 ReasoningBox 实例");
-                                        reasoningBox = new ReasoningBox(messageContent, md);
-                                        // 开始计时
-                                        reasoningBox.startTimer();
-                                    }
-                                    reasoningBox.appendContent("模型正在思考，请稍等...");
-                                }
-                                // 处理正常内容
-                                else if (data.content) {
-                                    if (assistantMessage === '' && reasoningBox) {
-                                        reasoningBox.markGenerationComplete();
-                                    }
-                                    assistantMessage += data.content;
-                                    // 创建或更新普通内容的容器
-                                    let textContentDiv = messageContent.querySelector('.text-content');
-                                    if (!textContentDiv) {
-                                        textContentDiv = document.createElement('div');
-                                        textContentDiv.className = 'text-content';
-                                        messageContent.appendChild(textContentDiv);
-                                    }
-                                    textContentDiv.innerHTML = md.render(assistantMessage);
-                                    initializeCodeBlocks(textContentDiv);
-                                    if (shouldAutoScroll(chatMessages)) {
-                                        textContentDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                                    }
-                                }
-                            } catch (error) {
-                                if (reasoningBox) {
-                                    reasoningBox.markGenerationComplete();
-                                }
-                                console.error('解析SSE数据出错:', error);
-                                messageDiv.classList.add('error-message');
-                                messageContent.innerHTML = md.render('发生错误，请重试\n'+error.message);
-                                
-                                // 重新创建重新生成按钮
-                                const messageWrapper = messageDiv.querySelector('.message-wrapper');
-                                const messageActions = messageWrapper.querySelector('.message-actions');
-                                messageActions.innerHTML = '';
-                                createRegenerateButton(messageIndex, messageActions, true);
-                                
-                                throw error;
-                            }
-                        }
-                    }
-                } catch (error) {
-                    if (error.name === 'AbortError' || error.name === 'CancelError') {
-                        if (reasoningBox) {
-                            reasoningBox.markGenerationComplete();
-                        }
-                        console.log('Stream reading cancelled');
-                        
-                        // 不要添加错误状态，只是取消了生成
-                        messageDiv.classList.remove('regenerating');
-                        
-                        // 重新创建重新生成按钮
-                        const messageWrapper = messageDiv.querySelector('.message-wrapper');
-                        const messageActions = messageWrapper.querySelector('.message-actions');
-                        messageActions.innerHTML = '';
-                        createRegenerateButton(messageIndex, messageActions, true);
-                        
-                        break;
-                    }
-                    throw error;
+            // 使用公共函数处理流响应
+            const { assistantMessage, reasoningBox } = await processStreamResponse(
+                response, 
+                messageDiv, 
+                messageContent, 
+                {
+                    messageIndex,
+                    md,
+                    chatMessages,
+                    shouldScrollToBottom: false // 使用shouldAutoScroll决定是否滚动
                 }
-            }
+            );
             
             if (assistantMessage.trim()) {
+                // 获取当前消息对象，如果不存在则创建一个新的
+                let message = currentConversation.messages[messageIndex];
+                if (!message) {
+                    message = {
+                        role: 'assistant',
+                        content: '',
+                        versions: []
+                    };
+                    currentConversation.messages[messageIndex] = message;
+                }
+                
+                // 确保消息角色是assistant
+                message.role = 'assistant';
+                
                 // 创建新版本
                 const newVersion = {
                     content: assistantMessage,
@@ -2173,17 +1942,22 @@ async function regenerateMessage(messageIndex) {
                     modelId: selectedModel // 使用当前选择的模型ID
                 };
                 
+                // 初始化versions数组(如果不存在)
+                if (!message.versions) {
+                    message.versions = [];
+                }
+                
                 // 添加到版本历史
                 message.versions.push(newVersion);
                 message.currentVersion = message.versions.length - 1;
                 
                 // 更新主消息
                 message.content = assistantMessage;
-                message.modelIcon = modelIcon; // 更新主消息的模型信息
-                message.modelId = selectedModel; // 更新主消息的模型ID
-                message.reasoning_content = reasoningBox ? reasoningBox.getContent() : null; // 保存思考内容
-                message.reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null; // 保存摘要
-                message.thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : null;  // 添加空值检查
+                message.modelIcon = modelIcon;
+                message.modelId = selectedModel;
+                message.reasoning_content = reasoningBox ? reasoningBox.getContent() : null;
+                message.reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null;
+                message.thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : null;
                 message.attachments = newVersion.attachments;
                 
                 // 清除当前对话中这条消息后的所有消息
@@ -3009,7 +2783,8 @@ function editConversationTitle(conversationId) {
 async function regenerateErrorMessage(messageIndex) {
     const sendButton = document.getElementById('send-button');
     if (sendButton.classList.contains('stop')) {
-        sendButton.disabled = false;
+        sendButton.disabled = true;
+        userInput.disabled = true;
     }
 
     // 设置内容生成状态为true
@@ -3125,130 +2900,18 @@ async function regenerateErrorMessage(messageIndex) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            // 保存 reader 对象以便能够中断它
-            const reader = response.body.getReader();
-            currentReader = reader;
-            const decoder = new TextDecoder();
-            
-            let assistantMessage = '';
-
-            // 循环读取响应流
-            while (true) {
-                try {
-                    // 检查是否已手动停止生成
-                    if (generationStopped) {
-                        // 重置标志
-                        generationStopped = false;
-                        break;
-                    }
-                    
-                    const { value, done } = await reader.read();
-                    if (done) {
-                        if (reasoningBox) {
-                            reasoningBox.markGenerationComplete();
-                        }
-                        break;
-                    }
-                    
-                    const text = decoder.decode(value);
-                    const lines = text.split('\n');
-                    
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                const data = JSON.parse(line.slice(6));
-                                if (data.error) {
-                                    console.error('重新生成时发生错误:', data.error);
-                                    messageDiv.classList.add('error-message');
-                                    messageContent.innerHTML = md.render('发生错误，请重试\n'+data.error);
-                                    
-                                    // 重新创建重新生成按钮
-                                    const messageWrapper = messageDiv.querySelector('.message-wrapper');
-                                    const messageActions = messageWrapper.querySelector('.message-actions');
-                                    messageActions.innerHTML = '';
-                                    createRegenerateButton(messageIndex, messageActions, true);
-                                    
-                                    throw new Error(data.error);
-                                }
-                                
-                                // 处理思考内容
-                                if (data.reasoning_content) {
-                                    if (!reasoningBox) {
-                                        reasoningBox = new ReasoningBox(messageContent, md);
-                                    }
-                                    reasoningBox.appendContent(data.reasoning_content);
-                                } 
-                                // 处理等待推理标志
-                                else if (data.waiting_reasoning) {
-                                    console.log("重新生成时收到 waiting_reasoning 数据:", data);
-                                    // 如果收到waiting_reasoning为true，则表示模型正在思考，创建reasoningBox，提示用户等待
-                                    // 如果还没有创建 reasoningBox，创建一个
-                                    if (!reasoningBox) {
-                                        console.log("重新生成时创建 ReasoningBox 实例");
-                                        reasoningBox = new ReasoningBox(messageContent, md);
-                                        // 开始计时
-                                        reasoningBox.startTimer();
-                                    }
-                                    reasoningBox.appendContent("模型正在思考，请稍等...");
-                                }
-                                // 处理正常内容
-                                else if (data.content) {
-                                    if (assistantMessage === '' && reasoningBox) {
-                                        reasoningBox.markGenerationComplete();
-                                    }
-                                    assistantMessage += data.content;
-                                    // 创建或更新普通内容的容器
-                                    let textContentDiv = messageContent.querySelector('.text-content');
-                                    if (!textContentDiv) {
-                                        textContentDiv = document.createElement('div');
-                                        textContentDiv.className = 'text-content';
-                                        messageContent.appendChild(textContentDiv);
-                                    }
-                                    textContentDiv.innerHTML = md.render(assistantMessage);
-                                    initializeCodeBlocks(textContentDiv);
-                                    if (shouldAutoScroll(chatMessages)) {
-                                        textContentDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                                    }
-                                }
-                            } catch (error) {
-                                if (reasoningBox) {
-                                    reasoningBox.markGenerationComplete();
-                                }
-                                console.error('解析SSE数据出错:', error);
-                                messageDiv.classList.add('error-message');
-                                messageContent.innerHTML = md.render('发生错误，请重试\n'+error.message);
-                                
-                                // 重新创建重新生成按钮
-                                const messageWrapper = messageDiv.querySelector('.message-wrapper');
-                                const messageActions = messageWrapper.querySelector('.message-actions');
-                                messageActions.innerHTML = '';
-                                createRegenerateButton(messageIndex, messageActions, true);
-                                
-                                throw error;
-                            }
-                        }
-                    }
-                } catch (error) {
-                    if (error.name === 'AbortError' || error.name === 'CancelError') {
-                        if (reasoningBox) {
-                            reasoningBox.markGenerationComplete();
-                        }
-                        console.log('Stream reading cancelled');
-                        
-                        // 不要添加错误状态，只是取消了生成
-                        messageDiv.classList.remove('regenerating');
-                        
-                        // 重新创建重新生成按钮
-                        const messageWrapper = messageDiv.querySelector('.message-wrapper');
-                        const messageActions = messageWrapper.querySelector('.message-actions');
-                        messageActions.innerHTML = '';
-                        createRegenerateButton(messageIndex, messageActions, true);
-                        
-                        break;
-                    }
-                    throw error;
+            // 使用公共函数处理流响应
+            const { assistantMessage, reasoningBox } = await processStreamResponse(
+                response, 
+                messageDiv, 
+                messageContent, 
+                {
+                    messageIndex,
+                    md,
+                    chatMessages,
+                    shouldScrollToBottom: false // 使用shouldAutoScroll决定是否滚动
                 }
-            }
+            );
             
             if (assistantMessage.trim()) {
                 // 获取当前消息对象，如果不存在则创建一个新的
@@ -3262,25 +2925,17 @@ async function regenerateErrorMessage(messageIndex) {
                     currentConversation.messages[messageIndex] = message;
                 }
                 
-                // 确保消息角色是assistant
-                message.role = 'assistant';
-                
                 // 创建新版本
                 const newVersion = {
                     content: assistantMessage,
                     reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
-                    reasoning_summary: reasoningBox ? reasoningBox.getSummary() : null,
-                    thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,
+                    reasoning_summary: reasoningBox ? reasoningBox.getSummary() : null, // 保存摘要到版本历史
+                    thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,  // 保存思考时间到版本历史
                     attachments: [],
-                    subsequentMessages: [],
-                    modelIcon: modelIcon,
-                    modelId: selectedModel
+                    subsequentMessages: [], // 新版本不应该有后续消息，因为重新生成时已经清空了后续消息
+                    modelIcon: modelIcon, // 使用当前选择的模型图标
+                    modelId: selectedModel // 使用当前选择的模型ID
                 };
-                
-                // 初始化versions数组(如果不存在)
-                if (!message.versions) {
-                    message.versions = [];
-                }
                 
                 // 添加到版本历史
                 message.versions.push(newVersion);
@@ -3288,11 +2943,11 @@ async function regenerateErrorMessage(messageIndex) {
                 
                 // 更新主消息
                 message.content = assistantMessage;
-                message.modelIcon = modelIcon;
-                message.modelId = selectedModel;
-                message.reasoning_content = reasoningBox ? reasoningBox.getContent() : null;
-                message.reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null;
-                message.thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : null;
+                message.modelIcon = modelIcon; // 更新主消息的模型信息
+                message.modelId = selectedModel; // 更新主消息的模型ID
+                message.reasoning_content = reasoningBox ? reasoningBox.getContent() : null; // 保存思考内容
+                message.reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null; // 保存摘要
+                message.thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : null;  // 添加空值检查
                 message.attachments = newVersion.attachments;
                 
                 // 清除当前对话中这条消息后的所有消息
@@ -3414,4 +3069,166 @@ function ensureScrollToBottom(container) {
             }, delay);
         });
     }
+}
+
+/**
+ * 处理流式响应，用于从服务器读取和处理SSE数据流
+ * @param {Response} response - 从服务器获取的响应对象
+ * @param {HTMLElement} messageDiv - 消息容器元素
+ * @param {HTMLElement} messageContent - 消息内容元素
+ * @param {Object} options - 配置选项
+ * @param {number} options.messageIndex - 消息索引
+ * @param {Object} options.md - Markdown渲染器对象
+ * @param {HTMLElement} options.chatMessages - 聊天消息容器元素
+ * @param {boolean} options.shouldScrollToBottom - 是否应该滚动到底部，默认为true
+ * @returns {Promise<{assistantMessage: string, reasoningBox: Object}>} 返回助手消息内容和reasoningBox对象
+ */
+async function processStreamResponse(response, messageDiv, messageContent, options = {}) {
+    const { messageIndex, md, chatMessages, shouldScrollToBottom = true } = options;
+    const reader = response.body.getReader();
+    currentReader = reader;
+    const decoder = new TextDecoder();
+    
+    let assistantMessage = '';
+    let reasoningBox = null;
+    
+    // 循环读取响应流
+    while (true) {
+        try {
+            // 检查是否已手动停止生成
+            if (generationStopped) {
+                // 重置标志
+                generationStopped = false;
+                break;
+            }
+            
+            const { value, done } = await reader.read();
+            if (done) {
+                // 只有在存在 reasoningBox 时才标记完成
+                if (reasoningBox) {
+                    reasoningBox.markGenerationComplete();
+                }
+                break;
+            }
+            
+            const text = decoder.decode(value);
+            const lines = text.split('\n');
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        console.log("data:", data);
+                        if (data.error) {
+                            console.error('解析SSE数据出错:', data.error);
+                            messageDiv.classList.add('error-message');
+                            messageContent.innerHTML = md.render('发生错误，请重试\n'+data.error);
+                            
+                            // 添加重新生成按钮
+                            const messageWrapper = messageDiv.querySelector('.message-wrapper');
+                            const messageActions = messageWrapper.querySelector('.message-actions');
+                            messageActions.innerHTML = '';
+                            createRegenerateButton(messageIndex, messageActions, true);
+                            
+                            throw new Error(data.error);
+                        }
+                        
+                        // 处理思考内容
+                        if (data.reasoning_content) {
+                            // 如果还没有创建 reasoningBox，创建一个
+                            if (!reasoningBox) {
+                                reasoningBox = new ReasoningBox(messageContent, md);
+                            }
+                            reasoningBox.appendContent(data.reasoning_content);
+                        } 
+                        // 处理等待推理标志
+                        else if (data.waiting_reasoning) {
+                            console.log("收到 waiting_reasoning 数据:", data);
+                            // 如果收到waiting_reasoning为true，则表示模型正在思考，创建reasoningBox，提示用户等待
+                            // 如果还没有创建 reasoningBox，创建一个
+                            if (!reasoningBox) {
+                                console.log("创建 ReasoningBox 实例");
+                                reasoningBox = new ReasoningBox(messageContent, md);
+                                // 开始计时
+                                reasoningBox.startTimer();
+                            }
+                            reasoningBox.appendContent("模型正在思考，请稍等...");
+                        }
+                        // 处理正常内容
+                        else if (data.content) {
+                            // 如果有 reasoningBox 且是第一次收到内容，标记思考完成
+                            if (assistantMessage === '' && reasoningBox) {
+                                reasoningBox.markGenerationComplete();
+                            }
+                            assistantMessage += data.content;
+                            // 创建或更新普通内容的容器
+                            let textContentDiv = messageContent.querySelector('.text-content');
+                            if (!textContentDiv) {
+                                textContentDiv = document.createElement('div');
+                                textContentDiv.className = 'text-content';
+                                messageContent.appendChild(textContentDiv);
+                            }
+                            textContentDiv.innerHTML = md.render(assistantMessage);
+                            initializeCodeBlocks(textContentDiv);
+                            
+                            // 检查并处理图片加载完成后的滚动
+                            const images = textContentDiv.querySelectorAll('img');
+                            if (images.length > 0) {
+                                images.forEach(img => {
+                                    if (!img.complete) {
+                                        img.onload = function() {
+                                            ensureScrollToBottom(chatMessages);
+                                        };
+                                    }
+                                });
+                            }   
+                            
+                            // 根据选项决定如何滚动
+                            if (shouldScrollToBottom) {
+                                ensureScrollToBottom(chatMessages);
+                            } else if (shouldAutoScroll(chatMessages)) {
+                                textContentDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                            }
+                        }
+                    } catch (error) {
+                        console.error('解析SSE数据出错:', error, '原始数据:', line);
+                        messageDiv.classList.add('error-message');
+                        messageContent.innerHTML = md.render('发生错误，请重试\n'+error.message);
+
+                        // 添加重新生成按钮
+                        const messageWrapper = messageDiv.querySelector('.message-wrapper');
+                        const messageActions = messageWrapper.querySelector('.message-actions');
+                        messageActions.innerHTML = '';
+                        createRegenerateButton(messageIndex, messageActions, true);
+
+                        if (reasoningBox) {
+                            reasoningBox.markGenerationComplete();
+                        }
+                        throw error;
+                    }
+                }
+            }
+        } catch (error) {
+            if (error.name === 'AbortError' || error.name === 'CancelError') {
+                if (reasoningBox) {
+                    reasoningBox.markGenerationComplete();
+                }
+                console.log('Stream reading cancelled');
+                
+                // 不要添加错误状态，只是取消了生成
+                messageDiv.classList.remove('regenerating');
+                
+                // 重新创建重新生成按钮
+                const messageWrapper = messageDiv.querySelector('.message-wrapper');
+                const messageActions = messageWrapper.querySelector('.message-actions');
+                messageActions.innerHTML = '';
+                createRegenerateButton(messageIndex, messageActions, true);
+                
+                break;
+            }
+            throw error;
+        }
+    }
+    
+    return { assistantMessage, reasoningBox };
 }

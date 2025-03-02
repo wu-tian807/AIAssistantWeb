@@ -1,5 +1,5 @@
 const textarea = document.getElementById('user-input');
-function adjustTextareaHeight(textarea) {
+export function adjustTextareaHeight(textarea) {
     // 重置高度
     textarea.style.height = 'auto';
     
