@@ -53,7 +53,7 @@ export class TitleIconRenderer {
         const modelGroup = selectedOption.parentElement.label.toLowerCase();
         const groupType = modelGroup.includes('xai') ? 'xai' : 
                          modelGroup.includes('google') ? 'google' : modelGroup.includes('deepseek') ? 'deepseek' : 
-                         modelGroup.includes('siliconcloud') ? 'siliconcloud' : null;
+                         modelGroup.includes('siliconcloud') ? 'siliconcloud' : modelGroup.includes('oaipro') ? 'oaipro' : null;
 
         // 更新图标
         if (groupType && model_to_svg[groupType]) {

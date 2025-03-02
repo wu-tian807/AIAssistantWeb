@@ -82,5 +82,17 @@ PRICE_CONFIG = {
     "qwen2.5-vl-72b-instruct":{
         "input": 2.20,
         "output": 6.59
+    },
+    "gpt-4o-mini":{
+        "input": 0.15,
+        "output": 0.6
+    },
+    "gpt-4o":{
+        "input": 2.5,
+        "output": 10
+    },
+    "chatgpt-4o-latest":{
+        "input": 5,
+        "output": 15
     }
 }

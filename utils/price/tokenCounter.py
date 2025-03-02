@@ -110,19 +110,19 @@ class TokenCounter:
             if 'content' in message and isinstance(message['content'], list):
                 for item in message['content']:
                     tokens = self._process_content_item(item, model_id)
-                    self._accumulate_tokens(role, tokens, input_tokens, output_tokens)
+                    input_tokens, output_tokens = self._accumulate_tokens(role, tokens, input_tokens, output_tokens)
             
             # 处理Google格式（parts列表）
             elif 'parts' in message:
                 for part in message['parts']:
                     tokens = self._process_part(part, model_id)
-                    self._accumulate_tokens(role, tokens, input_tokens, output_tokens)
+                    input_tokens, output_tokens = self._accumulate_tokens(role, tokens, input_tokens, output_tokens)
             
             # 处理纯文本消息
             else:
                 text = str(message.get('content', ''))
                 tokens = self.count_tokens_by_model(text, model_id)
-                self._accumulate_tokens(role, tokens, input_tokens, output_tokens)
+                input_tokens, output_tokens = self._accumulate_tokens(role, tokens, input_tokens, output_tokens)
         
         return input_tokens, output_tokens
 
@@ -155,12 +155,13 @@ class TokenCounter:
                     return 0
         return self.count_tokens_by_model(str(part), model_id)
 
-    def _accumulate_tokens(self, role: str, tokens: int, input_tokens: int, output_tokens: int) -> None:
-        """累加token到相应统计量"""
+    def _accumulate_tokens(self, role: str, tokens: int, input_tokens: int, output_tokens: int) -> Tuple[int, int]:
+        """累加token到相应统计量，返回更新后的(input_tokens, output_tokens)"""
         if role == 'assistant':
             output_tokens += tokens
         else:
             input_tokens += tokens
+        return input_tokens, output_tokens
 
     def estimate_completion_tokens(self, text: str, model_id: str = None) -> int:
         """计算生成文本的token数量"""

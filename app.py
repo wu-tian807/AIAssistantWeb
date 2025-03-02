@@ -13,7 +13,7 @@ from config import AVAILABLE_MODELS
 from config import RATE_LIMIT_WINDOW
 from utils.files.file_config import ATTACHMENT_TYPES, AttachmentType
 
-from initialization import app, db, mail, xai_client, deepseek_client,gemini_pool,siliconcloud_client
+from initialization import app, db, mail, xai_client, deepseek_client,gemini_pool,siliconcloud_client,oaipro_client
 
 
 from utils.user_model import User, DEFAULT_USER_SETTINGS
@@ -670,7 +670,10 @@ def chat():
                         max_tokens=max_tokens
                     )
                 else:
-                    client = xai_client
+                    if provider == 'xai':
+                        client = xai_client
+                    elif provider == 'oaipro':
+                        client = oaipro_client
                     stream = client.chat.completions.create(
                         model=model_id,
                         messages=processed_messages,
@@ -725,7 +728,6 @@ def chat():
                 last_response = chunk
                 if last_response and hasattr(last_response, 'usage'):
                     try:
-                        #print(f"OpenAI响应: {last_response}")
                         usage_dict = last_response.usage
                         input_tokens = usage_dict['prompt_tokens'] - usage_dict.get('prompt_tokens_details', {}).get('cached_tokens', 0)
                         output_tokens = usage_dict['completion_tokens']
@@ -854,8 +856,45 @@ def chat():
                 if use_estimated:
                     # 使用tiktoken计算token数量
                     print(f"使用tiktoken计算{model_id}的token数")
-                    # 估算输入token
-                    input_tokens = token_counter.estimate_message_tokens(processed_messages, model_id)[0]
+                    
+                    # 输出消息处理前的结构以便调试
+                    print(f"消息数量: {len(processed_messages)}")
+                    for i, msg in enumerate(processed_messages):
+                        print(f"消息 {i+1} 结构: {msg.keys()}")
+                        if 'content' in msg:
+                            if isinstance(msg['content'], list):
+                                print(f"消息 {i+1} content类型: 列表，长度: {len(msg['content'])}")
+                            else:
+                                print(f"消息 {i+1} content类型: {type(msg['content'])}")
+                    
+                    # 针对OpenAI模型格式进行预处理
+                    if model_type == 'openai':
+                        formatted_messages = []
+                        for msg in processed_messages:
+                            formatted_msg = {'role': msg.get('role', 'user')}
+                            
+                            # 处理内容为列表的情况
+                            if 'content' in msg and isinstance(msg['content'], list):
+                                text_content = []
+                                for item in msg['content']:
+                                    if isinstance(item, dict) and item.get('type') == 'text':
+                                        text_content.append(item.get('text', ''))
+                                formatted_msg['content'] = ' '.join(text_content)
+                            elif 'content' in msg:
+                                formatted_msg['content'] = msg['content']
+                            else:
+                                formatted_msg['content'] = ''
+                                
+                            formatted_messages.append(formatted_msg)
+                        
+                        print(f"格式化后的消息数量: {len(formatted_messages)}")
+                        # 估算输入token
+                        input_tokens = token_counter.estimate_message_tokens(formatted_messages, model_id)[0]
+                    else:
+                        # 估算输入token
+                        input_tokens = token_counter.estimate_message_tokens(processed_messages, model_id)[0]
+                    
+                    print(f"输入token数: {input_tokens}")
                     # 估算输出token
                     output_text = ''.join(accumulated_output)
                     output_tokens = token_counter.estimate_completion_tokens(output_text, model_id)

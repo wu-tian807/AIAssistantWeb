@@ -342,6 +342,70 @@ export async function fetchModels() {
             
             select.appendChild(siliconcloudGroup);
         }
+        //添加oaipro模型组
+        if (models.oaipro && models.oaipro.models.length > 0) {
+            const oaiproGroup = document.createElement('optgroup');
+            oaiproGroup.label = 'OAIPro Models';
+            
+            // 如果存在自定义选择器，创建组
+            if (customSelect) {
+                const group = document.createElement('div');
+                group.className = 'option-group';
+                
+                const label = document.createElement('div');
+                label.className = 'group-label';
+                label.textContent = 'OpenAI and Anthropic Models';
+                group.appendChild(label);
+                
+                models.oaipro.models.forEach(model => {
+                    // 创建原始option
+                    const option = document.createElement('option');
+                    option.setAttribute('data-model-icon', 'oaipro');
+                    option.setAttribute('data-max-output-tokens', model.max_output_tokens);
+                    // 添加reasoner属性，如果存在
+                    if (model.reasoner !== undefined) {
+                        option.setAttribute('data-reasoner', model.reasoner);
+                    }
+                    option.value = model.id;
+                    option.textContent = `${model.name} - ${model.description}`;
+                    oaiproGroup.appendChild(option);
+                    
+                    // 创建自定义选项
+                    const item = document.createElement('div');
+                    item.className = 'option-item';
+                    item.textContent = `${model.name} - ${model.description}`;
+                    item.setAttribute('data-value', model.id);
+                    item.setAttribute('data-model-icon', 'oaipro');
+                    item.setAttribute('data-max-output-tokens', model.max_output_tokens);
+                    // 添加reasoner属性，如果存在
+                    if (model.reasoner !== undefined) {
+                        item.setAttribute('data-reasoner', model.reasoner);
+                    }
+                    
+                    item.addEventListener('click', () => {
+                        const allItems = customSelect.querySelectorAll('.option-item');
+                        allItems.forEach(i => i.classList.remove('selected'));
+                        item.classList.add('selected');
+                        
+                        const selectedText = customSelect.querySelector('.selected-text');
+                        selectedText.textContent = item.textContent;
+                        
+                        select.value = model.id;
+                        const event = new Event('change');
+                        select.dispatchEvent(event);
+                        
+                        customSelect.classList.remove('open');
+                    });
+                    
+                    group.appendChild(item);
+                });
+                
+                customSelect.querySelector('.select-options').appendChild(group);
+            }
+            
+            select.appendChild(oaiproGroup);
+        }
+        
         // 设置默认选中的模型
         select.value = 'grok-2-vision-1212';
         
