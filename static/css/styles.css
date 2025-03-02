@@ -202,23 +202,19 @@ html, body {
     color: white;
     margin-left: auto;
     border-radius: 15px 15px 0 15px;
-    max-width: 65%;
+    max-width: 95%; /* 调整为与消息内容相同的宽度，从65%增加到95% */
     width: fit-content;
 }
 
 .user-message .message-wrapper {
     background-color: #007AFF;
-    position: relative;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
+    border-radius: 15px 15px 5px 15px;
+    padding: 12px 16px;
     margin-left: auto;
-    border-radius: 15px 15px 5px 15px;  /* 调整右下角弧度更小 */
-    max-width: 65%;
-    width: fit-content;
-    padding: 12px 16px;    /* 添加适当的内边距 */
-    margin-bottom: 8px;    /* 添加底部间距 */
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);  /* 添加轻微阴影提升层次感 */
+    max-width: 95%;  /* 增加最大宽度，从85%提高到95%，让消息可以更灵活地向左扩展 */
+    min-width: fit-content; /* 确保最小宽度适应内容 */
+    width: auto; /* 让宽度自动调整 */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 /* 如果需要调整文字样式，可以添加以下规则 */
@@ -284,7 +280,7 @@ html, body {
     border-radius: 15px 15px 5px 15px;
     padding: 12px 16px;
     margin-left: auto;
-    max-width: 85%;  /* 增加最大宽度,让消息可以更灵活地向左扩展 */
+    max-width: 95%;  /* 增加最大宽度，从85%提高到95%，让消息可以更灵活地向左扩展 */
     min-width: fit-content; /* 确保最小宽度适应内容 */
     width: auto; /* 让宽度自动调整 */
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
@@ -295,6 +291,7 @@ html, body {
     background-color: transparent;
     box-shadow: none;
     padding: 0;
+    max-width: 98%; /* 编辑状态下提供更宽的编辑区域 */
 }
 
 .chat-input-container {
@@ -558,6 +555,8 @@ html, body {
     border-radius: 8px;
     border: 1px solid #e0e0e0;
     overflow-x: auto;
+    width: 100%; /* 确保容器占满可用空间 */
+    max-width: 100%; /* 与编辑框匹配 */
 }
 /* 编辑文本框样式 */
 .edit-textarea {
@@ -568,9 +567,11 @@ html, body {
     border-radius: 8px;
     font-size: 15px;
     line-height: 1.5;
-    resize: vertical;
+    resize: both; /* 改为both，允许水平和垂直方向调整大小 */
     background-color: #fff;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, width 0.3s ease;
+    max-width: 100%; /* 确保不超过父容器 */
+    min-width: 300px; /* 设置最小宽度 */
 }
 
 .edit-textarea:focus {

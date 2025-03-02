@@ -67,11 +67,45 @@
                 opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
                 margin 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
                 padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    overflow: hidden;
+    overflow-y: auto; /* 改为auto以支持垂直滚动 */
+    overflow-x: hidden; /* 保持水平方向不滚动 */
     opacity: 1;
     max-height: 2000px; /* 足够大的高度以容纳内容 */
     transform: translateZ(0); /* 启用GPU加速 */
     will-change: max-height, opacity; /* 告知浏览器将变化的属性 */
+    padding-right: 8px; /* 添加右侧内边距，防止内容与滚动条太近 */
+}
+
+/* 添加滚动条样式 */
+.reasoning-box-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.reasoning-box-content::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+}
+
+.reasoning-box-content::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+
+.reasoning-box-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+/* 暗色主题滚动条样式 */
+.dark-theme .reasoning-box-content::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.dark-theme .reasoning-box-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.dark-theme .reasoning-box-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
 }
 
 .reasoning-box-content.collapsed {

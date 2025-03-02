@@ -25,7 +25,7 @@ const sendButton = document.getElementById('send-button');
 const attachmentPreview = document.getElementById('attachment-preview');
 
 // 检查是否可以发送消息的函数
-function canSendMessage() {
+export function canSendMessage() {
     const hasText = userInput.value.trim().length > 0;
     const hasAttachments = attachmentPreview && attachmentPreview.children.length > 0;
     const stopStatus = sendButton.classList.contains('stop');
