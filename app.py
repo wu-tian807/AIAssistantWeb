@@ -622,12 +622,12 @@ def chat():
 
             if model_type == 'openai':
                 # OpenAI 模型调用
+                formatted_messages_for_deepseek = []
                 if model_id.startswith('deepseek'):
                     if provider == 'deepseek':
                         client = deepseek_client
                     elif provider == 'siliconcloud':
                         client = siliconcloud_client
-                    formatted_messages = []
                     for msg in processed_messages:
                         # 确保content是字符串
                         content = ''
@@ -656,12 +656,12 @@ def chat():
                             if parts_content:
                                 content = content + ' ' + ' '.join(parts_content)
                         
-                        formatted_messages.append({
+                        formatted_messages_for_deepseek.append({
                             'role': msg['role'],
                             'content': content.strip()
                         })
                     
-                    print("发送给模型的消息:", formatted_messages)
+                    print("发送给模型的消息:", formatted_messages_for_deepseek)
                 else:
                     if provider == 'xai':
                         client = xai_client
@@ -674,15 +674,15 @@ def chat():
                     print("waiting_reasoning 数据已发送")
                     stream = client.chat.completions.create(
                         model=model_id,
-                        messages=processed_messages,
+                        messages=formatted_messages_for_deepseek if len(formatted_messages_for_deepseek) > 0 else processed_messages,
                         stream=True,
                         max_completion_tokens=max_tokens,
-                        reasoning_effort='low'
+                        reasoning_effort='high'
                     )
                 else:
                     stream = client.chat.completions.create(
                         model=model_id,
-                        messages=processed_messages,
+                        messages=formatted_messages_for_deepseek if len(formatted_messages_for_deepseek) > 0 else processed_messages,
                         stream=True,
                         temperature=temperature,
                         max_tokens=max_tokens
@@ -740,9 +740,9 @@ def chat():
                 if last_response and hasattr(last_response, 'usage'):
                     try:
                         usage_dict = last_response.usage
-                        input_tokens = usage_dict['prompt_tokens'] - usage_dict.get('prompt_tokens_details', {}).get('cached_tokens', 0)
-                        output_tokens = usage_dict['completion_tokens']
-                        cached_input_tokens = usage_dict.get('prompt_tokens_details', {}).get('cached_tokens', 0)
+                        input_tokens = usage_dict.prompt_tokens - (usage_dict.prompt_tokens_details.cached_tokens if usage_dict.prompt_tokens_details else 0)
+                        output_tokens = usage_dict.completion_tokens
+                        cached_input_tokens = usage_dict.prompt_tokens_details.cached_tokens if usage_dict.prompt_tokens_details else 0
                         use_estimated = False
                         print(f"从OpenAI响应获取到token数 - 输入: {input_tokens}, 输出: {output_tokens}, 缓存输入: {cached_input_tokens}")
                     except Exception as e:
@@ -868,19 +868,19 @@ def chat():
                     # 使用tiktoken计算token数量
                     print(f"使用tiktoken计算{model_id}的token数")
                     
-                    # 输出消息处理前的结构以便调试
-                    print(f"消息数量: {len(processed_messages)}")
-                    for i, msg in enumerate(processed_messages):
-                        print(f"消息 {i+1} 结构: {msg.keys()}")
-                        if 'content' in msg:
-                            if isinstance(msg['content'], list):
-                                print(f"消息 {i+1} content类型: 列表，长度: {len(msg['content'])}")
-                            else:
-                                print(f"消息 {i+1} content类型: {type(msg['content'])}")
+                    # # 输出消息处理前的结构以便调试
+                    # print(f"消息数量: {len(processed_messages)}")
+                    # for i, msg in enumerate(processed_messages):
+                    #     print(f"消息 {i+1} 结构: {msg.keys()}")
+                    #     if 'content' in msg:
+                    #         if isinstance(msg['content'], list):
+                    #             print(f"消息 {i+1} content类型: 列表，长度: {len(msg['content'])}")
+                    #         else:
+                    #             print(f"消息 {i+1} content类型: {type(msg['content'])}")
                     
                     # 针对OpenAI模型格式进行预处理
                     if model_type == 'openai':
-                        formatted_messages = []
+                        formatted_messages_for_deepseek = []
                         for msg in processed_messages:
                             formatted_msg = {'role': msg.get('role', 'user')}
                             
@@ -896,11 +896,11 @@ def chat():
                             else:
                                 formatted_msg['content'] = ''
                                 
-                            formatted_messages.append(formatted_msg)
+                            formatted_messages_for_deepseek.append(formatted_msg)
                         
-                        print(f"格式化后的消息数量: {len(formatted_messages)}")
+                        print(f"格式化后的消息数量: {len(formatted_messages_for_deepseek)}")
                         # 估算输入token
-                        input_tokens = token_counter.estimate_message_tokens(formatted_messages, model_id)[0]
+                        input_tokens = token_counter.estimate_message_tokens(formatted_messages_for_deepseek, model_id)[0]
                     else:
                         # 估算输入token
                         input_tokens = token_counter.estimate_message_tokens(processed_messages, model_id)[0]
