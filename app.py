@@ -15,7 +15,7 @@ from utils.files.file_config import ATTACHMENT_TYPES, AttachmentType
 
 from initialization import app, db, mail, xai_client, deepseek_client,gemini_pool,siliconcloud_client,oaipro_client
 
-
+from config import THINKING_MODELS_WITHOUT_CONTENT
 from utils.user_model import User, DEFAULT_USER_SETTINGS
 from utils.conversation_model import Conversation
 
@@ -662,18 +662,24 @@ def chat():
                         })
                     
                     print("发送给模型的消息:", formatted_messages)
-                    stream = client.chat.completions.create(
-                        model=model_id,
-                        messages=formatted_messages,
-                        stream=True,
-                        temperature=temperature,
-                        max_tokens=max_tokens
-                    )
                 else:
                     if provider == 'xai':
                         client = xai_client
                     elif provider == 'oaipro':
                         client = oaipro_client
+                stream = None
+                if model_id in THINKING_MODELS_WITHOUT_CONTENT:
+                    print(f"发送 waiting_reasoning 数据，模型: {model_id}")
+                    yield f"data: {json.dumps({'waiting_reasoning':True})}\n\n"
+                    print("waiting_reasoning 数据已发送")
+                    stream = client.chat.completions.create(
+                        model=model_id,
+                        messages=processed_messages,
+                        stream=True,
+                        max_completion_tokens=max_tokens,
+                        reasoning_effort='low'
+                    )
+                else:
                     stream = client.chat.completions.create(
                         model=model_id,
                         messages=processed_messages,
@@ -686,7 +692,9 @@ def chat():
                     print("使用reasoner模式")
                     for chunk in stream:
                         try:
-                            if chunk.choices[0].delta.reasoning_content is not None:
+                            reasoning_content = None
+                            content = None
+                            if hasattr(chunk.choices[0].delta, 'reasoning_content') and chunk.choices[0].delta.reasoning_content is not None:
                                 reasoning_content = chunk.choices[0].delta.reasoning_content
                                 accumulated_output.append(reasoning_content)
                                 # 立即发送推理内容
@@ -704,8 +712,11 @@ def chat():
                                 # 强制刷新
                                 if hasattr(response, 'flush'):
                                     response.flush()
-                            print("reasoning_content："+reasoning_content)
-                            print("content："+content)
+                            # 安全地记录日志，避免空值
+                            if reasoning_content is not None:
+                                print(f"reasoning_content: {reasoning_content}")
+                            if content is not None:
+                                print(f"content: {content}")
                         except Exception as e:
                             print(f"处理流式响应chunk时出错: {str(e)}")
                             continue

@@ -1303,7 +1303,7 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
         messageContent.innerHTML = '';
 
         // 创建思考框元素
-        const reasoningBox = new ReasoningBox(messageContent, md);
+        //const reasoningBox = new ReasoningBox(messageContent, md);
         
         const messageActions = document.createElement('div');
         messageActions.className = 'message-actions';
@@ -1378,6 +1378,7 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
                             if (line.startsWith('data: ')) {
                                 try {
                                     const data = JSON.parse(line.slice(6));
+                                    console.log("data:", data);
                                     if (data.error) {
                                         console.error('解析SSE数据出错:', data.error);
                                         messageDiv.classList.add('error-message');
@@ -1400,6 +1401,19 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
                                         }
                                         reasoningBox.appendContent(data.reasoning_content);
                                     } 
+                                    // 处理等待推理标志
+                                    else if (data.waiting_reasoning) {
+                                        console.log("第三处收到 waiting_reasoning 数据:", data);
+                                        // 如果收到waiting_reasoning为true，则表示模型正在思考，创建reasoningBox，提示用户等待
+                                        // 如果还没有创建 reasoningBox，创建一个
+                                        if (!reasoningBox) {
+                                            console.log("第三处创建 ReasoningBox 实例");
+                                            reasoningBox = new ReasoningBox(messageContent, md);
+                                            reasoningBox.appendContent("模型正在思考，请稍等...");
+                                            // 开始计时
+                                            reasoningBox.startTimer();
+                                        }
+                                    }
                                     // 处理正常内容
                                     else if (data.content) {
                                         // 如果有 reasoningBox 且是第一次收到内容，标记思考完成
@@ -1427,8 +1441,7 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
                                                     };
                                                 }
                                             });
-                                        }
-                                        
+                                        }   
                                         // 使用新函数确保滚动到底部
                                         ensureScrollToBottom(chatMessages);
                                     }
@@ -2075,6 +2088,19 @@ async function regenerateMessage(messageIndex) {
                                     }
                                     reasoningBox.appendContent(data.reasoning_content);
                                 } 
+                                // 处理等待推理标志
+                                else if (data.waiting_reasoning) {
+                                    console.log("重新生成时收到 waiting_reasoning 数据:", data);
+                                    // 如果收到waiting_reasoning为true，则表示模型正在思考，创建reasoningBox，提示用户等待
+                                    // 如果还没有创建 reasoningBox，创建一个
+                                    if (!reasoningBox) {
+                                        console.log("重新生成时创建 ReasoningBox 实例");
+                                        reasoningBox = new ReasoningBox(messageContent, md);
+                                        // 开始计时
+                                        reasoningBox.startTimer();
+                                    }
+                                    reasoningBox.appendContent("模型正在思考，请稍等...");
+                                }
                                 // 处理正常内容
                                 else if (data.content) {
                                     if (assistantMessage === '' && reasoningBox) {
@@ -3152,6 +3178,19 @@ async function regenerateErrorMessage(messageIndex) {
                                     }
                                     reasoningBox.appendContent(data.reasoning_content);
                                 } 
+                                // 处理等待推理标志
+                                else if (data.waiting_reasoning) {
+                                    console.log("重新生成时收到 waiting_reasoning 数据:", data);
+                                    // 如果收到waiting_reasoning为true，则表示模型正在思考，创建reasoningBox，提示用户等待
+                                    // 如果还没有创建 reasoningBox，创建一个
+                                    if (!reasoningBox) {
+                                        console.log("重新生成时创建 ReasoningBox 实例");
+                                        reasoningBox = new ReasoningBox(messageContent, md);
+                                        // 开始计时
+                                        reasoningBox.startTimer();
+                                    }
+                                    reasoningBox.appendContent("模型正在思考，请稍等...");
+                                }
                                 // 处理正常内容
                                 else if (data.content) {
                                     if (assistantMessage === '' && reasoningBox) {

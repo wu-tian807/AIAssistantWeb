@@ -153,6 +153,7 @@ class ReasoningBox {
 
     // 添加思考内容
     appendContent(content) {
+        console.log("ReasoningBox.appendContent 被调用，内容:", content);
         this.content += content;
         this.lastContentUpdate = Date.now();
         this.isGenerating = true;
@@ -160,6 +161,8 @@ class ReasoningBox {
             this.startTimer();
             this.titleSpan.textContent = '思考中';  // 确保显示"思考中"
         }
+        // 确保容器可见
+        this.container.style.display = 'block';
         this.render();
     }
 
