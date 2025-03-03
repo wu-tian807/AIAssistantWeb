@@ -270,7 +270,7 @@ def generate_image_summary(base_64_id, user_id,mime_type):
         ]}
     ]
     summary = aliyun_client.chat.completions.create(
-        model="qwen2.5-vl-72b-instruct",
+        model="qwen2.5-vl-7b-instruct",
         messages=contents)
     #计算价格
     print(summary.usage)

@@ -1169,7 +1169,7 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
 
         // 清空输入框并重置高度
         userInput.value = '';
-        userInput.style.height = 'auto'; // 重置输入框高度
+        // userInput.style.height = 'auto'; // 重置输入框高度
         userInput.disabled = true;
         // // 如果存在adjustTextareaHeight函数，调用它以确保高度正确重置
         // if (typeof adjustTextareaHeight === 'function') {

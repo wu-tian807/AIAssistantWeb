@@ -35,7 +35,7 @@ from utils.attachment_handler.image_handler import delete_base64_file, save_base
 from routes.upload_attachment_types import upload_attachment_types_bp
 from routes.text.text_routes import text_bp  # 添加这行
 from routes.generate_text import summary_bp  # 导入摘要生成蓝图
-
+from routes.models_get import models_get_bp  # 导入模型蓝图
 # 注册蓝图
 app.register_blueprint(user_profile)
 app.register_blueprint(user_settings)  # 注册用户设置蓝图
@@ -44,6 +44,7 @@ app.register_blueprint(image_bp, url_prefix='/api/image')  # 添加这行
 app.register_blueprint(upload_attachment_types_bp)  # 注册附件类型蓝图
 app.register_blueprint(text_bp, url_prefix='/api/text')  # 添加这行
 app.register_blueprint(summary_bp, url_prefix='/api/summary')  # 注册摘要生成蓝图
+app.register_blueprint(models_get_bp, url_prefix='/api/models')  # 注册模型蓝图
 
 # 在每个请求之前生成CSRF Token
 @app.before_request
@@ -1180,7 +1181,7 @@ def generate_title():
     try:
         data = request.get_json()
         first_message = data.get('message')
-        model_id = data.get('model_id', 'gemini-1.5-flash-8b')
+        model_id = data.get('model_id', 'grok-2-latest')
 
         def generate():
             prompt = f"请根据用户的第一句话生成一个简短的、有趣的对话标题（不超过20个字）。用户的话是：{first_message}"

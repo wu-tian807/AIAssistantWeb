@@ -14,6 +14,17 @@ export class EnhancedVisualToggle {
         this.ocrEnabled = false;
         this.initialized = false;
         this.isDarkMode = document.body.classList.contains('dark-theme');
+        this.processingStatus = document.createElement('div');
+        this.processingStatus.className = 'processing-status';
+        this.processingStatus.style.display = 'none';
+        document.body.appendChild(this.processingStatus);
+        
+        this.initialize();
+    }
+
+    async initialize() {
+        await this.fetchSettings();
+        this.setupEventListeners();
     }
 
     /**
@@ -484,6 +495,35 @@ export class EnhancedVisualToggle {
             console.error('设置输入框变化监听器时出错:', error);
         }
     }
+
+    showProcessingStatus(message) {
+        this.processingStatus.textContent = message;
+        this.processingStatus.style.display = 'block';
+    }
+
+    hideProcessingStatus() {
+        this.processingStatus.style.display = 'none';
+    }
+
+    handleImageProcessing(event) {
+        const data = JSON.parse(event.data);
+        if (data.status === 'processing_image') {
+            this.showProcessingStatus(data.message || '正在处理图片...');
+        } else if (data.content && data.content.includes('[图片AI分析结果')) {
+            this.hideProcessingStatus();
+        } else if (data.error) {
+            this.showProcessingStatus(`处理失败: ${data.error}`);
+            setTimeout(() => this.hideProcessingStatus(), 3000);
+        }
+    }
+
+    setupEventListeners() {
+        // 添加SSE事件监听
+        const eventSource = new EventSource('/api/chat/stream');
+        eventSource.onmessage = (event) => this.handleImageProcessing(event);
+        
+        // ... existing code ...
+    }
 }
 
 // 初始化组件
@@ -506,4 +546,21 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (error) {
         console.error('初始化增强视觉分析开关组件时出错:', error);
     }
-}); 
+});
+
+// 添加CSS样式
+const style = document.createElement('style');
+style.textContent = `
+.processing-status {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 5px;
+    z-index: 1000;
+    display: none;
+}
+`;
+document.head.appendChild(style); 
