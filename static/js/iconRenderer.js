@@ -49,15 +49,13 @@ export class TitleIconRenderer {
             return;
         }
 
-        // 获取选中的模型所属的组（xai 或 google）
-        const modelGroup = selectedOption.parentElement.label.toLowerCase();
-        const groupType = modelGroup.includes('xai') ? 'xai' : 
-                         modelGroup.includes('google') ? 'google' : modelGroup.includes('deepseek') ? 'deepseek' : 
-                         modelGroup.includes('siliconcloud') ? 'siliconcloud' : modelGroup.includes('oaipro') ? 'oaipro' : null;
-
+        // 直接使用data-model-icon属性
+        const modelIcon = selectedOption.getAttribute('data-model-icon');
+        
         // 更新图标
-        if (groupType && model_to_svg[groupType]) {
-            this.modelIcon.src = model_to_svg[groupType];
+        if (modelIcon && model_to_svg[modelIcon]) {
+            console.log('更新标题图标为:', modelIcon, model_to_svg[modelIcon]);
+            this.modelIcon.src = model_to_svg[modelIcon];
         }
     }
 }
@@ -67,6 +65,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     await fetchModels();
     // 初始化图标渲染器
     const iconRenderer = new TitleIconRenderer();
-    // 触发一次更新以设置初始图标
-    iconRenderer.updateIcon();
+    
+    // 延迟触发图标更新，确保在模型选择后执行
+    setTimeout(() => {
+        console.log('延迟触发图标更新');
+        iconRenderer.updateIcon();
+    }, 500);
 });

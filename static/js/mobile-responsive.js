@@ -1,0 +1,615 @@
+/**
+ * 移动端响应式交互功能
+ * 处理移动设备上的特定交互和布局调整
+ */
+
+// 保存设备状态
+let isMobile = false;
+
+// 当文档加载完成后执行
+document.addEventListener('DOMContentLoaded', function() {
+    // 检测是否为移动设备
+    isMobile = window.innerWidth <= 768;
+    
+    if (isMobile) {
+        setupMobileInterface();
+    }
+    
+    // 监听窗口大小变化，动态调整布局
+    window.addEventListener('resize', function() {
+        const isMobileNow = window.innerWidth <= 768;
+        
+        // 只有当设备类型变化时才重新设置
+        if (isMobile !== isMobileNow) {
+            if (isMobileNow) {
+                setupMobileInterface();
+            } else {
+                restoreDesktopInterface();
+            }
+            // 更新当前状态
+            isMobile = isMobileNow;
+        } else if (isMobile) {
+            // 即使设备类型未变化，但在移动设备上调整尺寸时也需要重新计算高度
+            adjustMessageAreaHeight();
+        }
+    });
+    
+    // 监听输入框聚焦事件，处理键盘弹出
+    const userInput = document.getElementById('user-input');
+    if (userInput) {
+        userInput.addEventListener('focus', function() {
+            if (isMobile) {
+                // 键盘弹出时，滚动到底部并调整高度
+                setTimeout(() => {
+                    adjustMessageAreaHeight();
+                    scrollToBottom();
+                }, 300);
+            }
+        });
+        
+        userInput.addEventListener('blur', function() {
+            if (isMobile) {
+                // 键盘收起时，调整高度
+                setTimeout(() => {
+                    adjustMessageAreaHeight();
+                }, 300);
+            }
+        });
+    }
+});
+
+/**
+ * 设置移动端界面
+ * 添加汉堡菜单、遮罩层等移动端特有元素
+ */
+function setupMobileInterface() {
+    // 1. 创建汉堡菜单按钮
+    if (!document.querySelector('.menu-toggle')) {
+        const menuToggle = document.createElement('button');
+        menuToggle.className = 'menu-toggle';
+        menuToggle.innerHTML = '<i class="fas fa-bars"></i>';
+        menuToggle.setAttribute('aria-label', '菜单');
+        
+        // 添加到页面
+        const chatHeader = document.querySelector('.chat-header');
+        chatHeader.insertBefore(menuToggle, chatHeader.firstChild);
+        
+        // 添加点击事件
+        menuToggle.addEventListener('click', toggleSidebar);
+    }
+    
+    // 2. 创建侧边栏遮罩层
+    if (!document.querySelector('.sidebar-overlay')) {
+        const overlay = document.createElement('div');
+        overlay.className = 'sidebar-overlay';
+        document.body.appendChild(overlay);
+        
+        // 添加点击事件
+        overlay.addEventListener('click', toggleSidebar);
+    }
+    
+    // 3. 调整消息区域的高度
+    adjustMessageAreaHeight();
+    
+    // 4. 确保侧边栏初始状态为隐藏
+    const sidebar = document.querySelector('.sidebar');
+    sidebar.classList.remove('show');
+    
+    // 5. 优化移动端输入体验
+    optimizeMobileInput();
+    
+    // 6. 优化移动端模型设置显示
+    optimizeMobileModelSettings();
+    
+    // 7. 设置系统提示词切换功能
+    setupSystemPromptToggle();
+    
+    // 8. 设置模态框层级处理
+    setupModalLayerHandling();
+    
+    // 9. 优化选择框和下拉菜单
+    optimizeSelects();
+}
+
+/**
+ * 恢复桌面端界面
+ * 移除移动端特有元素，恢复桌面布局
+ */
+function restoreDesktopInterface() {
+    // 1. 移除汉堡菜单按钮
+    const menuToggle = document.querySelector('.menu-toggle');
+    if (menuToggle) {
+        menuToggle.remove();
+    }
+    
+    // 2. 移除遮罩层
+    const overlay = document.querySelector('.sidebar-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
+    
+    // 3. 恢复侧边栏默认状态
+    const sidebar = document.querySelector('.sidebar');
+    sidebar.style.left = '0';
+    sidebar.classList.remove('show');
+    
+    // 4. 恢复输入区域默认状态
+    restoreDesktopInput();
+    
+    // 5. 恢复模型设置默认状态
+    restoreDesktopModelSettings();
+    
+    // 6. 恢复系统提示词显示
+    restoreSystemPromptDisplay();
+    
+    // 7. 恢复选择框和下拉菜单
+    restoreSelects();
+}
+
+/**
+ * 切换侧边栏显示/隐藏
+ */
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.querySelector('.sidebar-overlay');
+    
+    sidebar.classList.toggle('show');
+    overlay.classList.toggle('show');
+    
+    // 隐藏系统提示词
+    hideSystemPrompt();
+}
+
+/**
+ * 调整消息区域的高度
+ * 根据当前设备尺寸动态计算聊天消息区域的高度
+ */
+function adjustMessageAreaHeight() {
+    if (!isMobile) return;
+    
+    // 使用flex布局自动调整高度
+    const chatMessages = document.querySelector('.chat-messages');
+    const inputContainer = document.querySelector('.message-input-container');
+    
+    if (chatMessages && inputContainer) {
+        // 确保消息区域填充剩余空间，自动调整高度
+        const inputHeight = inputContainer.offsetHeight;
+        chatMessages.style.marginBottom = `${inputHeight + 10}px`;
+    }
+}
+
+/**
+ * 优化移动端输入体验
+ */
+function optimizeMobileInput() {
+    // 调整文本区域自动增长高度的最大值
+    const userInput = document.getElementById('user-input');
+    if (userInput) {
+        userInput.style.maxHeight = '100px';
+        
+        // 在输入时自动调整高度
+        userInput.addEventListener('input', function() {
+            adjustMessageAreaHeight();
+        });
+    }
+    
+    // 点击发送按钮后自动隐藏键盘
+    const sendButton = document.getElementById('send-button');
+    if (sendButton) {
+        const originalClickHandler = sendButton.onclick;
+        
+        sendButton.onclick = function(e) {
+            if (originalClickHandler) {
+                originalClickHandler.call(this, e);
+            }
+            
+            // 隐藏键盘
+            document.activeElement.blur();
+        };
+    }
+}
+
+/**
+ * 恢复桌面端输入区域
+ */
+function restoreDesktopInput() {
+    const userInput = document.getElementById('user-input');
+    if (userInput) {
+        userInput.style.maxHeight = '';
+    }
+    
+    // 恢复消息区域边距
+    const chatMessages = document.querySelector('.chat-messages');
+    if (chatMessages) {
+        chatMessages.style.marginBottom = '';
+    }
+}
+
+/**
+ * 优化移动端模型设置显示
+ */
+function optimizeMobileModelSettings() {
+    // 当模型设置渲染器存在时进行优化
+    if (window.modelSettingRenderer) {
+        // 调整模型设置样式
+        const modelSettingContainer = document.querySelector('.model-setting-container');
+        if (modelSettingContainer) {
+            // 简化移动端上的显示
+            const sliders = modelSettingContainer.querySelectorAll('.slider-container');
+            sliders.forEach(slider => {
+                // 调整滑块宽度
+                slider.style.width = '100%';
+            });
+        }
+    }
+    
+    // 增强视觉开关层级调整
+    const enhancedVisualToggle = document.querySelector('.enhanced-visual-toggle-container');
+    if (enhancedVisualToggle) {
+        enhancedVisualToggle.style.zIndex = '30';
+        
+        // 调整位置，避免与输入框重叠
+        enhancedVisualToggle.style.bottom = '80px';
+    }
+}
+
+/**
+ * 恢复桌面端模型设置
+ */
+function restoreDesktopModelSettings() {
+    if (window.modelSettingRenderer) {
+        const modelSettingContainer = document.querySelector('.model-setting-container');
+        if (modelSettingContainer) {
+            const sliders = modelSettingContainer.querySelectorAll('.slider-container');
+            sliders.forEach(slider => {
+                slider.style.width = '';
+            });
+        }
+    }
+    
+    // 恢复增强视觉开关层级
+    const enhancedVisualToggle = document.querySelector('.enhanced-visual-toggle-container');
+    if (enhancedVisualToggle) {
+        enhancedVisualToggle.style.zIndex = '';
+        enhancedVisualToggle.style.bottom = '';
+    }
+}
+
+/**
+ * 优化选择框和下拉菜单
+ */
+function optimizeSelects() {
+    // 优化模型选择器
+    const modelSelect = document.getElementById('model-select');
+    if (modelSelect) {
+        // 确保选择框的z-index设置正确
+        modelSelect.style.zIndex = '200';
+        
+        // 添加聚焦和失焦事件来管理z-index
+        modelSelect.addEventListener('focus', function() {
+            this.style.zIndex = '300';
+        });
+        
+        modelSelect.addEventListener('blur', function() {
+            setTimeout(() => {
+                this.style.zIndex = '200';
+            }, 300); // 延迟恢复z-index，确保下拉菜单有时间关闭
+        });
+        
+        // 简化模型名称但保留完整内容
+        Array.from(modelSelect.options).forEach(option => {
+            // 保存原始文本以便还原
+            if (!option.getAttribute('data-original-text') && option.text) {
+                option.setAttribute('data-original-text', option.text);
+            }
+        });
+        
+        // 添加 CSS 类
+        modelSelect.classList.add('model-select-element');
+    }
+}
+
+/**
+ * 恢复选择框和下拉菜单
+ */
+function restoreSelects() {
+    // 恢复模型选择器
+    const modelSelect = document.getElementById('model-select');
+    if (modelSelect) {
+        // 移除移动端样式
+        modelSelect.style.zIndex = '';
+        modelSelect.classList.remove('model-select-element');
+        
+        // 移除事件监听器
+        const newModelSelect = modelSelect.cloneNode(true);
+        modelSelect.parentNode.replaceChild(newModelSelect, modelSelect);
+        
+        // 恢复原始文本
+        Array.from(newModelSelect.options).forEach(option => {
+            const originalText = option.getAttribute('data-original-text');
+            if (originalText) {
+                option.text = originalText;
+            }
+        });
+    }
+}
+
+/**
+ * 设置系统提示词切换功能
+ * 在移动端将系统提示词改为点击按钮显示/隐藏
+ */
+function setupSystemPromptToggle() {
+    const promptHeader = document.querySelector('.system-prompt-header');
+    const systemPrompt = document.getElementById('system-prompt');
+    
+    if (promptHeader && systemPrompt) {
+        // 保留原始标题文本，但不再修改显示内容
+        const titleSpan = promptHeader.querySelector('span');
+        if (titleSpan && !titleSpan.getAttribute('data-original-text')) {
+            titleSpan.setAttribute('data-original-text', titleSpan.textContent);
+            // 不再修改文本内容，保持原始文本
+        }
+        
+        // 移除现有的事件监听器
+        const newPromptHeader = promptHeader.cloneNode(true);
+        promptHeader.parentNode.replaceChild(newPromptHeader, promptHeader);
+        
+        // 移除现有的显示类
+        systemPrompt.classList.remove('show');
+        
+        // 设置系统提示词样式
+        systemPrompt.style.position = 'absolute';
+        systemPrompt.style.maxHeight = '150px';
+        
+        // 添加点击事件，切换系统提示词显示/隐藏
+        newPromptHeader.addEventListener('click', function(e) {
+            e.stopPropagation(); // 防止点击事件冒泡
+            
+            // 隐藏其他弹出元素
+            hideAllDropdowns();
+            
+            // 切换显示状态
+            systemPrompt.classList.toggle('show');
+            
+            // 当显示系统提示词时
+            if (systemPrompt.classList.contains('show')) {
+                // 计算位置，确保不超出屏幕
+                const containerRect = this.getBoundingClientRect();
+                
+                // 设置合理的左侧位置
+                const leftPosition = Math.max(10, Math.min(
+                    containerRect.left,
+                    window.innerWidth - 270 // 260px宽度 + 10px边距
+                ));
+                systemPrompt.style.left = `${leftPosition}px`;
+                
+                // 聚焦输入框
+                systemPrompt.focus();
+                
+                // 点击其他区域时隐藏系统提示词
+                document.addEventListener('click', hideSystemPrompt);
+            } else {
+                document.removeEventListener('click', hideSystemPrompt);
+            }
+        });
+        
+        // 防止系统提示词点击事件冒泡
+        systemPrompt.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    }
+}
+
+/**
+ * 恢复系统提示词在桌面端的显示方式
+ */
+function restoreSystemPromptDisplay() {
+    const systemPrompt = document.getElementById('system-prompt');
+    const promptHeader = document.querySelector('.system-prompt-header');
+    
+    if (systemPrompt) {
+        // 移除移动端特有的类和事件
+        systemPrompt.classList.remove('show');
+        document.removeEventListener('click', hideSystemPrompt);
+        
+        // 恢复样式
+        systemPrompt.style.position = '';
+        systemPrompt.style.width = '';
+        systemPrompt.style.left = '';
+    }
+    
+    // 重新添加头部点击事件
+    if (promptHeader) {
+        const newPromptHeader = promptHeader.cloneNode(true);
+        promptHeader.parentNode.replaceChild(newPromptHeader, promptHeader);
+        
+        // 恢复桌面版点击事件
+        newPromptHeader.addEventListener('click', function() {
+            const container = document.querySelector('.system-prompt-container');
+            const textarea = document.getElementById('system-prompt');
+            
+            if (container) {
+                container.classList.toggle('collapsed');
+            }
+            
+            if (textarea) {
+                textarea.classList.toggle('collapsed');
+                textarea.style.height = textarea.classList.contains('collapsed') ? 
+                    '0' : (textarea.scrollHeight + 'px');
+                
+                // 如果展开，则聚焦
+                if (!textarea.classList.contains('collapsed')) {
+                    textarea.focus();
+                }
+            }
+        });
+    }
+}
+
+/**
+ * 隐藏系统提示词
+ * 点击文档其他区域时调用
+ */
+function hideSystemPrompt(e) {
+    const systemPrompt = document.getElementById('system-prompt');
+    const promptHeader = document.querySelector('.system-prompt-header');
+    
+    // 如果点击的不是系统提示词也不是它的头部，则隐藏
+    if (systemPrompt && 
+        (!e || 
+        (e.target !== systemPrompt && 
+         e.target !== promptHeader && 
+         !promptHeader.contains(e.target)))) {
+        
+        systemPrompt.classList.remove('show');
+        document.removeEventListener('click', hideSystemPrompt);
+    }
+}
+
+/**
+ * 隐藏所有下拉菜单
+ * 用于在打开一个下拉菜单前隐藏其他下拉菜单
+ */
+function hideAllDropdowns() {
+    // 隐藏系统提示词
+    hideSystemPrompt();
+    
+    // 隐藏用户配置下拉菜单
+    const profileDropdown = document.querySelector('.profile-dropdown');
+    if (profileDropdown && window.getComputedStyle(profileDropdown).display !== 'none') {
+        profileDropdown.style.display = 'none';
+    }
+}
+
+/**
+ * 设置模态框层级处理
+ * 确保模态框和侧边栏能正确覆盖增强视觉分析开关
+ */
+function setupModalLayerHandling() {
+    // 监听模型设置栏的显示/隐藏
+    const modelSettingObserver = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                // 当模型设置栏显示时，调整增强视觉分析开关的层级
+                const modelSettingBar = document.querySelector('.model-setting-bar');
+                const enhancedVisualToggle = document.querySelector('.enhanced-visual-toggle-container');
+                
+                if (modelSettingBar && enhancedVisualToggle) {
+                    if (modelSettingBar.style.display !== 'none') {
+                        // 模型设置栏显示时，隐藏增强视觉分析开关
+                        enhancedVisualToggle.style.visibility = 'hidden';
+                    } else {
+                        // 模型设置栏隐藏时，显示增强视觉分析开关
+                        enhancedVisualToggle.style.visibility = 'visible';
+                    }
+                }
+            }
+        });
+    });
+    
+    const modelSettingBar = document.querySelector('.model-setting-bar');
+    if (modelSettingBar) {
+        modelSettingObserver.observe(modelSettingBar, { attributes: true });
+    }
+    
+    // 监听用户下拉菜单点击
+    const userProfileBtn = document.querySelector('.user-profile-btn');
+    if (userProfileBtn) {
+        userProfileBtn.addEventListener('click', function() {
+            // 隐藏其他下拉元素
+            hideSystemPrompt();
+            
+            // 确保增强视觉分析开关不遮挡下拉菜单
+            const enhancedVisualToggle = document.querySelector('.enhanced-visual-toggle-container');
+            if (enhancedVisualToggle) {
+                enhancedVisualToggle.style.zIndex = '20';
+            }
+        });
+    }
+}
+
+/**
+ * 滚动消息区域到底部
+ */
+function scrollToBottom() {
+    const chatMessages = document.getElementById('chat-messages');
+    if (chatMessages) {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+}
+
+/**
+ * 移动端响应式功能测试
+ * 此函数仅用于测试移动端响应式功能是否正常工作
+ */
+function testMobileResponsive() {
+    // 创建测试报告
+    const report = {
+        isMobile: isMobile,
+        viewport: {
+            width: window.innerWidth,
+            height: window.innerHeight
+        },
+        elements: {}
+    };
+    
+    // 检测DOM元素是否存在
+    const elementsToCheck = [
+        '.sidebar', 
+        '.chat-container', 
+        '.chat-header', 
+        '.chat-messages', 
+        '.message-input-container',
+        '.menu-toggle',
+        '.sidebar-overlay',
+        '.system-prompt-container',
+        '.user-profile-container',
+        '.enhanced-visual-toggle-container'
+    ];
+    
+    elementsToCheck.forEach(selector => {
+        const element = document.querySelector(selector);
+        report.elements[selector] = {
+            exists: !!element,
+            visible: element ? window.getComputedStyle(element).display !== 'none' : false
+        };
+        
+        if (element) {
+            report.elements[selector].dimensions = {
+                width: element.offsetWidth,
+                height: element.offsetHeight
+            };
+            
+            // 检查z-index
+            const zIndex = window.getComputedStyle(element).zIndex;
+            if (zIndex !== 'auto') {
+                report.elements[selector].zIndex = zIndex;
+            }
+        }
+    });
+    
+    // 检查modelSettingRenderer
+    report.modelSettingRenderer = {
+        exists: !!window.modelSettingRenderer
+    };
+    
+    // 输出测试报告到控制台
+    console.log('移动端响应式功能测试报告:', report);
+    
+    // 返回测试报告
+    return report;
+}
+
+/**
+ * 当键盘显示或隐藏时调整界面
+ * 主要针对移动端键盘弹出时的界面调整
+ */
+window.addEventListener('resize', function() {
+    // 在移动设备上，键盘弹出时会改变视口高度
+    if (isMobile) {
+        adjustMessageAreaHeight();
+    }
+});
+
+// 暴露公共方法
+export { toggleSidebar, adjustMessageAreaHeight, scrollToBottom, testMobileResponsive, hideAllDropdowns }; 

@@ -10,13 +10,21 @@ import { initializeUserProfile ,initializeTheme} from './user_profiles/userDropd
 import { ModelSettingRenderer } from './model_setting_bar/modelSettingRenderer.js';
 import { AttachmentTypeLoader } from "./utils/attachments/types.js";
 import ReasoningBox from './reasoning_box.js';
+// 导入移动端响应式功能
+import { adjustMessageAreaHeight, testMobileResponsive, hideAllDropdowns } from './mobile-responsive.js';
+
 const md = initMarkdownit();
+// 在文件开头添加新的变量
+let conversations = [];
+export let currentConversationId = null;
 // 存储聊天消息历史
 let messages = [];
 // 当前的流式响应对象
 let currentReader = null;
 // 添加全局标志，用于表示是否手动停止生成
 window.generationStopped = false;
+// 在脚本开始处添加全局变量定义
+window.ReasoningBoxInstance = null; // 添加全局实例变量
 
 // 获取 DOM 元素
 const chatMessages = document.getElementById('chat-messages');
@@ -101,6 +109,33 @@ function stopGeneration() {
     if (window.isGenerating) {
         console.log("设置generationStopped为true");
         window.generationStopped = true;
+        const currentConversation = conversations.find(c => c.id === currentConversationId);
+        
+        // 保存当前未完成的思考框内容
+        const messageDiv = document.querySelector('.message.assistant-message:last-child');
+        if (messageDiv) {
+            const messageContent = messageDiv.querySelector('.message-content');
+            const reasoningBox = messageContent.querySelector('.reasoning-box');
+            
+            if (reasoningBox && window.ReasoningBoxInstance) {
+                // 标记思考框为已完成
+                window.ReasoningBoxInstance.markGenerationComplete();
+                
+                // 获取当前对话
+                if (currentConversation && currentConversation.messages.length > 0) {
+                    // 获取上一条用户消息的索引
+                    const lastUserMessageIndex = currentConversation.messages.length - 1;
+                    
+                    // 移除最后一条用户消息，防止重复
+                    if (currentConversation.messages[lastUserMessageIndex].role === "user") {
+                        currentConversation.messages.pop();
+                        // 保存对话
+                        saveConversation(currentConversation.id, 'update');
+                    }
+                }
+            }
+        }
+        
         if (currentReader) {
             console.log("准备取消currentReader");
             try {
@@ -585,10 +620,6 @@ function appendMessage(content, isUser = false, messageIndex = null, attachments
     }
 }
 
-// 在文件开头添加新的变量
-let conversations = [];
-export let currentConversationId = null;
-
 // 在文件开头添加这个变量
 const default_system_prompt = String.raw`你是一个AI助理。你需要尽可能地满足用户的需求。在页面格式方面有以下提示：请直接输出markdown内容，不要添加额外的代码块标记。如果需要显示代码，直接使用markdown的代码块语法。
 
@@ -878,6 +909,29 @@ async function loadConversations() {
                 if (window.modelSettingRenderer) {
                     // 获取当前选中的模型配置
                     const modelSelect = document.getElementById('model-select');
+                    
+                    // 获取最后一条助手消息的模型信息
+                    const lastModel = getLastAssistantModel({messages: currentConversation.messages});
+                    console.log('当前会话最后使用的模型:', lastModel);
+                    
+                    // 如果有最后使用的模型，则使用该模型
+                    if (lastModel && lastModel.modelId) {
+                        updateModelSelect(lastModel.modelId, modelSelect);
+                        
+                        // 确保图标更新
+                        const titleIconRenderer = document.querySelector('#model-icon');
+                        if (titleIconRenderer) {
+                            // 从icon_types.js导入的映射中获取图标路径
+                            const iconPath = model_to_svg[lastModel.modelIcon];
+                            if (iconPath) {
+                                console.log('直接更新标题图标为:', lastModel.modelIcon);
+                                titleIconRenderer.src = iconPath;
+                            }
+                        }
+                    } else if (currentConversation.model_id) {
+                        updateModelSelect(currentConversation.model_id, modelSelect);
+                    }
+                    
                     const selectedOption = modelSelect.selectedOptions[0];
                     const maxTokens = parseInt(selectedOption.getAttribute('data-max-output-tokens')) || 4096;
                     const defaultTokens = parseInt(selectedOption.getAttribute('data-default-output-tokens')) || Math.floor(maxTokens/2);
@@ -1587,6 +1641,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelectorAll('.text-content').forEach(textContent => {
         initializeCodeBlocks(textContent);
     });
+    
+    // 监听模型选择变化，处理移动端选择框问题
+    const modelSelectForMobile = document.getElementById('model-select');
+    if (modelSelectForMobile) {
+        modelSelectForMobile.addEventListener('change', function() {
+            // 在移动端，选择后需要重新计算消息区域高度
+            if (window.innerWidth <= 768) {
+                // 延迟执行以确保DOM已更新
+                setTimeout(() => {
+                    adjustMessageAreaHeight();
+                    hideAllDropdowns();
+                }, 100);
+            }
+        });
+    }
+    
+    // 运行移动端响应式测试（仅在控制台输出报告）
+    if (window.innerWidth <= 768) {
+        // 延迟执行测试，确保所有DOM元素都已加载
+        setTimeout(() => {
+            testMobileResponsive();
+        }, 1000);
+    }
     
     // 等待模型列表加载完成
     const modelSelect = document.getElementById('model-select');
@@ -2512,6 +2589,8 @@ async function switchVersion(messageIndex, newVersion) {
                     reasoning_summary: version.reasoning_summary,
                     reasoning_time: version.thinking_time
                 });
+                // 保存到全局变量，以便stopGeneration可以访问
+                window.ReasoningBoxInstance = reasoningBox;
             }
         }
 
@@ -3083,6 +3162,11 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
                 // 重置标志
                 window.generationStopped = false;
                 console.log("重置generationStopped为false");
+                // 如果存在reasoningBox，则保存到全局实例
+                if (reasoningBox) {
+                    console.log("保存reasoningBox到全局实例");
+                    window.ReasoningBoxInstance = reasoningBox;
+                }
                 break;
             }
             
@@ -3135,6 +3219,8 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
                             if (!reasoningBox) {
                                 console.log("创建新的reasoningBox");
                                 reasoningBox = new ReasoningBox(messageContent, md);
+                                // 保存到全局变量，以便stopGeneration可以访问
+                                window.ReasoningBoxInstance = reasoningBox;
                             }
                             reasoningBox.appendContent(data.reasoning_content);
                         } 

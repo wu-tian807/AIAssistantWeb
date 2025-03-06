@@ -24,7 +24,6 @@ export class EnhancedVisualToggle {
 
     async initialize() {
         await this.fetchSettings();
-        this.setupEventListeners();
     }
 
     /**
@@ -503,26 +502,6 @@ export class EnhancedVisualToggle {
 
     hideProcessingStatus() {
         this.processingStatus.style.display = 'none';
-    }
-
-    handleImageProcessing(event) {
-        const data = JSON.parse(event.data);
-        if (data.status === 'processing_image') {
-            this.showProcessingStatus(data.message || '正在处理图片...');
-        } else if (data.content && data.content.includes('[图片AI分析结果')) {
-            this.hideProcessingStatus();
-        } else if (data.error) {
-            this.showProcessingStatus(`处理失败: ${data.error}`);
-            setTimeout(() => this.hideProcessingStatus(), 3000);
-        }
-    }
-
-    setupEventListeners() {
-        // 添加SSE事件监听
-        const eventSource = new EventSource('/api/chat/stream');
-        eventSource.onmessage = (event) => this.handleImageProcessing(event);
-        
-        // ... existing code ...
     }
 }
 

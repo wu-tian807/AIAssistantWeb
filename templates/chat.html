@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <!-- 首先定义全局变量 -->
     <script>
@@ -51,6 +51,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/reasoning-box.css') }}">
     <!-- 添加增强视觉分析开关样式 -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/enhanced-visual-toggle.css') }}">
+    <!-- 添加移动端响应式样式 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-responsive.css') }}">
     <!-- 添加常用语言包 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/javascript.min.js"></script>
@@ -146,6 +148,8 @@
     <script type="module" src="{{ url_for('static', filename='js/inputRenderer.js') }}"></script>
     <!-- 添加增强视觉分析开关脚本 -->
     <script type="module" src="{{ url_for('static', filename='js/components/enhanced_visual_toggle.js') }}"></script>
+    <!-- 添加移动端响应式脚本 -->
+    <script type="module" src="{{ url_for('static', filename='js/mobile-responsive.js') }}"></script>
     <script>
         // 移除原有的logout事件监听
     </script>

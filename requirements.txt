@@ -3,6 +3,7 @@ Flask==3.0.0
 Flask-SQLAlchemy==3.1.1
 Flask-Mail==0.9.1
 Flask-Login==0.6.3
+Flask_Migrate==4.0.7
 google-generativeai==0.3.2
 google-genai==1.2.0
 openai==1.65.2
@@ -26,7 +27,7 @@ langdetect>=1.0.9  # 语言检测
 regex>=2023.10.3  # 增强的正则表达式支持
 
 # tokenize
-tiktoken==1.45.0
+tiktoken==0.9.0
 
 # 图片视频处理
 opencv-python==4.11.0.86

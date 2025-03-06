@@ -1,0 +1,589 @@
+/* 移动端响应式设计样式
+ * 此文件包含专门针对移动设备的样式调整
+ * 作用于手机端竖屏（最大宽度为768px的设备）
+ */
+
+/* 基础移动端响应式布局 */
+@media screen and (max-width: 768px) {
+    /* 应用容器的基本调整 */
+    .app-container {
+        flex-direction: column;
+        height: 100vh;
+        position: relative;
+        overflow: hidden;
+    }
+
+    /* 侧边栏调整 - 默认隐藏 */
+    .sidebar {
+        position: fixed;
+        left: -100%;
+        top: 0;
+        width: 85%;
+        height: 100%;
+        z-index: 1000;
+        transition: left 0.3s ease;
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.2);
+    }
+
+    /* 侧边栏显示状态 */
+    .sidebar.show {
+        left: 0;
+    }
+
+    /* 遮罩层 - 当侧边栏打开时显示 */
+    .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+    }
+
+    .sidebar-overlay.show {
+        display: block;
+    }
+
+    /* 主内容区域调整 */
+    .chat-container {
+        width: 100%;
+        height: 100vh;
+        margin-left: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden; /* 确保内容不会超出容器 */
+    }
+
+    /* 聊天头部调整 - 全新布局 */
+    .chat-header .header-main {
+        padding: 4px 10px; /* 减小内边距 */
+        flex-direction: column;
+        flex-wrap: nowrap; /* 不允许换行，保持垂直排列 */
+        align-items: flex-start;
+        justify-content: flex-start;
+        gap: 0px; /* 减小元素间距 */
+        position: relative;
+        width: calc(100% - 20px); /* 确保头部自身不超出容器 */
+        overflow: visible; /* 防止内容溢出 */
+        min-height: unset; /* 移除最小高度限制 */
+    }
+
+    .chat-header h1 {
+        font-size: 0.75rem; /* 减小字体 */
+        margin: 0;
+        order: 1;
+        flex: 0 0 auto; /* 不拉伸 */
+        white-space: nowrap;
+        overflow: visible;
+        text-overflow: ellipsis;
+        margin-left: 10px; /* 减小左侧间距 */
+        max-width: calc(100% - 50px);
+        margin-top: 2px; /* 减小顶部间距 */
+        position: relative; /* 使用相对定位 */
+    }
+
+    /* 控制区域样式 - 改为水平排列 */
+    .controls-section {
+        width: calc(100% - 20px); /* 减去左侧菜单按钮空间和右侧边距 */
+        flex-direction: row; /* 改为水平排列 */
+        align-items: center; /* 垂直居中 */
+        justify-content: space-between; /* 两端对齐 */
+        gap: 6px; /* 元素间距 */
+        order: 3;
+        padding-left: 10px; /* 为菜单按钮留出空间 */
+        margin-bottom: 2px; /* 减小底部间距 */
+        overflow: visible; /* 防止内容溢出 */
+        margin-top: -2px; /* 向上移动 */
+    }
+
+    /* 模型选择器调整 */
+    .model-selector {
+        width: auto; /* 设置为固定百分比宽度 */
+        max-width: 240px; /* 限制最大宽度 */
+        min-width: unset; /* 移除最小宽度限制 */
+        flex: 0 0 auto; /* 固定宽度，不拉伸 */
+        order: 1;
+        display: flex;
+        align-items: center;
+        margin-left: 0; /* 覆盖前面的margin-left设置 */
+        overflow: visible; /* 防止内容溢出 */
+        position: relative;
+        left: -5px; /* 减小左偏移，使其位置更合理 */
+        height: 30px; /* 设置更小的高度 */
+        margin-bottom: 0; /* 移除底部边距 */
+    }
+
+    /* 自定义选择器样式调整 */
+    .custom-select {
+        width: 100%;
+        position: relative;
+        left: -5px; /* 与model-selector保持一致的左移 */
+        height: 30px; /* 设置高度 */
+    }
+    
+    /* 确保选项列表在移动端也能正确显示 */
+    .select-options {
+        left: 0;
+        width: 100%;
+    }
+
+    .select-trigger {
+        padding-left: 5px; /* 减少左侧内边距 */
+        height: 30px; /* 设置高度 */
+        font-size: 13px; /* 更小的字体 */
+        display: flex;
+        align-items: center;
+        white-space: nowrap; /* 防止文本换行 */
+        overflow: hidden; /* 隐藏溢出内容 */
+    }
+
+    /* 选择器中的文本显示省略号 */
+    .select-trigger .selected-text {
+        white-space: nowrap; /* 防止文本换行 */
+        overflow: hidden; /* 隐藏溢出内容 */
+        text-overflow: ellipsis; /* 使用省略号 */
+        max-width: calc(100% - 20px); /* 为箭头图标留出空间 */
+    }
+
+    #model-select {
+        width: 100%; /* 填充可用空间 */
+        max-width: calc(100% - 25px); /* 为图标留出空间 */
+        padding: 3px 10px 3px 5px; /* 减小内边距 */
+        font-size: 13px; /* 更小的字体 */
+        border: none;
+        background-color: transparent;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        outline: none;
+        cursor: pointer;
+        height: 30px; /* 设置高度 */
+    }
+
+    /* 模型选择下拉菜单限制高度防止溢出 */
+    #model-select option {
+        font-size: 0.85rem;
+        white-space: normal; /* 允许文本换行 */
+    }
+
+    /* 确保下拉菜单位置正确且不超出屏幕 */
+    #model-select:focus {
+        z-index: 250; /* 确保选择框在聚焦时位于顶层 */
+    }
+
+    /* 系统提示词容器调整 */
+    .system-prompt-container {
+        width: auto; /* 设置为固定百分比宽度 */
+        max-width: 240px; /* 限制最大宽度 */
+        order: 2;
+        flex: 0 0 auto; /* 固定宽度，不拉伸 */
+        margin-bottom: 0; /* 移除底部边距 */
+        position: relative;
+    }
+
+    /* 系统提示词头部样式增强 */
+    .system-prompt-header {
+        background-color: #f5f5f5;
+        padding: 0 8px; /* 减小内边距 */
+        border-radius: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: normal;
+        color: #666;
+        font-size: 0.75rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        height: 30px; /* 设置高度 */
+        line-height: 30px; /* 垂直居中 */
+        white-space: nowrap; /* 防止文本换行 */
+    }
+
+    .system-prompt-header span {
+        white-space: nowrap; /* 防止文本换行 */
+        overflow: hidden; /* 隐藏溢出内容 */
+        text-overflow: ellipsis; /* 使用省略号 */
+        max-width: calc(100% - 20px); /* 为箭头图标留出空间 */
+        display: block; /* 确保span可以应用宽度 */
+    }
+
+    /* 系统提示词文本框默认隐藏 */
+    #system-prompt {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: 260px; /* 固定一个合理的宽度 */
+        max-width: 90vw; /* 最大不超过视口宽度的90% */
+        margin-top: 5px;
+        font-size: 0.85rem;
+        max-height: 150px;
+        z-index: 200;
+        background-color: rgba(0, 0, 0, 0.15);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    /* 点击后显示系统提示词 */
+    #system-prompt.show {
+        display: block;
+    }
+
+    /* 用户信息区域 */
+    .user-profile-container {
+        width: auto;
+        order: 2;
+        margin: 0;
+        position: absolute;
+        right: 10px;
+        top: 8px;
+    }
+
+    /* 用户资料按钮调整 */
+    .user-profile-btn {
+        padding: 2px;
+        font-size: 0;
+    }
+
+    /* 用户头像调整 */
+    .user-profile-btn img {
+        width: 30px;
+        height: 30px;
+        margin-right: 0;
+    }
+
+    /* 隐藏用户名称 */
+    .user-display-name {
+        display: none;
+    }
+
+    /* 菜单按钮位置调整 */
+    .menu-toggle {
+        display: block;
+        position: absolute;
+        top: 8px;
+        left: 10px;
+        z-index: 10;
+        background: none;
+        border: none;
+        font-size: 1.3rem;
+        color: var(--text-color);
+        cursor: pointer;
+        padding: 5px;
+    }
+
+    /* 消息区域调整，确保不被输入框遮挡 */
+    .chat-messages {
+        height: auto;
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px;
+        padding-bottom: 0; /* 移除底部内边距，由margin-bottom代替 */
+        margin-bottom: 70px; /* 为固定定位的输入框留出空间 */
+        overflow-anchor: none; /* 防止滚动锚定问题 */
+    }
+
+    /* 消息样式调整 */
+    .message {
+        max-width: 95%;
+        padding: 12px;
+        margin-bottom: 10px;
+    }
+
+    .user-message {
+        margin-left: auto;
+        margin-right: 5px;
+    }
+
+    .assistant-message {
+        margin-left: 5px;
+        margin-right: auto;
+    }
+
+    /* 输入区域调整 */
+    .message-input-container {
+        padding: 10px;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background-color: var(--background-color);
+        z-index: 150; /* 提高层级，确保始终在顶部 */
+        box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
+        border-top: 1px solid var(--border-color);
+    }
+
+    .chat-input-container {
+        width: 100%;
+    }
+
+    /* 附件预览区域 */
+    .attachment-preview {
+        max-height: 80px;
+        overflow-y: auto;
+    }
+
+    /* 隐藏桌面端不需要的元素 */
+    .menu-toggle-desktop {
+        display: none;
+    }
+
+    /* 消息操作按钮调整 */
+    .message-actions {
+        flex-direction: column;
+        right: 5px;
+    }
+
+    /* 代码块样式调整 */
+    pre {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    /* 表格样式调整 */
+    table {
+        display: block;
+        overflow-x: auto;
+        max-width: 100%;
+    }
+
+    /* 图片附件调整 */
+    .image-attachment {
+        max-width: 100%;
+    }
+
+    /* 弹窗调整 */
+    .modal-content {
+        width: 90%;
+        max-height: 80vh;
+    }
+    
+    /* 模型设置相关样式调整 */
+    .model-setting-container {
+        width: 100%;
+        padding: 10px;
+    }
+    
+    .model-setting-slider {
+        width: 100%;
+    }
+    
+    .slider-container {
+        width: 100%;
+        margin: 10px 0;
+    }
+    
+    .model-setting-title {
+        font-size: 0.9rem;
+    }
+    
+    .model-setting-value {
+        font-size: 0.9rem;
+    }
+    
+    /* 思考框样式调整 */
+    .reasoning-box {
+        max-width: 95%;
+        font-size: 0.9rem;
+    }
+    
+    .reasoning-action-button {
+        padding: 3px 8px;
+        font-size: 0.8rem;
+    }
+    
+    /* 减少代码块内容的字体大小 */
+    pre code {
+        font-size: 0.85rem;
+    }
+    
+    /* 调整版本控制按钮 */
+    .version-control {
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+    
+    .version-button {
+        padding: 3px 5px;
+        font-size: 0.75rem;
+    }
+    
+    /* 调整附件显示 */
+    .attachment-container {
+        max-width: 95%;
+    }
+    
+    .file-attachment {
+        padding: 5px;
+    }
+    
+    /* 调整输入区域文本框 */
+    #user-input {
+        font-size: 1rem;
+    }
+
+    /* 调整增强视觉分析开关层级 */
+    .enhanced-visual-toggle-container {
+        z-index: 30; /* 进一步降低层级，确保被其他元素覆盖 */
+        bottom: 80px; /* 提高位置，避免与输入框重叠 */
+    }
+
+    /* 侧边栏和模型设置栏层级提高 */
+    .sidebar {
+        z-index: 1000; /* 高于增强视觉分析开关 */
+    }
+
+    .model-setting-bar {
+        z-index: 200; /* 高于增强视觉分析开关 */
+    }
+
+    /* 调整模型设置侧边栏 */
+    .model-setting-dropdown {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+
+
+    /* 修复用户下拉菜单样式 */
+    .profile-dropdown {
+        position: absolute;
+        right: 0;
+        top: 100%;
+        z-index: 300;
+        width: auto;
+        min-width: 150px;
+    }
+
+    /* 确保弹出层级关系正确 */
+    .modal {
+        z-index: 1100; /* 确保模态框始终在最上层 */
+    }
+
+    /* 解决下拉选项遮挡问题 */
+    .chat-header select {
+        z-index: 251;
+        max-width: 100%;
+        text-overflow: ellipsis;
+        overflow: hidden;
+    }
+
+    /* 确保model-selector只定义一次 */
+    /* .model-selector 定义已移至文件开头部分，这里删除重复定义 */
+
+    #model-icon {
+        width: 16px; /* 减小图标尺寸 */
+        height: 16px;
+        margin-right: 4px;
+        flex-shrink: 0; /* 防止图标被压缩 */
+    }
+
+    #model-icon-container {
+        width: 16px; /* 减小图标容器尺寸 */
+        height: 16px;
+        margin-right: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0; /* 防止图标被压缩 */
+    }
+}
+
+/* 特小屏幕设备的额外适配（宽度小于360px） */
+@media screen and (max-width: 360px) {
+    .model-selector, 
+    .system-prompt-container {
+        width: auto; /* 保持固定百分比宽度 */
+        max-width: 160px; /* 更小屏幕上进一步限制宽度 */
+        margin-bottom: 0;
+        overflow: hidden; /* 防止内容溢出 */
+        position: relative;
+        left: 0px; /* 移除左偏移 */
+        height: 28px; /* 进一步减小高度 */
+    }
+    
+    .controls-section {
+        flex-direction: row; /* 保持水平排列 */
+        align-items: center;
+        width: calc(100% - 20px); /* 确保留出空间 */
+        overflow: hidden; /* 防止内容溢出 */
+        padding-left: 5px; /* 小屏幕下减少左边距 */
+        gap: 4px; /* 更小的间距 */
+        margin-top: -2px; /* 保持向上移动 */
+    }
+    
+    #model-select,
+    .system-prompt-header,
+    .select-trigger {
+        max-width: 100%; /* 允许占满父容器 */
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        height: 26px; /* 进一步减小高度 */
+        line-height: 26px;
+        font-size: 12px; /* 进一步减小字体 */
+    }
+    
+    #model-select option {
+        font-size: 12px;
+    }
+    
+    .chat-header h1 {
+        font-size: 0.7rem; /* 进一步减小字体 */
+        margin: 0;
+        margin-left: 5px; /* 更小的左侧间距 */
+        margin-top: 1px; /* 更小的顶部间距 */
+    }
+    
+    .user-profile-btn img {
+        width: 24px;
+        height: 24px;
+    }
+    
+    #model-icon-container,
+    #model-icon {
+        width: 14px;
+        height: 14px;
+    }
+
+    /* 确保选择器文本在小屏幕上正确显示省略号 */
+    .select-trigger .selected-text {
+        max-width: calc(100% - 15px); /* 更小屏幕上为箭头留出更少空间 */
+        font-size: 12px; /* 更小的字体 */
+    }
+    
+    /* 确保下拉框在小屏幕上正确显示文本 */
+    .select-options {
+        max-width: 160px; /* 与容器宽度匹配 */
+        font-size: 12px;
+    }
+    
+    .select-options .option-item {
+        white-space: normal; /* 允许选项文本换行 */
+        padding: 5px; /* 减小内边距 */
+        font-size: 12px;
+    }
+    
+    .option-group .group-label {
+        font-size: 11px; /* 更小的分组标签字体 */
+        padding: 3px 5px; /* 减小内边距 */
+    }
+}
+
+/* 下拉菜单样式优化 */
+select.model-select-element {
+    max-height: 200px !important;
+    overflow-y: auto !important;
+    max-width: 100% !important;
+    width: auto !important;
+}
+
+/* 解决下拉选项遮挡问题 */
+.chat-header select {
+    z-index: 251;
+    max-width: 100%;
+    text-overflow: ellipsis;
+    overflow: hidden;
+} 
