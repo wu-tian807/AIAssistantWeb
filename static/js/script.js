@@ -1229,6 +1229,14 @@ const uploader = new Uploader({
         console.log('文件上传成功，添加到 imageUploader:', attachment);
         // 将上传的附件添加到 imageUploader 中
         imageUploader.attachments.add(attachment);
+    },
+    previewHandler: async (previewElement) => {
+        // 使用 AttachmentRenderer 处理预览元素
+        if (previewElement && previewElement instanceof HTMLElement) {
+            attachmentRenderer.addExternalElement(previewElement);
+            return true; // 返回true表示已处理
+        }
+        return false; // 返回false表示未处理
     }
 });
 

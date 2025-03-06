@@ -1,0 +1,37 @@
+/* 
+ * 输入工具栏样式 
+ * 用于管理输入框上方的工具栏及其布局
+ */
+
+/* 工具栏容器 */
+.input-tools-toolbar {
+    display: inline-flex;
+    align-items: center;
+    height: 32px;
+    padding: 0 4px;
+    transition: all 0.3s ease;
+    background-color: transparent;
+    animation: fade-in 0.3s ease-in-out;
+}
+
+/* 工具栏渐入动画 */
+@keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* 暗色模式下的工具栏 */
+.dark-mode.input-tools-toolbar {
+    background-color: #1a1a1a;
+    border: 1px solid #333;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    color: #e0e0e0;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+    .input-tools-toolbar {
+        padding: 0 2px;
+        height: 28px;
+    }
+} 

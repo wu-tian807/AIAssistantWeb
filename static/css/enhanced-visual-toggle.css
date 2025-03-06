@@ -3,244 +3,96 @@
  * 增强视觉分析开关样式
  */
 
-/* 增强视觉分析开关滑块基础样式 */
-.visual-tools-toolbar .slider {
-    position: absolute !important;
-    cursor: pointer !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    background-color: rgba(204, 204, 204, 0.5) !important;
-    -webkit-transition: 0.3s !important;
-    transition: 0.3s !important;
-    border-radius: 18px !important;
-    z-index: 1 !important;
-    overflow: hidden !important;
-}
+/*
+ * 增强视觉分析按钮样式
+ * 用于管理视觉分析功能的眼睛图标按钮
+ */
 
-/* 增强视觉分析开关滑块样式 - 限制只影响增强视觉分析开关 */
-.visual-tools-toolbar .slider:before,
-.visual-tools-toolbar .toggle-switch .slider:before {
-    position: absolute !important;
-    content: "" !important;
-    height: 14px !important; /* 调整滑块尺寸 */
-    width: 14px !important; /* 调整滑块尺寸 */
-    left: 2px !important;
-    bottom: 2px !important;
-    background-color: white !important;
-    -webkit-transition: 0.3s !important;
-    transition: 0.3s !important;
-    border-radius: 50% !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3) !important;
-}
-
-/* 增强视觉分析开关选中状态样式规则 */
-.visual-tools-toolbar .toggle-switch input:checked + .slider:before {
-    -webkit-transform: translateX(16px) !important;
-    -ms-transform: translateX(16px) !important;
-    transform: translateX(16px) !important;
-}
-
-/* 工具栏容器 */
-.visual-tools-toolbar {
-    display: flex;
-    justify-content: flex-start;
-    align-items: center;
-    padding: 5px 10px;
-    margin: 5px 0;
-    background-color: rgba(245, 245, 245, 0.9);
-    border-radius: 5px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    transition: opacity 0.3s ease;
-    animation: fade-in 0.3s ease-in-out;
-    position: relative;
-    z-index: 50;
-}
-
-/* 工具栏容器悬停状态 */
-.visual-tools-toolbar:hover {
-    opacity: 1;
-}
-
-/* 工具栏渐入动画 */
-@keyframes fade-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-/* 开关容器 */
-.toggle-container {
-    display: flex;
-    align-items: center;
-    margin-right: 10px;
-    background-color: transparent;
+/* 眼睛图标按钮 */
+.visual-eye-button {
+    background: transparent;
     border: none;
-    padding: 0;
+    padding: 4px;
+    border-radius: 50%;
     cursor: pointer;
+    color: #666;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    margin: 0 2px;
 }
 
-/* 开关标签文本 */
-.toggle-label {
-    margin-right: 8px;
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: #333;
-    white-space: nowrap;
+.visual-eye-button:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    transform: scale(1.1);
 }
 
-/* 开关按钮容器 */
-.toggle-switch {
-    position: relative;
-    display: inline-block;
-    width: 34px;
-    height: 18px;
-    margin: 0;
+.visual-eye-button.active {
+    color: #2196F3;
 }
 
-/* 隐藏原始复选框 */
-.toggle-switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-    position: absolute;
-    z-index: -1;
+/* 暗色模式下的按钮 */
+.dark-mode .visual-eye-button {
+    color: #aaa;
 }
 
-/* 增强视觉分析开关选中状态背景色 */
-.visual-tools-toolbar .toggle-switch input:checked + .slider {
-    background-color: rgba(33, 150, 243, 0.7) !important;
+.dark-mode .visual-eye-button.active {
+    color: #64B5F6;
 }
 
-/* 增强视觉分析开关聚焦状态轮廓 */
-.visual-tools-toolbar .toggle-switch input:focus + .slider {
-    box-shadow: 0 0 1px #2196F3 !important;
-}
-
-/* 暗色模式下的工具栏背景 */
-.dark-mode .visual-tools-toolbar {
-    background-color: rgba(30, 30, 30, 0.9);
-}
-
-/* 暗色模式下的标签文本颜色 */
-.dark-mode .toggle-label {
-    color: #e0e0e0;
-}
-
-/* 暗色模式下的滑块背景 */
-.dark-mode .visual-tools-toolbar .toggle-switch .slider {
-    background-color: rgba(80, 80, 80, 0.5) !important;
-}
-
-/* 暗色模式下选中状态的滑块背景 */
-.dark-mode .visual-tools-toolbar .toggle-switch input:checked + .slider {
-    background-color: rgba(33, 150, 243, 0.5) !important;
-}
-
-/* 暗色模式下的滑块颜色 */
-.dark-mode .visual-tools-toolbar .toggle-switch .slider:before {
-    background-color: #ddd !important;
-}
-
-/* 暗色模式下选中状态的滑块位置 */
-.dark-mode .visual-tools-toolbar .toggle-switch input:checked + .slider:before {
-    -webkit-transform: translateX(16px) !important;
-    -ms-transform: translateX(16px) !important;
-    transform: translateX(16px) !important;
-}
-
-/* 移动端样式调整 */
-@media (max-width: 768px) {
-    .visual-tools-toolbar {
-        padding: 4px 8px;
-        margin: 3px 0;
-        z-index: 60; /* 确保可以被模型设置和侧边栏覆盖 */
-        position: absolute;
-        bottom: 55px; /* 放在输入框上方 */
-        right: 10px;
-        border-radius: 20px;
-        max-width: 130px; /* 限制宽度，避免占用太多空间 */
-    }
-
-    .toggle-label {
-        font-size: 0.75rem;
-    }
-
-    .toggle-switch {
-        width: 30px;
-        height: 16px;
-    }
-
-    .visual-tools-toolbar .toggle-switch .slider:before {
-        height: 12px !important;
-        width: 12px !important;
-    }
-
-    .visual-tools-toolbar .toggle-switch input:checked + .slider:before {
-        -webkit-transform: translateX(14px) !important;
-        -ms-transform: translateX(14px) !important;
-        transform: translateX(14px) !important;
-    }
-
-    .dark-mode .visual-tools-toolbar .toggle-switch .slider:before {
-        height: 12px !important;
-        width: 12px !important;
-    }
-
-    .dark-mode .visual-tools-toolbar .toggle-switch input:checked + .slider:before {
-        -webkit-transform: translateX(14px) !important;
-        -ms-transform: translateX(14px) !important;
-        transform: translateX(14px) !important;
-    }
+.dark-mode .visual-eye-button:hover {
+    background-color: rgba(255, 255, 255, 0.05);
 }
 
 /* 处理状态提示 */
 .processing-status {
-    display: inline-block;
-    margin-left: 8px;
-    font-size: 0.8rem;
-    padding: 2px 6px;
-    border-radius: 3px;
-    background-color: #f0f0f0;
-    color: #333;
-    transition: all 0.3s ease;
-    opacity: 0;
-    animation: fadeIn 0.3s ease forwards;
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 5px;
+    z-index: 1000;
+    display: none;
+    animation: fadeIn 0.3s ease;
 }
 
 .processing-status.error {
-    background-color: #ffdddd;
-    color: #d32f2f;
+    background-color: rgba(244, 67, 54, 0.9);
 }
 
 .processing-status.success {
-    background-color: #e8f5e9;
-    color: #2e7d32;
+    background-color: rgba(76, 175, 80, 0.9);
 }
 
 @keyframes fadeIn {
-    0% {
+    from {
         opacity: 0;
-        transform: translateY(-5px);
+        transform: translateY(10px);
     }
-    100% {
+    to {
         opacity: 1;
         transform: translateY(0);
     }
 }
 
-/* 暗色主题处理状态提示 */
 .dark-theme .processing-status {
-    background-color: #333;
-    color: #eee;
+    background-color: rgba(30, 30, 30, 0.9);
 }
 
 .dark-theme .processing-status.error {
-    background-color: #4f1c1c;
-    color: #ff8a8a;
+    background-color: rgba(244, 67, 54, 0.8);
 }
 
 .dark-theme .processing-status.success {
-    background-color: #1c3a25;
-    color: #81c784;
+    background-color: rgba(76, 175, 80, 0.8);
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+    .visual-eye-button {
+        padding: 3px;
+    }
 } 

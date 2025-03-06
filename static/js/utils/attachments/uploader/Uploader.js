@@ -222,8 +222,22 @@ export class Uploader {
                         }
                     }
                     
-                    console.log('添加预览元素到容器');
-                    this.options.container.appendChild(previewElement);
+                    // 如果有自定义预览处理器，使用预览处理器处理预览元素
+                    if (this.options.previewHandler && typeof this.options.previewHandler === 'function') {
+                        const handled = await this.options.previewHandler(previewElement);
+                        // 如果预览处理器返回true，表示已处理，不需要再添加到容器
+                        if (handled === true) {
+                            console.log('预览元素已由自定义处理器处理');
+                        } else {
+                            // 否则，仍然使用默认方式添加到容器
+                            console.log('添加预览元素到容器（默认方式）');
+                            this.options.container.appendChild(previewElement);
+                        }
+                    } else {
+                        // 没有自定义处理器，使用默认方式添加到容器
+                        console.log('添加预览元素到容器（默认方式）');
+                        this.options.container.appendChild(previewElement);
+                    }
                 }
             }
 

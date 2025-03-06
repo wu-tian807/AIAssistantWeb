@@ -14,6 +14,7 @@ export class AttachmentRenderer {
             [AttachmentType.BINARY]: this.renderBinaryPreview.bind(this)
         };
         this.container = null;
+        this.attachmentCount = 0; // 添加附件计数器
     }
 
     /**
@@ -22,6 +23,21 @@ export class AttachmentRenderer {
      */
     setContainer(container) {
         this.container = container;
+        // 初始状态下隐藏容器
+        this.updateContainerVisibility();
+    }
+
+    /**
+     * 根据附件数量更新容器可见性
+     */
+    updateContainerVisibility() {
+        if (!this.container) return;
+        
+        if (this.attachmentCount > 0) {
+            this.container.style.display = ''; // 恢复默认显示
+        } else {
+            this.container.style.display = 'none'; // 隐藏容器
+        }
     }
 
     /**
@@ -31,6 +47,32 @@ export class AttachmentRenderer {
         if (this.container) {
             while (this.container.firstChild) {
                 this.container.removeChild(this.container.firstChild);
+            }
+            // 重置计数器并更新容器可见性
+            this.attachmentCount = 0;
+            this.updateContainerVisibility();
+        }
+    }
+
+    /**
+     * 添加附件到容器
+     * @param {HTMLElement} element 附件元素
+     */
+    addAttachmentToContainer(element) {
+        if (this.container && element) {
+            this.container.appendChild(element);
+            this.attachmentCount++;
+            this.updateContainerVisibility();
+            
+            // 为元素添加删除事件监听，以便在删除时更新计数
+            const deleteButton = element.querySelector('.delete-button');
+            if (deleteButton) {
+                const originalOnClick = deleteButton.onclick;
+                deleteButton.onclick = (e) => {
+                    if (originalOnClick) originalOnClick(e);
+                    this.attachmentCount--;
+                    this.updateContainerVisibility();
+                };
             }
         }
     }
@@ -60,24 +102,29 @@ export class AttachmentRenderer {
             };
             
             // 处理异步渲染
+            let element;
             if (renderer.render) {
-                const element = await renderer.render(rendererAttachment);
+                element = await renderer.render(rendererAttachment);
                 if (!element || !(element instanceof HTMLElement)) {
                     console.error('渲染器返回了无效的元素:', element);
-                    return this.createErrorElement('渲染失败');
+                    element = this.createErrorElement('渲染失败');
                 }
-                return element;
             } else {
-                const element = renderer(rendererAttachment);
+                element = renderer(rendererAttachment);
                 if (!element || !(element instanceof HTMLElement)) {
                     console.error('渲染器返回了无效的元素:', element);
-                    return this.createErrorElement('渲染失败');
+                    element = this.createErrorElement('渲染失败');
                 }
-                return element;
             }
+            
+            // 将渲染后的元素添加到容器并更新可见性
+            this.addAttachmentToContainer(element);
+            return element;
         } catch (error) {
             console.error('渲染附件时发生错误:', error);
-            return this.createErrorElement('渲染时发生错误');
+            const errorElement = this.createErrorElement('渲染时发生错误');
+            this.addAttachmentToContainer(errorElement);
+            return errorElement;
         }
     }
 
@@ -117,7 +164,12 @@ export class AttachmentRenderer {
             const deleteButton = document.createElement('button');
             deleteButton.className = 'delete-button';
             deleteButton.innerHTML = '×';
-            deleteButton.onclick = () => previewItem.remove();
+            deleteButton.onclick = () => {
+                previewItem.remove();
+                // 更新附件计数并检查可见性
+                this.attachmentCount--;
+                this.updateContainerVisibility();
+            };
             previewItem.appendChild(deleteButton);
         }
         
@@ -152,7 +204,12 @@ export class AttachmentRenderer {
             const deleteButton = document.createElement('button');
             deleteButton.className = 'delete-button';
             deleteButton.innerHTML = '×';
-            deleteButton.onclick = () => previewItem.remove();
+            deleteButton.onclick = () => {
+                previewItem.remove();
+                // 更新附件计数并检查可见性
+                this.attachmentCount--;
+                this.updateContainerVisibility();
+            };
             previewItem.appendChild(deleteButton);
         }
         
@@ -161,5 +218,32 @@ export class AttachmentRenderer {
         previewItem.appendChild(fileName);
         
         return previewItem;
+    }
+
+    /**
+     * 直接添加外部创建的预览元素
+     * @param {HTMLElement} element 预览元素
+     */
+    addExternalElement(element) {
+        if (!element || !(element instanceof HTMLElement)) {
+            console.error('无效的预览元素');
+            return;
+        }
+        
+        this.addAttachmentToContainer(element);
+        
+        // 查找并修改删除按钮的事件处理
+        const deleteButton = element.querySelector('.delete-button');
+        if (deleteButton) {
+            const originalOnClick = deleteButton.onclick;
+            deleteButton.onclick = (e) => {
+                if (originalOnClick) originalOnClick(e);
+                // 确保计数器减少并更新容器可见性
+                this.attachmentCount--;
+                this.updateContainerVisibility();
+            };
+        }
+        
+        return element;
     }
 }
