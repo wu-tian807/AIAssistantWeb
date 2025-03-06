@@ -679,8 +679,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     toolbar.initialize();
                 }
                 
+                // 如果当前是移动端，则先隐藏工具栏
+                if(window.isMobile){
+                    InputToolbar.getInstance().hideToolbar();
+                }
                 // 如果OCR已启用但按钮未显示，重新添加按钮
-                if (enhancedVisualToggle.ocrEnabled && 
+                else if (enhancedVisualToggle.ocrEnabled && 
                     (!enhancedVisualToggle.buttonElement || 
                      !document.contains(enhancedVisualToggle.buttonElement))) {
                     console.log('增强视觉分析按钮未正确显示，尝试重新初始化');

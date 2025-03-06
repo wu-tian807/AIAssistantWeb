@@ -2,16 +2,16 @@
  * 移动端响应式交互功能
  * 处理移动设备上的特定交互和布局调整
  */
-
+import { InputToolbar } from './components/input_toolbar.js';
 // 保存设备状态
-let isMobile = false;
+window.isMobile = false;
 
 // 当文档加载完成后执行
 document.addEventListener('DOMContentLoaded', function() {
     // 检测是否为移动设备
-    isMobile = window.innerWidth <= 768;
+    window.isMobile = window.innerWidth <= 768;
     
-    if (isMobile) {
+    if (window.isMobile) {
         setupMobileInterface();
     }
     
@@ -20,15 +20,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const isMobileNow = window.innerWidth <= 768;
         
         // 只有当设备类型变化时才重新设置
-        if (isMobile !== isMobileNow) {
+        if (window.isMobile !== isMobileNow) {
             if (isMobileNow) {
                 setupMobileInterface();
             } else {
                 restoreDesktopInterface();
             }
             // 更新当前状态
-            isMobile = isMobileNow;
-        } else if (isMobile) {
+            window.isMobile = isMobileNow;
+        } else if (window.isMobile) {
             // 即使设备类型未变化，但在移动设备上调整尺寸时也需要重新计算高度
             adjustMessageAreaHeight();
         }
@@ -38,21 +38,25 @@ document.addEventListener('DOMContentLoaded', function() {
     const userInput = document.getElementById('user-input');
     if (userInput) {
         userInput.addEventListener('focus', function() {
-            if (isMobile) {
+            if (window.isMobile) {
                 // 键盘弹出时，滚动到底部并调整高度
                 setTimeout(() => {
                     adjustMessageAreaHeight();
                     scrollToBottom();
                 }, 300);
+                // 显示输入工具栏
+                InputToolbar.getInstance().showToolbar();
             }
         });
         
         userInput.addEventListener('blur', function() {
-            if (isMobile) {
+            if (window.isMobile) {
                 // 键盘收起时，调整高度
                 setTimeout(() => {
                     adjustMessageAreaHeight();
                 }, 300);
+                // 隐藏输入工具栏
+                InputToolbar.getInstance().hideToolbar();
             }
         });
     }
@@ -165,7 +169,7 @@ function toggleSidebar() {
  * 根据当前设备尺寸动态计算聊天消息区域的高度
  */
 function adjustMessageAreaHeight() {
-    if (!isMobile) return;
+    if (!window.isMobile) return;
     
     // 使用flex布局自动调整高度
     const chatMessages = document.querySelector('.chat-messages');
@@ -545,7 +549,7 @@ function scrollToBottom() {
 function testMobileResponsive() {
     // 创建测试报告
     const report = {
-        isMobile: isMobile,
+        isMobile: window.isMobile,
         viewport: {
             width: window.innerWidth,
             height: window.innerHeight
@@ -606,7 +610,7 @@ function testMobileResponsive() {
  */
 window.addEventListener('resize', function() {
     // 在移动设备上，键盘弹出时会改变视口高度
-    if (isMobile) {
+    if (window.isMobile) {
         adjustMessageAreaHeight();
     }
 });
