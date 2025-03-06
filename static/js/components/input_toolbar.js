@@ -679,10 +679,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     toolbar.initialize();
                 }
                 
-                // 如果当前是移动端，则先隐藏工具栏
-                if(window.isMobile){
-                    InputToolbar.getInstance().hideToolbar();
-                }
+                // // 如果当前是移动端，则先隐藏工具栏
+                // if(window.isMobile){
+                //     InputToolbar.getInstance().hideToolbar();
+                // }
                 // 如果OCR已启用但按钮未显示，重新添加按钮
                 else if (enhancedVisualToggle.ocrEnabled && 
                     (!enhancedVisualToggle.buttonElement || 
