@@ -44,8 +44,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     adjustMessageAreaHeight();
                     scrollToBottom();
                 }, 300);
-                // 显示输入工具栏
-                InputToolbar.getInstance().showToolbar();
             }
         });
         
@@ -55,8 +53,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 setTimeout(() => {
                     adjustMessageAreaHeight();
                 }, 300);
-                // 隐藏输入工具栏
-                InputToolbar.getInstance().hideToolbar();
             }
         });
     }
@@ -113,6 +109,9 @@ function setupMobileInterface() {
     
     // 9. 优化选择框和下拉菜单
     optimizeSelects();
+    
+    // 10. 设置下拉刷新功能
+    setupPullToRefresh();
 }
 
 /**
@@ -176,9 +175,17 @@ function adjustMessageAreaHeight() {
     const inputContainer = document.querySelector('.message-input-container');
     
     if (chatMessages && inputContainer) {
-        // 确保消息区域填充剩余空间，自动调整高度
+        // 获取输入框的实际高度
         const inputHeight = inputContainer.offsetHeight;
-        chatMessages.style.marginBottom = `${inputHeight + 10}px`;
+        
+        // 为消息区域设置更大的底部边距，确保滚动时内容不会被输入框遮挡
+        chatMessages.style.marginBottom = `${inputHeight + 20}px`;
+        
+        // 添加滚动边界处理，防止滚动穿透
+        chatMessages.style.overscrollBehavior = 'contain';
+        
+        // 确保消息区域的滚动位置正确
+        chatMessages.scrollTop = chatMessages.scrollTop;
     }
 }
 
@@ -615,5 +622,115 @@ window.addEventListener('resize', function() {
     }
 });
 
+/**
+ * 设置下拉刷新功能
+ * 允许用户在移动端通过下拉来刷新聊天
+ */
+function setupPullToRefresh() {
+    const chatMessages = document.getElementById('chat-messages');
+    if (!chatMessages) return;
+
+    // 创建下拉刷新指示器
+    const refreshIndicator = document.createElement('div');
+    refreshIndicator.className = 'pull-refresh-indicator';
+    refreshIndicator.innerHTML = '<i class="fas fa-sync-alt"></i>';
+    refreshIndicator.style.display = 'none';
+    chatMessages.parentNode.insertBefore(refreshIndicator, chatMessages);
+    
+    let touchStartY = 0;
+    let touchEndY = 0;
+    let pullDistance = 0;
+    let isPulling = false;
+    let refreshThreshold = 100; // 触发刷新的最小下拉距离（像素）
+    
+    // 触摸开始事件
+    chatMessages.addEventListener('touchstart', function(e) {
+        // 只有当滚动到顶部时才允许下拉刷新
+        if (chatMessages.scrollTop === 0) {
+            isPulling = true;
+            touchStartY = e.touches[0].clientY;
+            refreshIndicator.style.transform = 'translateY(-100%)';
+            refreshIndicator.style.display = 'flex';
+        }
+    });
+    
+    // 触摸移动事件
+    chatMessages.addEventListener('touchmove', function(e) {
+        if (!isPulling) return;
+        
+        touchEndY = e.touches[0].clientY;
+        pullDistance = touchEndY - touchStartY;
+        
+        // 只有下拉时才处理（pullDistance > 0）
+        if (pullDistance > 0) {
+            // 计算下拉距离并应用到指示器
+            let translateY = Math.min(pullDistance * 0.5, refreshThreshold) - 100;
+            refreshIndicator.style.transform = `translateY(${translateY}%)`;
+            
+            // 阻止默认滚动行为，让下拉更流畅
+            if (chatMessages.scrollTop === 0) {
+                e.preventDefault();
+            }
+            
+            // 当下拉距离超过阈值时，更新指示器样式
+            if (pullDistance > refreshThreshold) {
+                refreshIndicator.classList.add('ready');
+            } else {
+                refreshIndicator.classList.remove('ready');
+            }
+        }
+    });
+    
+    // 触摸结束事件
+    chatMessages.addEventListener('touchend', function() {
+        if (!isPulling) return;
+        
+        if (pullDistance > refreshThreshold) {
+            // 触发刷新
+            refreshContent();
+        } else {
+            // 重置下拉指示器
+            resetPullIndicator();
+        }
+        
+        isPulling = false;
+    });
+    
+    // 刷新内容的函数
+    function refreshContent() {
+        // 显示加载中状态
+        refreshIndicator.classList.add('refreshing');
+        refreshIndicator.querySelector('i').classList.add('fa-spin');
+        
+        // 这里执行刷新操作，例如重新加载当前会话
+        // 模拟异步操作
+        setTimeout(() => {
+            // 重新加载当前会话
+            if (window.currentConversationId) {
+                // 如果使用了对话ID，则加载特定对话
+                window.loadConversation(window.currentConversationId);
+            } else {
+                // 否则重新加载页面
+                window.location.reload();
+            }
+            
+            // 刷新完成后重置
+            resetPullIndicator();
+        }, 1000);
+    }
+    
+    // 重置下拉指示器
+    function resetPullIndicator() {
+        refreshIndicator.style.transform = 'translateY(-100%)';
+        refreshIndicator.classList.remove('ready', 'refreshing');
+        refreshIndicator.querySelector('i').classList.remove('fa-spin');
+        
+        // 延迟后隐藏指示器
+        setTimeout(() => {
+            refreshIndicator.style.display = 'none';
+        }, 300);
+    }
+}
+
 // 暴露公共方法
-export { toggleSidebar, adjustMessageAreaHeight, scrollToBottom, testMobileResponsive, hideAllDropdowns }; 
+export { toggleSidebar, adjustMessageAreaHeight, scrollToBottom, testMobileResponsive, hideAllDropdowns, setupPullToRefresh }; 

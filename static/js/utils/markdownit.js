@@ -8,7 +8,7 @@ export function initMarkdownit() {
             return `<div class="code-block-wrapper">
                 <div class="code-block-header">
                     <span>${lang || '代码'}</span>
-                    <button class="copy-button" data-action="copy">复制代码</button>
+                    <button class="copy-button" onclick="copyCode(this)" data-action="copy">复制代码</button>
                 </div>
                 <pre><code class="language-${lang || 'plaintext'}">${md.utils.escapeHtml(str)}</code></pre>
             </div>`;
@@ -116,31 +116,18 @@ export function initializeCodeBlocks(container) {
     
     // 添加复制按钮事件监听
     container.querySelectorAll('.code-block-header .copy-button[data-action="copy"]').forEach(button => {
+        // 如果已经有 onclick 属性，就不需要再添加事件监听
+        if (button.hasAttribute('onclick')) {
+            return;
+        }
+        
         // 移除可能的旧事件监听器
         button.removeAttribute('onclick');
         
         // 添加新的事件监听
         button.addEventListener('click', function() {
-            const pre = this.closest('.code-block-wrapper').querySelector('pre');
-            const code = pre.querySelector('code');
-            const text = code.innerText;
-
-            navigator.clipboard.writeText(text).then(() => {
-                this.textContent = '已复制！';
-                this.classList.add('copied');
-                
-                setTimeout(() => {
-                    this.textContent = '复制代码';
-                    this.classList.remove('copied');
-                }, 2000);
-            }).catch(err => {
-                console.error('复制失败:', err);
-                this.textContent = '复制失败';
-                
-                setTimeout(() => {
-                    this.textContent = '复制代码';
-                }, 2000);
-            });
+            // 调用全局 copyCode 函数
+            window.copyCode(this);
         });
     });
 }
