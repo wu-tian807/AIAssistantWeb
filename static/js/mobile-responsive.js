@@ -3,6 +3,7 @@
  * 处理移动设备上的特定交互和布局调整
  */
 import { InputToolbar } from './components/input_toolbar.js';
+import { showToast } from './utils/toast.js';
 // 保存设备状态
 window.isMobile = false;
 
@@ -56,7 +57,228 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+    setupMessageLongPressCopy();
+    
+    // 监听新消息添加
+    observeNewMessages();
 });
+
+/**
+ * 监听新消息的添加并更新长按功能
+ */
+function observeNewMessages() {
+    console.log('开始监听新消息...');
+    
+    // 获取消息容器
+    const messagesContainer = document.querySelector('.chat-messages');
+    if (!messagesContainer) {
+        console.error('未找到消息容器，无法监听新消息');
+        return;
+    }
+    
+    // 创建一个MutationObserver实例
+    const observer = new MutationObserver(function(mutations) {
+        let hasNewMessages = false;
+        
+        // 检查是否有新消息添加
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                for (let i = 0; i < mutation.addedNodes.length; i++) {
+                    const node = mutation.addedNodes[i];
+                    if (node.nodeType === 1 && // 元素节点
+                        (node.classList.contains('assistant-message') || 
+                         node.classList.contains('user-message'))) {
+                        hasNewMessages = true;
+                        break;
+                    }
+                }
+            }
+        });
+        
+        // 如果有新消息，重新设置长按功能
+        if (hasNewMessages) {
+            console.log('检测到新消息，更新长按功能');
+            // 不需要重新执行setupMessageLongPressCopy，因为使用事件委托
+        }
+    });
+    
+    // 开始观察消息容器的变化
+    observer.observe(messagesContainer, {
+        childList: true,      // 观察子节点的添加或删除
+        subtree: false        // 不观察所有后代节点
+    });
+}
+
+/*移动端的特殊的复制逻辑*/
+function setupMessageLongPressCopy() {
+    console.log('初始化长按复制功能...');
+    
+    // 获取消息容器元素
+    const messagesContainer = document.querySelector('.chat-messages');
+    if (!messagesContainer) {
+        console.error('未找到消息容器元素 .chat-messages');
+        return;
+    }
+    
+    let touchTimer = null;
+    let touchTarget = null;
+    const longPressTime = 600; // 减少长按时间阈值为600毫秒
+    let startX, startY;
+    const moveThreshold = 10; // 移动阈值，超过此值则不算长按
+    
+    // 使用事件委托，将事件绑定到消息容器上
+    messagesContainer.addEventListener('touchstart', function(event) {
+        // 检查目标元素是否是消息或消息的子元素
+        const messageElement = findParentMessage(event.target);
+        if (!messageElement) return;
+        
+        // 保存起始触摸位置
+        startX = event.touches[0].clientX;
+        startY = event.touches[0].clientY;
+        touchTarget = messageElement;
+        
+        console.log('触摸开始，目标:', messageElement.className);
+        
+        // 添加视觉反馈：高亮显示
+        messageElement.classList.add('touch-feedback');
+        
+        // 设置定时器
+        touchTimer = setTimeout(() => {
+            if (touchTarget) {
+                console.log('长按触发成功!');
+                // 找到消息内容元素
+                const textContent = messageElement.querySelector('.text-content') || 
+                                    messageElement.querySelector('.message-content');
+                
+                if (textContent) {
+                    // 获取文本内容
+                    const text = textContent.innerText || textContent.textContent;
+                    console.log('复制内容长度:', text.length);
+                    
+                    // 强化视觉反馈
+                    messageElement.classList.add('copy-active');
+                    setTimeout(() => {
+                        messageElement.classList.remove('copy-active');
+                    }, 300);
+                    
+                    // 复制到剪贴板
+                    copyToClipboard(text);
+                } else {
+                    console.error('未找到文本内容元素');
+                    showToast('未找到可复制的内容', 'error');
+                }
+            }
+        }, longPressTime);
+    }, { passive: false });
+    
+    messagesContainer.addEventListener('touchmove', function(event) {
+        if (!touchTarget) return;
+        
+        // 计算移动距离
+        const moveX = Math.abs(event.touches[0].clientX - startX);
+        const moveY = Math.abs(event.touches[0].clientY - startY);
+        
+        // 如果移动超过阈值，取消长按
+        if (moveX > moveThreshold || moveY > moveThreshold) {
+            console.log('移动超过阈值，取消长按');
+            clearTimeout(touchTimer);
+            touchTimer = null;
+            if (touchTarget) {
+                touchTarget.classList.remove('touch-feedback');
+                touchTarget = null;
+            }
+        }
+    });
+    
+    messagesContainer.addEventListener('touchend', function() {
+        console.log('触摸结束');
+        clearTimeout(touchTimer);
+        touchTimer = null;
+        if (touchTarget) {
+            touchTarget.classList.remove('touch-feedback');
+            touchTarget = null;
+        }
+    });
+    
+    messagesContainer.addEventListener('touchcancel', function() {
+        console.log('触摸取消');
+        clearTimeout(touchTimer);
+        touchTimer = null;
+        if (touchTarget) {
+            touchTarget.classList.remove('touch-feedback');
+            touchTarget = null;
+        }
+    });
+    
+    // 查找父级消息元素
+    function findParentMessage(element) {
+        while (element && element !== messagesContainer) {
+            if (element.classList.contains('assistant-message') || 
+                element.classList.contains('user-message')) {
+                return element;
+            }
+            element = element.parentElement;
+        }
+        return null;
+    }
+    
+    // 复制到剪贴板函数
+    function copyToClipboard(text) {
+        // 现代浏览器API
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text)
+                .then(() => {
+                    showToast('复制成功', 'success');
+                })
+                .catch(err => {
+                    console.error('复制API失败:', err);
+                    fallbackCopy(text);
+                });
+        } else {
+            fallbackCopy(text);
+        }
+    }
+    
+    // 降级复制方法
+    function fallbackCopy(text) {
+        try {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            // 确保textarea在视口内但不可见
+            textarea.style.position = 'fixed';
+            textarea.style.left = '0';
+            textarea.style.top = '0';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            
+            // 特别处理iOS
+            if (navigator.userAgent.match(/ipad|iphone/i)) {
+                const range = document.createRange();
+                range.selectNodeContents(textarea);
+                const selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+                textarea.setSelectionRange(0, 999999);
+            } else {
+                textarea.select();
+            }
+            
+            const successful = document.execCommand('copy');
+            document.body.removeChild(textarea);
+            
+            if (successful) {
+                showToast('复制成功', 'success');
+            } else {
+                showToast('复制失败', 'error');
+            }
+        } catch (e) {
+            console.error('降级复制也失败:', e);
+            showToast('复制失败', 'error');
+        }
+    }
+    
+    console.log('长按复制功能设置完成');
+}
 
 /**
  * 设置移动端界面

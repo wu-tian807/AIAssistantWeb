@@ -682,4 +682,37 @@
         word-break: break-word; /* 允许在单词内换行 */
         hyphens: auto; /* 启用连字符 */
     }
+
+    /* 长按复制功能的视觉反馈 */
+    .touch-feedback {
+        background-color: rgba(0, 0, 0, 0.05);
+        transition: background-color 0.2s ease;
+    }
+    
+    .copy-active {
+        background-color: rgba(0, 0, 0, 0.1);
+        animation: pulse 0.3s ease;
+    }
+    
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.02); }
+        100% { transform: scale(1); }
+    }
+    
+    /* 确保消息可以长按 */
+    .assistant-message, .user-message {
+        -webkit-touch-callout: none; /* 禁止iOS默认的长按菜单 */
+        -webkit-user-select: none;   /* 禁止用户默认选择 */
+        -khtml-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        touch-action: pan-y; /* 允许垂直滚动但处理其他触摸事件 */
+        position: relative;
+    }
+    
+    .message-content, .text-content {
+        pointer-events: auto;
+    }
 }

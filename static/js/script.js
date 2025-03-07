@@ -267,6 +267,7 @@ function shouldAutoScroll(container) {
     return window.shouldAutoScroll(container);
 }
 
+
 // 在文件开头定义函数
 function createVersionControl(messageIndex, messageActions, message) {
     const versionControl = document.createElement('div');
@@ -1150,6 +1151,13 @@ async function switchConversation(conversationId) {
     document.querySelectorAll('.text-content').forEach(textContent => {
         // 重新应用代码高亮，但是只对包含code-block-wrapper的容器
         initializeCodeBlocks(textContent);
+    });
+
+    //平滑的滚动到最底部
+    const chatMessages = document.getElementById('chat-messages');
+    chatMessages.scrollTo({
+        top: chatMessages.scrollHeight,
+        behavior: 'smooth'
     });
 
     renderConversationsList();
