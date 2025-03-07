@@ -293,8 +293,11 @@
 
     /* 消息样式调整 */
     .message {
-        max-width: 95%;
-        padding: 12px;
+        padding: 10px;
+        border-radius: 8px;
+        max-width: 100%;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
         margin-bottom: 10px;
     }
 
@@ -303,12 +306,30 @@
         margin-right: 5px;
     }
 
+    /* 消息包装器样式调整 */
+    .assistant-message .message-wrapper{
+        width: 100%;
+        overflow-x: visible !important; /* 改为visible以避免强制横向滚动 */
+        max-width: 100%;
+        white-space: normal; /* 允许正常换行 */
+        word-break: break-word; /* 允许单词内换行 */
+    }
+    
+    .assistant-message .message-wrapper .message-content {
+        width: 100%;
+        overflow-x: visible !important; /* 改为visible以避免强制横向滚动 */
+        max-width: 100%;
+        white-space: normal; /* 允许正常换行 */
+        word-break: break-word; /* 允许单词内换行 */
+    }
+
     .assistant-message {
         margin-left: 5px;
         margin-right: auto;
         display: flex;
         align-items: flex-start;
         gap: 4px;
+        width: 95%;
         max-width: 95%;
     }
 
@@ -376,9 +397,13 @@
 
     /* 表格样式调整 */
     table {
+        min-width: 100%;
+        max-width: none;
         display: block;
         overflow-x: auto;
-        max-width: 100%;
+        white-space: nowrap;
+        border-collapse: collapse;
+        margin: 10px 0;
     }
 
     /* 图片附件调整 */
@@ -553,10 +578,108 @@
         flex-shrink: 0; /* 防止图标被压缩 */
     }
 
-    /* 消息包装器样式调整 */
-    .message-wrapper {
-        flex: 1;
-        width: calc(100% - 28px); /* 考虑到model-icon-wrapper宽度和间距 */
-        max-width: calc(100% - 28px);
+    /* 确保文本内容容器也能正确处理溢出 */
+    .text-content {
+        width: 100%;
+        overflow-x: auto;
+    }
+    
+    /* 确保水平滚动条只在必要时出现 */
+    .message-wrapper::-webkit-scrollbar,
+    .message-content::-webkit-scrollbar,
+    .text-content::-webkit-scrollbar,
+    table::-webkit-scrollbar {
+        height: 4px;
+        background-color: transparent;
+    }
+    
+    .message-wrapper::-webkit-scrollbar-thumb,
+    .message-content::-webkit-scrollbar-thumb,
+    .text-content::-webkit-scrollbar-thumb,
+    table::-webkit-scrollbar-thumb {
+        background-color: var(--border-color);
+        border-radius: 4px;
+    }
+
+    /* 移动端LaTeX公式样式优化 */
+    @media screen and (max-width: 768px) {
+        /* 解决LaTeX公式行号与内容重合问题 */
+        .assistant-message .katex {
+            font-size: 0.9em; /* 稍微减小公式字体大小 */
+        }
+        
+        /* 处理多行公式中的行号与公式间距 */
+        .assistant-message .katex .katex-html .tag {
+            position: relative;
+            margin-left: 8px; /* 增加行号与公式的间距 */
+            float: right;
+            clear: right;
+        }
+        
+        /* 为多行公式添加额外右侧边距，给行号留出空间 */
+        .assistant-message .katex-display > .katex {
+            padding-right: 30px; /* 为行号留出空间 */
+        }
+        
+        /* 处理align环境等多行公式的间距 */
+        .assistant-message .katex .align {
+            margin-right: 20px; /* 为行号留出足够空间 */
+        }
+    }
+
+    /* 确保代码块可以横向滚动 */
+    .assistant-message .code-block-wrapper {
+        max-width: 100%;
+        overflow-x: auto !important; /* 保持代码块的横向滚动 */
+        margin: 10px 0;
+    }
+    
+    .assistant-message .code-block-wrapper pre {
+        max-width: 100%;
+        overflow-x: auto !important; /* 保持代码块的横向滚动 */
+        white-space: pre; /* 保持代码格式 */
+        margin: 0; /* 移除额外边距 */
+    }
+    
+    .assistant-message .code-block-wrapper code {
+        white-space: pre; /* 保持代码格式 */
+    }
+
+    /* 表格样式修复 */
+    .assistant-message table {
+        display: block;
+        width: 100%;
+        overflow-x: auto !important; /* 确保表格可以横向滚动 */
+        max-width: 100%;
+        white-space: nowrap; /* 表格内容不换行，通过滚动显示 */
+        border-collapse: collapse;
+        margin: 10px 0;
+    }
+
+    /* 改进列表在移动端的显示 */
+    .assistant-message .message-content ul,
+    .assistant-message .message-content ol {
+        width: 100%;
+        max-width: 100%;
+        padding-left: 20px; /* 减少列表缩进 */
+        box-sizing: border-box;
+    }
+    
+    /* 确保嵌套列表正确显示 */
+    .assistant-message .message-content ul ul,
+    .assistant-message .message-content ol ol,
+    .assistant-message .message-content ul ol,
+    .assistant-message .message-content ol ul {
+        padding-left: 15px; /* 嵌套列表减少额外缩进 */
+        margin-right: 0;
+    }
+    
+    /* 确保列表项文本可以正确换行 */
+    .assistant-message .message-content li {
+        width: 100%;
+        overflow-wrap: break-word;
+        word-wrap: break-word;
+        word-break: break-word; /* 允许在单词内换行 */
+        hyphens: auto; /* 启用连字符 */
     }
 }

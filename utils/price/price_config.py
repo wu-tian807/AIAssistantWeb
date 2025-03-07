@@ -94,5 +94,13 @@ PRICE_CONFIG = {
     "chatgpt-4o-latest":{
         "input": 5,
         "output": 15
+    },
+    "o3-mini":{
+        "input": 1.1,
+        "output": 4.4
+    },
+    "o1":{
+        "input": 15,
+        "output": 60
     }
 }

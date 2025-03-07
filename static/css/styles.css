@@ -224,25 +224,26 @@ html, body {
     line-height: 1.4;      /* 调整行高 */
 }
 
+
 /* 助手消息容器样式调整 */
 .assistant-message {
-    position: relative;
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    margin: 0 auto;
-    max-width: 65%;
-    width: fit-content;
-    background-color: transparent; /* 移除外层背景色 */
-    padding: 0; /* 移除外层padding */
+position: relative;
+display: flex;
+align-items: flex-start;
+gap: 12px;
+margin: 0 auto;
+max-width: 65%;
+width: fit-content;
+background-color: transparent; /* 移除外层背景色 */
+padding: 0; /* 移除外层padding */
 }
 
 .message-wrapper {
-    position: relative;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+position: relative;
+width: 100%;
+display: flex;
+flex-direction: column;
+gap: 8px;
 }
 
 /* 消息内容容器样式调整 */
@@ -259,9 +260,18 @@ html, body {
 
 /* 确保代码块内容本身不会超出容器 */
 .assistant-message .message-content {
-    overflow-x: hidden;  /* 隐藏横向溢出 */
     width: 100%;
     max-width: 100%;
+    overflow-wrap: break-word; /* 添加换行支持 */
+    word-wrap: break-word;     /* 兼容旧浏览器 */
+}
+
+/* 列表样式优化 */
+.assistant-message .message-content ul,
+.assistant-message .message-content ol {
+    padding-left: 25px; /* 适当的列表缩进 */
+    margin: 10px 0;
+    box-sizing: border-box;
 }
 
 /* 保持代码块容器限制在消息宽度内 */

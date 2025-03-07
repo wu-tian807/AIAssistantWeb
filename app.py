@@ -708,11 +708,20 @@ def chat():
                                 content = chunk.choices[0].delta.content
                                 accumulated_output.append(content)
                                 # 立即发送内容
-                                response = f"data: {json.dumps({'content': content})}\n\n"
-                                yield response
-                                # 强制刷新
-                                if hasattr(response, 'flush'):
-                                    response.flush()
+                                try:
+                                    response = f"data: {json.dumps({'content': content})}\n\n"
+                                    yield response
+                                    # 强制刷新
+                                    if hasattr(response, 'flush'):
+                                        response.flush()
+                                except Exception as e:
+                                    print(f"JSON序列化错误: {str(e)}, 内容: {content}")
+                                    # 尝试使用安全的JSON序列化
+                                    try:
+                                        response = f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
+                                        yield response
+                                    except:
+                                        print("无法序列化内容，跳过")
                             # 安全地记录日志，避免空值
                             if reasoning_content is not None:
                                 print(f"reasoning_content: {reasoning_content}")
@@ -729,23 +738,33 @@ def chat():
                                 content = chunk.choices[0].delta.content
                                 accumulated_output.append(content)
                                 # 立即发送内容
-                                response = f"data: {json.dumps({'content': content})}\n\n"
-                                yield response
-                                # 强制刷新
-                                if hasattr(response, 'flush'):
-                                    response.flush()
+                                try:
+                                    response = f"data: {json.dumps({'content': content})}\n\n"
+                                    yield response
+                                    # 强制刷新
+                                    if hasattr(response, 'flush'):
+                                        response.flush()
+                                except Exception as e:
+                                    print(f"JSON序列化错误: {str(e)}, 内容: {content}")
+                                    # 尝试使用安全的JSON序列化
+                                    try:
+                                        response = f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
+                                        yield response
+                                    except:
+                                        print("无法序列化内容，跳过")
                         except Exception as e:
                             print(f"处理流式响应chunk时出错: {str(e)}")
                             continue
                 last_response = chunk
-                if last_response and hasattr(last_response, 'usage'):
+                if last_response and hasattr(last_response, 'usage') and last_response.usage is not None:
                     try:
                         usage_dict = last_response.usage
-                        input_tokens = usage_dict.prompt_tokens - (usage_dict.prompt_tokens_details.cached_tokens if usage_dict.prompt_tokens_details else 0)
-                        output_tokens = usage_dict.completion_tokens
-                        cached_input_tokens = usage_dict.prompt_tokens_details.cached_tokens if usage_dict.prompt_tokens_details else 0
-                        use_estimated = False
-                        print(f"从OpenAI响应获取到token数 - 输入: {input_tokens}, 输出: {output_tokens}, 缓存输入: {cached_input_tokens}")
+                        if usage_dict and hasattr(usage_dict, 'prompt_tokens'):
+                            input_tokens = usage_dict.prompt_tokens - (usage_dict.prompt_tokens_details.cached_tokens if hasattr(usage_dict, 'prompt_tokens_details') and usage_dict.prompt_tokens_details else 0)
+                            output_tokens = usage_dict.completion_tokens if hasattr(usage_dict, 'completion_tokens') else 0
+                            cached_input_tokens = usage_dict.prompt_tokens_details.cached_tokens if hasattr(usage_dict, 'prompt_tokens_details') and usage_dict.prompt_tokens_details else 0
+                            use_estimated = False
+                            print(f"从OpenAI响应获取到token数 - 输入: {input_tokens}, 输出: {output_tokens}, 缓存输入: {cached_input_tokens}")
                     except Exception as e:
                         print(f"从OpenAI响应获取token数时出错: {e}")
                         print(f"完整的usage信息: {last_response.usage if hasattr(last_response, 'usage') else 'None'}")
