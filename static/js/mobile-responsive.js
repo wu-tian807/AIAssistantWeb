@@ -849,35 +849,33 @@ window.addEventListener('resize', function() {
  * 允许用户在移动端通过下拉来刷新聊天
  */
 function setupPullToRefresh() {
-    const chatMessages = document.getElementById('chat-messages');
-    if (!chatMessages) return;
+    const chatHeader = document.querySelector('.chat-header');
+    if (!chatHeader) return;
 
     // 创建下拉刷新指示器
     const refreshIndicator = document.createElement('div');
     refreshIndicator.className = 'pull-refresh-indicator';
     refreshIndicator.innerHTML = '<i class="fas fa-sync-alt"></i>';
     refreshIndicator.style.display = 'none';
-    chatMessages.parentNode.insertBefore(refreshIndicator, chatMessages);
+    chatHeader.insertAdjacentElement('afterend', refreshIndicator);
     
     let touchStartY = 0;
     let touchEndY = 0;
     let pullDistance = 0;
     let isPulling = false;
-    let refreshThreshold = 100; // 触发刷新的最小下拉距离（像素）
+    let refreshThreshold = 80; // 适当减小触发刷新的阈值
     
     // 触摸开始事件
-    chatMessages.addEventListener('touchstart', function(e) {
-        // 只有当滚动到顶部时才允许下拉刷新
-        if (chatMessages.scrollTop === 0) {
-            isPulling = true;
-            touchStartY = e.touches[0].clientY;
-            refreshIndicator.style.transform = 'translateY(-100%)';
-            refreshIndicator.style.display = 'flex';
-        }
+    chatHeader.addEventListener('touchstart', function(e) {
+        // 在header区域允许下拉刷新
+        isPulling = true;
+        touchStartY = e.touches[0].clientY;
+        refreshIndicator.style.transform = 'translateY(-100%)';
+        refreshIndicator.style.display = 'flex';
     });
     
     // 触摸移动事件
-    chatMessages.addEventListener('touchmove', function(e) {
+    chatHeader.addEventListener('touchmove', function(e) {
         if (!isPulling) return;
         
         touchEndY = e.touches[0].clientY;
@@ -890,9 +888,7 @@ function setupPullToRefresh() {
             refreshIndicator.style.transform = `translateY(${translateY}%)`;
             
             // 阻止默认滚动行为，让下拉更流畅
-            if (chatMessages.scrollTop === 0) {
-                e.preventDefault();
-            }
+            e.preventDefault();
             
             // 当下拉距离超过阈值时，更新指示器样式
             if (pullDistance > refreshThreshold) {
@@ -903,8 +899,8 @@ function setupPullToRefresh() {
         }
     });
     
-    // 触摸结束事件
-    chatMessages.addEventListener('touchend', function() {
+    // 触摸结束事件，也监听整个document，以防止手指滑出header区域
+    document.addEventListener('touchend', function(e) {
         if (!isPulling) return;
         
         if (pullDistance > refreshThreshold) {
@@ -916,6 +912,14 @@ function setupPullToRefresh() {
         }
         
         isPulling = false;
+    });
+    
+    // 添加touchcancel事件处理，处理意外的触摸取消
+    document.addEventListener('touchcancel', function() {
+        if (isPulling) {
+            resetPullIndicator();
+            isPulling = false;
+        }
     });
     
     // 刷新内容的函数
