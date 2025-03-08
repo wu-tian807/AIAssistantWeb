@@ -114,6 +114,10 @@
                 <input type="password" id="password" placeholder="请输入密码" required>
                 <div class="error-message" id="passwordError"></div>
             </div>
+            <div class="form-group" style="display: flex; align-items: center; margin-bottom: 15px;">
+                <input type="checkbox" id="rememberMe" style="width: auto; margin-right: 10px;">
+                <label for="rememberMe" style="font-size: 14px; color: #666;">保持登录状态</label>
+            </div>
             <button type="submit" id="submitBtn">登录</button>
         </form>
         <div class="register-link">
@@ -127,8 +131,22 @@
         const loginForm = document.getElementById('loginForm');
         const emailInput = document.getElementById('email');
         const passwordInput = document.getElementById('password');
+        const rememberMeInput = document.getElementById('rememberMe');
         const emailError = document.getElementById('emailError');
         const passwordError = document.getElementById('passwordError');
+
+        // 检查用户是否已登录，如果已登录则跳转到首页
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch('/check_login_status');
+                const data = await response.json();
+                if (data.logged_in) {
+                    window.location.href = '/';
+                }
+            } catch (error) {
+                console.error('检查登录状态失败:', error);
+            }
+        });
 
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -139,7 +157,7 @@
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
                     },
-                    body: `email=${emailInput.value}&password=${passwordInput.value}`
+                    body: `email=${emailInput.value}&password=${passwordInput.value}&remember_me=${rememberMeInput.checked}`
                 });
                 
                 const data = await response.json();

@@ -64,6 +64,13 @@ def utility_processor():
 # 修改注册路由
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    # 如果用户已登录，直接跳转到首页
+    if 'user_id' in session:
+        if request.method == 'POST':
+            return jsonify({'redirect': url_for('home')}), 200
+        else:
+            return redirect(url_for('home'))
+        
     if request.method == 'POST':
         email = request.form.get('email')
         
@@ -160,9 +167,17 @@ def set_password():
 # 修改登录路由为密码登录
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # 如果用户已登录，直接跳转到首页
+    if 'user_id' in session:
+        if request.method == 'POST':
+            return jsonify({'redirect': url_for('home')}), 200
+        else:
+            return redirect(url_for('home'))
+        
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
+        remember_me = request.form.get('remember_me') == 'true'
         
         user = User.query.filter_by(email=email).first()
         if not user or not user.verified:
@@ -172,14 +187,36 @@ def login():
             return jsonify({'error': '密码错误'}), 400
             
         session['user_id'] = user.id
+        
+        # 如果勾选了"保持登录"，设置会话的持久性
+        if remember_me:
+            # 默认 session 是在浏览器关闭后过期的
+            # 这里将其设置为30天
+            session.permanent = True
+            app.permanent_session_lifetime = timedelta(days=30)
+        else:
+            session.permanent = False
+            
         return jsonify({'message': '登录成功', 'redirect': url_for('home')}), 200
             
     return render_template('login.html')
 
+# 添加检查登录状态的路由
+@app.route('/check_login_status')
+def check_login_status():
+    if 'user_id' in session:
+        return jsonify({'logged_in': True}), 200
+    return jsonify({'logged_in': False}), 200
+
 # 登出路由
 @app.route('/logout')
 def logout():
+    # 清除用户ID
     session.pop('user_id', None)
+    # 清除session的持久性设置
+    session.permanent = False
+    # 清除整个会话
+    session.clear()
     return redirect(url_for('login'))
 
 # 修改主页路由，添加登录验证

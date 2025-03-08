@@ -174,6 +174,19 @@
         let isVerified = false;
         let countdownTimer = null;
 
+        // 检查用户是否已登录，如果已登录则跳转到首页
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch('/check_login_status');
+                const data = await response.json();
+                if (data.logged_in) {
+                    window.location.href = '/';
+                }
+            } catch (error) {
+                console.error('检查登录状态失败:', error);
+            }
+        });
+
         function startCountdown(button, duration) {
             if (countdownTimer) {
                 clearInterval(countdownTimer);
