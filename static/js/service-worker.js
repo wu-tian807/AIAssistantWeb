@@ -1,5 +1,5 @@
 // 缓存名称和版本
-const CACHE_NAME = 'ai-chat-assistant-v1';
+const CACHE_NAME = 'ai-chat-assistant-v2';
 
 // 需要缓存的资源列表
 const urlsToCache = [
@@ -7,11 +7,22 @@ const urlsToCache = [
   '/static/css/styles.css',
   '/static/css/mobile-responsive.css',
   '/static/css/markdown-styles.css',
+  '/static/css/splash-screen.css',
   '/static/js/script.js',
   '/static/js/inputRenderer.js',
   '/static/js/mobile-responsive.js',
+  '/static/js/pwa-enhancements.js',
   '/static/icons/models/xai.svg',
   '/static/icons/users/default_profile.svg',
+  '/static/icons/pwa/splash-640x1136.png',
+  '/static/icons/pwa/splash-750x1334.png',
+  '/static/icons/pwa/splash-1242x2208.png',
+  '/static/icons/pwa/splash-1125x2436.png',
+  '/static/icons/pwa/splash-1536x2048.png',
+  '/static/icons/pwa/splash-1668x2224.png',
+  '/static/icons/pwa/splash-2048x2732.png',
+  '/static/icons/pwa/icon-192x192.png',
+  '/static/icons/pwa/icon-512x512.png',
   // 添加其他需要缓存的资源
 ];
 

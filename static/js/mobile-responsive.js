@@ -170,7 +170,7 @@ function setupMessageLongPressCopy() {
                         showCopyButton(text, messageElement);
                     } else {
                         // 复制到剪贴板
-                        showCopyButton(text,messageElement);
+                        copyToClipboard(text);
                     }
                 } else {
                     console.error('未找到文本内容元素');

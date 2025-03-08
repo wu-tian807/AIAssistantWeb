@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
+    <!-- 用于缓存更新 -->
+    <script src="{{ url_for('static', filename='js/for_cached_update.js') }}?v=1.0.2"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -76,6 +78,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/enhanced-visual-toggle.css') }}">
     <!-- 添加移动端响应式样式 -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-responsive.css') }}">
+    <!-- 添加PWA启动屏和安装横幅样式 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/splash-screen.css') }}">
     <!-- 添加常用语言包 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/javascript.min.js"></script>
@@ -179,6 +183,9 @@
     <script src="{{ url_for('static', filename='js/utils/upload_status.js') }}"></script>
     <script src="{{ url_for('static', filename='js/utils/upload_status_listener.js') }}"></script>
     
+    <!-- 添加PWA增强功能 -->
+    <script src="{{ url_for('static', filename='js/pwa-enhancements.js') }}"></script>
+    
     <!-- PWA Service Worker注册 -->
     <script>
         // 注册Service Worker
@@ -193,36 +200,6 @@
                     });
             });
         }
-        
-        // 添加安装横幅事件
-        let deferredPrompt;
-        const addBtn = document.createElement('button');
-        addBtn.style.display = 'none';
-        
-        window.addEventListener('beforeinstallprompt', (e) => {
-            // 阻止Chrome 67及更早版本自动显示安装提示
-            e.preventDefault();
-            // 存储事件以便稍后触发
-            deferredPrompt = e;
-            // 显示自定义安装按钮
-            addBtn.style.display = 'block';
-            
-            addBtn.addEventListener('click', () => {
-                // 隐藏按钮
-                addBtn.style.display = 'none';
-                // 显示安装提示
-                deferredPrompt.prompt();
-                // 等待用户响应
-                deferredPrompt.userChoice.then((choiceResult) => {
-                    if (choiceResult.outcome === 'accepted') {
-                        console.log('用户接受安装应用');
-                    } else {
-                        console.log('用户拒绝安装应用');
-                    }
-                    deferredPrompt = null;
-                });
-            });
-        });
     </script>
 </body>
 </html> 
