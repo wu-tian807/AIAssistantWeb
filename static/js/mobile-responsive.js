@@ -1017,6 +1017,17 @@ function setupPullToRefresh() {
     
     // 触摸开始事件
     chatHeader.addEventListener('touchstart', function(e) {
+        // 检查触摸事件是否发生在model-select或其子元素上
+        const modelSelect = document.getElementById('model-select');
+        const modelSelector = document.querySelector('.model-selector');
+        
+        // 如果触摸开始于model-select或其父容器，则不触发下拉刷新
+        if (modelSelect && (modelSelect.contains(e.target) || e.target === modelSelect || 
+            (modelSelector && (modelSelector.contains(e.target) || e.target === modelSelector)))) {
+            isPulling = false;
+            return;
+        }
+        
         // 在header区域允许下拉刷新
         isPulling = true;
         touchStartY = e.touches[0].clientY;
@@ -1027,6 +1038,15 @@ function setupPullToRefresh() {
     // 触摸移动事件
     chatHeader.addEventListener('touchmove', function(e) {
         if (!isPulling) return;
+        
+        // 再次检查，确保即使手指移动到model-select区域也不触发刷新
+        const modelSelect = document.getElementById('model-select');
+        const modelSelector = document.querySelector('.model-selector');
+        if (modelSelect && (modelSelect.contains(e.target) || e.target === modelSelect || 
+            (modelSelector && (modelSelector.contains(e.target) || e.target === modelSelector)))) {
+            isPulling = false;
+            return;
+        }
         
         touchEndY = e.touches[0].clientY;
         pullDistance = touchEndY - touchStartY;
