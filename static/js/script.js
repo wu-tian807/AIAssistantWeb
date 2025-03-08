@@ -62,12 +62,20 @@ export function canSendMessage() {
 
 // 监听输入框变化，控制发送按钮状态
 userInput.addEventListener('input', () => {
-    sendButton.disabled = !canSendMessage();
+    if(sendButton.classList.contains('stop')){
+        sendButton.disabled = false;
+    }else{
+        sendButton.disabled = !canSendMessage();
+    }
 });
 
 // 创建 MutationObserver 监听预览框的变化
 const previewObserver = new MutationObserver(() => {
-    sendButton.disabled = !canSendMessage();
+    if(sendButton.classList.contains('stop')){
+        sendButton.disabled = false;
+    }else{
+        sendButton.disabled = !canSendMessage();
+    }
 });
 
 // 开始观察预览框的变化
@@ -1294,6 +1302,12 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
         userInput.value = '';
         userInput.style.height = 'auto';
         userInput.disabled = true;
+        // 清空输入框并更新按钮状态
+        clearAttachmentPreview();
+        sendButton.textContent = '停止';
+        sendButton.classList.add('stop');
+        sendButton.disabled = true; // 在获取流以前先暂时禁用按钮
+        userInput.disabled = false;
 
         const selectedModel = modelSelect.value;
         if (!selectedModel) {
@@ -1382,14 +1396,6 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
             renderConversationsList();
             generateTitle(content);
         }
-
-        // 清空输入框并更新按钮状态
-        userInput.value = '';
-        clearAttachmentPreview();
-        sendButton.textContent = '停止';
-        sendButton.classList.add('stop');
-        sendButton.disabled = false; // 确保停止按钮始终可用
-        userInput.disabled = true;
 
         // 发送消息后强制滚动到底部
         const chatMessages = document.getElementById('chat-messages');
@@ -1896,7 +1902,7 @@ window.copyCode = copyCode;
 async function regenerateMessage(messageIndex) {
     const sendButton = document.getElementById('send-button');
     if (sendButton.classList.contains('stop')) {
-        sendButton.disabled = true;
+        sendButton.disabled = false;
         userInput.disabled = true;
     }
 
@@ -2008,8 +2014,8 @@ async function regenerateMessage(messageIndex) {
         // 禁用发送按钮，显示停止按钮
         sendButton.textContent = '停止';
         sendButton.classList.add('stop');
-        sendButton.disabled = false;  // 确保停止按钮可点击
-        userInput.disabled = true;  // 禁用输入框
+        sendButton.disabled = true;  // 在获取流以前先暂时禁用按钮
+        userInput.disabled = false; // 允许用户提前输入
         
         try {
             // 获取选中的模型ID和图标信息
@@ -2839,7 +2845,7 @@ function editConversationTitle(conversationId) {
 async function regenerateErrorMessage(messageIndex) {
     const sendButton = document.getElementById('send-button');
     if (sendButton.classList.contains('stop')) {
-        sendButton.disabled = true;
+        sendButton.disabled = false;
         userInput.disabled = true;
     }
 
@@ -2908,8 +2914,8 @@ async function regenerateErrorMessage(messageIndex) {
         // 禁用发送按钮，显示停止按钮
         sendButton.textContent = '停止';
         sendButton.classList.add('stop');
-        sendButton.disabled = false;  // 确保停止按钮可点击
-        userInput.disabled = true;  // 禁用输入框
+        sendButton.disabled = true;  // 在获取流以前先暂时禁用按钮
+        userInput.disabled = false;  // 允许用户提前输入
         
         try {
             // 获取选中的模型ID和图标信息
@@ -3160,6 +3166,8 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
     currentReader = reader;
     console.log("设置currentReader完成");
     const decoder = new TextDecoder();
+    
+    sendButton.disabled = false; // 在获取流之后接触禁用，允许用户关闭流。
     
     let assistantMessage = '';
     let reasoningBox = null;

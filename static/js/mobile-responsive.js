@@ -120,6 +120,10 @@ function setupMessageLongPressCopy() {
         return;
     }
     
+    // 检测是否为iOS设备
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    console.log('是否为iOS设备:', isIOS);
+    
     let touchTimer = null;
     let touchTarget = null;
     const longPressTime = 600; // 减少长按时间阈值为600毫秒
@@ -161,8 +165,13 @@ function setupMessageLongPressCopy() {
                         messageElement.classList.remove('copy-active');
                     }, 300);
                     
-                    // 复制到剪贴板
-                    copyToClipboard(text);
+                    // iOS设备上显示复制按钮，其他设备直接复制
+                    if (isIOS) {
+                        showCopyButton(text, messageElement);
+                    } else {
+                        // 复制到剪贴板
+                        showCopyButton(text,messageElement);
+                    }
                 } else {
                     console.error('未找到文本内容元素');
                     showToast('未找到可复制的内容', 'error');
@@ -222,7 +231,159 @@ function setupMessageLongPressCopy() {
         return null;
     }
     
-    // 复制到剪贴板函数
+    // 为iOS设备显示复制按钮
+    function showCopyButton(text, messageElement) {
+        // 安全检查：确保messageElement已定义
+        if (!messageElement || typeof messageElement.getBoundingClientRect !== 'function') {
+            console.error('无效的messageElement，使用固定位置显示复制按钮');
+            // 如果元素无效，则使用固定位置
+            showFixedCopyButton(text);
+            return;
+        }
+        
+        // 移除可能已存在的复制按钮
+        const existingBtn = document.getElementById('ios-copy-button');
+        if (existingBtn) {
+            existingBtn.remove();
+        }
+        
+        // 创建复制按钮
+        const copyBtn = document.createElement('button');
+        copyBtn.id = 'ios-copy-button';
+        copyBtn.textContent = '复制此消息';
+        copyBtn.className = 'ios-copy-button';
+        
+        // 设置按钮样式
+        copyBtn.style.position = 'absolute';
+        copyBtn.style.zIndex = '1000';
+        copyBtn.style.padding = '8px 12px';
+        copyBtn.style.backgroundColor = '#4285f4';
+        copyBtn.style.color = 'white';
+        copyBtn.style.border = 'none';
+        copyBtn.style.borderRadius = '4px';
+        copyBtn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+        copyBtn.style.fontSize = '14px';
+        
+        // 定位按钮在消息下方
+        const rect = messageElement.getBoundingClientRect();
+        copyBtn.style.left = rect.left + 'px';
+        copyBtn.style.top = (rect.bottom + 10) + 'px';
+        
+        // 添加点击事件 - 在用户明确点击时执行复制
+        copyBtn.addEventListener('click', function() {
+            iosCopyToClipboard(text);
+            copyBtn.remove();
+        });
+        
+        // 添加自动消失
+        setTimeout(() => {
+            if (document.body.contains(copyBtn)) {
+                copyBtn.remove();
+            }
+        }, 5000);
+        
+        document.body.appendChild(copyBtn);
+    }
+    
+    // 在固定位置显示复制按钮（备用方法）
+    function showFixedCopyButton(text) {
+        // 移除可能已存在的复制按钮
+        const existingBtn = document.getElementById('ios-copy-button');
+        if (existingBtn) {
+            existingBtn.remove();
+        }
+        
+        // 创建复制按钮
+        const copyBtn = document.createElement('button');
+        copyBtn.id = 'ios-copy-button';
+        copyBtn.textContent = '复制此消息';
+        copyBtn.className = 'ios-copy-button';
+        
+        // 设置按钮样式 - 使用固定位置
+        copyBtn.style.position = 'fixed';
+        copyBtn.style.zIndex = '1000';
+        copyBtn.style.padding = '8px 12px';
+        copyBtn.style.backgroundColor = '#4285f4';
+        copyBtn.style.color = 'white';
+        copyBtn.style.border = 'none';
+        copyBtn.style.borderRadius = '4px';
+        copyBtn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+        copyBtn.style.fontSize = '14px';
+        copyBtn.style.bottom = '20%';
+        copyBtn.style.left = '50%';
+        copyBtn.style.transform = 'translateX(-50%)';
+        
+        // 添加点击事件 - 在用户明确点击时执行复制
+        copyBtn.addEventListener('click', function() {
+            iosCopyToClipboard(text);
+            copyBtn.remove();
+        });
+        
+        // 添加自动消失
+        setTimeout(() => {
+            if (document.body.contains(copyBtn)) {
+                copyBtn.remove();
+            }
+        }, 5000);
+        
+        document.body.appendChild(copyBtn);
+    }
+    
+    // 专为iOS优化的复制方法
+    function iosCopyToClipboard(text) {
+        // 方法1: 使用navigator.clipboard API (需要用户明确操作，这里是按钮点击)
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text)
+                .then(() => {
+                    showToast('复制成功', 'success');
+                })
+                .catch(err => {
+                    console.error('iOS Clipboard API失败:', err);
+                    // 失败时尝试方法2
+                    iosFallbackCopy(text);
+                });
+        } else {
+            // 使用备选方法
+            iosFallbackCopy(text);
+        }
+    }
+    
+    // iOS的特殊备选复制方法
+    function iosFallbackCopy(text) {
+        try {
+            // 创建临时输入元素
+            const input = document.createElement('input');
+            input.value = text;
+            input.readOnly = true; // 防止键盘弹出
+            input.contentEditable = true;
+            input.style.position = 'absolute';
+            input.style.left = '-9999px';
+            input.style.fontSize = '16px'; // 防止iOS缩放
+            
+            document.body.appendChild(input);
+            
+            // 选择所有文本
+            input.focus();
+            input.setSelectionRange(0, text.length);
+            
+            // 尝试复制
+            const successful = document.execCommand('copy');
+            
+            // 移除元素
+            document.body.removeChild(input);
+            
+            if (successful) {
+                showToast('复制成功', 'success');
+            } else {
+                showToast('iOS复制失败，请手动长按选择并复制', 'error');
+            }
+        } catch (e) {
+            console.error('iOS降级复制失败:', e);
+            showToast('复制失败，请手动长按选择并复制', 'error');
+        }
+    }
+    
+    // 复制到剪贴板函数 (非iOS设备)
     function copyToClipboard(text) {
         // 现代浏览器API
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -239,7 +400,7 @@ function setupMessageLongPressCopy() {
         }
     }
     
-    // 降级复制方法
+    // 非iOS设备的备选复制方法
     function fallbackCopy(text) {
         try {
             const textarea = document.createElement('textarea');
@@ -251,18 +412,7 @@ function setupMessageLongPressCopy() {
             textarea.style.opacity = '0';
             document.body.appendChild(textarea);
             
-            // 特别处理iOS
-            if (navigator.userAgent.match(/ipad|iphone/i)) {
-                const range = document.createRange();
-                range.selectNodeContents(textarea);
-                const selection = window.getSelection();
-                selection.removeAllRanges();
-                selection.addRange(range);
-                textarea.setSelectionRange(0, 999999);
-            } else {
-                textarea.select();
-            }
-            
+            textarea.select();
             const successful = document.execCommand('copy');
             document.body.removeChild(textarea);
             
