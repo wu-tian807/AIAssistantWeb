@@ -449,10 +449,19 @@ function appendMessage(content, isUser = false, messageIndex = null, attachments
             const currentConversation = conversations.find(c => c.id === currentConversationId);
             if (currentConversation && currentConversation.messages[messageIndex]) {
                 const message = currentConversation.messages[messageIndex];
-                iconInfo = {
-                    icon: message.modelIcon,
-                    id: message.modelId
-                };
+                // 获取当前版本的模型图标信息
+                if (message.versions && message.versions[message.currentVersion]) {
+                    const currentVersion = message.versions[message.currentVersion];
+                    iconInfo = {
+                        icon: currentVersion.modelIcon || message.modelIcon,
+                        id: currentVersion.modelId || message.modelId
+                    };
+                } else {
+                    iconInfo = {
+                        icon: message.modelIcon,
+                        id: message.modelId
+                    };
+                }
             }
         }
         
@@ -513,10 +522,24 @@ function appendMessage(content, isUser = false, messageIndex = null, attachments
     // 创建文本内容容器
     const textContent = document.createElement('div');
     textContent.className = 'text-content';
+    
+    // 获取正确的内容 - 为非用户消息检查是否应该使用特定版本的内容
+    let displayContent = content;
+    if (!isUser && messageIndex !== null) {
+        const currentConversation = conversations.find(c => c.id === currentConversationId);
+        if (currentConversation && currentConversation.messages[messageIndex]) {
+            const message = currentConversation.messages[messageIndex];
+            // 如果有版本信息，并且有当前版本的索引，使用当前版本的内容
+            if (message.versions && message.versions[message.currentVersion]) {
+                displayContent = message.versions[message.currentVersion].content;
+            }
+        }
+    }
+    
     if (isUser) {
-        textContent.textContent = content;
+        textContent.textContent = displayContent;
     } else {
-        textContent.innerHTML = md.render(content);
+        textContent.innerHTML = md.render(displayContent);
         initializeCodeBlocks(textContent);  // 使用initializeCodeBlocks函数替代applyCodeHighlight函数
     }
     messageContent.appendChild(textContent);
@@ -560,8 +583,22 @@ function appendMessage(content, isUser = false, messageIndex = null, attachments
         const attachmentsContainer = document.createElement('div');
         attachmentsContainer.className = 'message-attachments-container';
         
+        // 使用当前版本的附件，如果有的话
+        let currentAttachments = attachments;
+        if (!isUser && messageIndex !== null) {
+            const currentConversation = conversations.find(c => c.id === currentConversationId);
+            if (currentConversation && currentConversation.messages[messageIndex]) {
+                const message = currentConversation.messages[messageIndex];
+                // 如果有版本信息，并且有当前版本的索引，使用当前版本的附件
+                if (message.versions && message.versions[message.currentVersion] && 
+                    message.versions[message.currentVersion].attachments) {
+                    currentAttachments = message.versions[message.currentVersion].attachments;
+                }
+            }
+        }
+        
         const attachmentRenderer = new AttachmentRenderer();
-        const renderPromises = attachments.map(async attachment => {
+        const renderPromises = currentAttachments.map(async attachment => {
             try {
                 const renderedElement = await attachmentRenderer.render({
                     type: attachment.type || 'image',
@@ -890,10 +927,31 @@ async function loadConversations() {
             if (conversation.messages) {
                 // 遍历所有消息
                 conversation.messages.forEach((message, index) => {
-                    // 处理版本数据
-                    if (message.versions && message.versions.length > 0) {
-                        // 确保每个版本都有subsequentMessages字段
+                    // 如果是助手消息，则确保currentVersion存在
+                    if (message.role === 'assistant' && message.versions && message.versions.length > 0) {
+                        // 确保currentVersion是有效的
+                        if (message.currentVersion === undefined || message.currentVersion < 0 || 
+                            message.currentVersion >= message.versions.length) {
+                            message.currentVersion = message.versions.length - 1;
+                            console.log(`修正 ${index} 号消息的版本索引为`, message.currentVersion);
+                        }
+                        
+                        // 确保每个版本都有必要的字段
                         message.versions.forEach((version, versionIndex) => {
+                            // 确保版本有内容字段
+                            if (!version.content && message.content) {
+                                version.content = message.content;
+                            }
+                            
+                            // 确保版本有模型信息
+                            if (!version.modelId && message.modelId) {
+                                version.modelId = message.modelId;
+                            }
+                            if (!version.modelIcon && message.modelIcon) {
+                                version.modelIcon = message.modelIcon;
+                            }
+                            
+                            // 确保每个版本都有subsequentMessages字段
                             if (!version.subsequentMessages) {
                                 version.subsequentMessages = [];
                                 
@@ -903,6 +961,12 @@ async function loadConversations() {
                                 }
                             }
                         });
+                        
+                        // 使用当前版本的内容更新消息内容，确保UI显示正确版本
+                        const currentVersion = message.versions[message.currentVersion];
+                        if (currentVersion && currentVersion.content) {
+                            message.content = currentVersion.content;
+                        }
                     }
                 });
             }
@@ -1029,6 +1093,25 @@ async function switchConversation(conversationId) {
     // 更新系统提示词
     const systemPromptTextarea = document.getElementById('system-prompt');
     systemPromptTextarea.value = conversation.systemPrompt || default_system_prompt;
+    
+    // 确保每条消息都使用当前选择的版本内容
+    if (conversation.messages) {
+        conversation.messages.forEach((message, index) => {
+            if (message.role === 'assistant' && message.versions && message.versions.length > 0) {
+                // 确保currentVersion有效
+                if (message.currentVersion === undefined || message.currentVersion < 0 || 
+                    message.currentVersion >= message.versions.length) {
+                    message.currentVersion = message.versions.length - 1;
+                }
+
+                // 使用当前版本的内容更新消息内容
+                const currentVersion = message.versions[message.currentVersion];
+                if (currentVersion && currentVersion.content) {
+                    message.content = currentVersion.content;
+                }
+            }
+        });
+    }
     
     // 更新模型设置
     if (window.modelSettingRenderer) {
@@ -1302,8 +1385,6 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
         userInput.value = '';
         userInput.style.height = 'auto';
         userInput.disabled = true;
-        // 清空输入框并更新按钮状态
-        clearAttachmentPreview();
         sendButton.textContent = '停止';
         sendButton.classList.add('stop');
         sendButton.disabled = true; // 在获取流以前先暂时禁用按钮
@@ -1389,6 +1470,9 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
         
         // 立即保存用户消息到数据库
         await saveConversation(currentConversation.id, 'update');
+
+        // 清空输入框并更新按钮状态
+        clearAttachmentPreview();
         
         // 如果是第一条消息，生成对话标题
         if (currentConversation.messages.length === 1) {
@@ -3037,10 +3121,14 @@ async function regenerateErrorMessage(messageIndex) {
                 currentReader = null;
             }
             // userInput.disabled = false;
-            // console.log("发送按钮触发5");
+            // console.log("发送按钮触发2");
             // sendButton.textContent = '发送';
             // sendButton.classList.remove('stop');
-            // sendButton.disabled = false;
+            // if(!canSendMessage()){
+            //     sendButton.disabled = true;
+            // }else{
+            //     sendButton.disabled = false;
+            // }
             
             // 移除regenerating标记
             messageDiv.classList.remove('regenerating');
@@ -3052,10 +3140,14 @@ async function regenerateErrorMessage(messageIndex) {
                 currentReader = null;
             }
             //userInput.disabled = false;
-            // console.log("发送按钮触发6");
+            // console.log("发送按钮触发3");
             // sendButton.textContent = '发送';
             // sendButton.classList.remove('stop');
-            // sendButton.disabled = false;
+            // if(!canSendMessage()){
+            //     sendButton.disabled = true;
+            // }else{
+            //     sendButton.disabled = false;
+            // }
             
             messageDiv.classList.add('error-message');
             // 移除regenerating标记
