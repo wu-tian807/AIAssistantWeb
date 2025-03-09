@@ -32,6 +32,7 @@
         justify-content: center;
         max-width: 1000px;
         margin: 0 auto;
+        flex-wrap: wrap;
     }
 
     /* 模型图标容器样式 */
@@ -49,8 +50,9 @@
     .model-selector {
         display: flex;
         align-items: center;
-        width: 450px;
-        min-width: 450px;
+        width: auto;
+        min-width: auto;
+        max-width: 450px;
         flex: 1;
         background-color: #ffffff;
         border: 1px solid #e0e0e0;
@@ -98,10 +100,10 @@
 
     /* 系统提示词容器样式 */
     .system-prompt-container {
-        width: 450px;
-        min-width: 450px;
+        width: auto;
+        min-width: auto;
         flex: 1;
-        max-width: 800px;
+        max-width: 450px;
         margin: 0 auto;
         border: 1px solid #e0e0e0;
         border-radius: 8px;
@@ -242,4 +244,28 @@
 .drag-over {
     border: 2px dashed #4a90e2;
     background-color: rgba(74, 144, 226, 0.1);
+}
+
+/* 在中等尺寸屏幕上优化模型选择器和系统提示容器的布局 */
+@media screen and (min-width: 769px) and (max-width: 1200px) {
+    .model-selector, 
+    .system-prompt-container {
+        max-width: 350px; /* 在中等尺寸屏幕上减小最大宽度 */
+    }
+    
+    .controls-section {
+        gap: 15px; /* 减小间距 */
+    }
+}
+
+/* 在较小的桌面屏幕上进一步优化布局 */
+@media screen and (min-width: 769px) and (max-width: 991px) {
+    .model-selector, 
+    .system-prompt-container {
+        max-width: 300px; /* 进一步减小最大宽度 */
+    }
+    
+    .controls-section {
+        gap: 10px; /* 进一步减小间距 */
+    }
 }

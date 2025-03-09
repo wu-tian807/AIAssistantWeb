@@ -17,6 +17,10 @@ SVG_TO_MODEL_TYPE = {
     'siliconcloud':{
         'icon_path': 'static/icons/models/siliconcloud.svg',
         'name': 'SiliconCloud'
+    },
+    'oaipro':{
+        'icon_path': 'static/icons/models/oaipro.svg',
+        'name': 'OAIPro'
     }
 }
 # 模型配置
@@ -57,8 +61,22 @@ AVAILABLE_MODELS = {
             {'id':'deepseek-ai/DeepSeek-R1','name':'DeepSeek R1','description':'硅基流动部署的DeepSeekR1','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT],'max_output_tokens':8192,'reasoner':True}
         ],
         'api_type':'openai'
+    },
+    'oaipro':{
+        'models':[
+            {'id':'gpt-4o-mini','name':'GPT4o Mini','description':'OpenAI的最快速的模型，支持128K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.IMAGE],'max_output_tokens':16000},
+            {'id':'gpt-4o','name':'GPT4o','description':'OpenAI的旗舰模型，支持128K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.IMAGE],'max_output_tokens':25000},
+            {'id':'chatgpt-4o-latest','name':'ChatGPT4o','description':'OpenAI最新的ChatGPT4o，支持128K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.IMAGE],'max_output_tokens':25000},
+            {'id':'o1','name':'OpenAI o1','description':'OpenAI的高性能推理模型，支持200K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.IMAGE],'max_output_tokens':100000,'reasoner':True},
+            {'id':'o3-mini','name':'OpenAI o3-mini','description':'OpenAI新一代，支持200K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.IMAGE],'max_output_tokens':100000,'reasoner':True}
+        ],
+        'api_type':'openai'
     }
 }
+#思考模型但是不会返回思考内容的模型
+THINKING_MODELS_WITHOUT_CONTENT = ['o1','gemini-2.0-flash-thinking-exp-01-21','o3-mini']
+#思考模型可以调整思考力度的模型
+THINKING_MODELS_WITH_THINKING_DEGREE = ['o1','o3-mini']
 
 #速率限制
 RATE_LIMIT_WINDOW = 60  # 60秒时间窗口
@@ -67,11 +85,12 @@ MAX_EMAILS_PER_WINDOW = 3  # 每个时间窗口内最多发送3封邮件
 #设置AliYun API用于Qwen2.5VL模型，用于增强型OCR（计价）
 # API配置
 API_KEYS = {
-    'google': ["YOUR_GOOGLE_API_KEY"],
-    'xai': ["YOUR_XAI_API_KEY"],
-    'deepseek': ["YOUR_DEEPSEEK_API_KEY"],
-    'siliconcloud':["YOUR_SILICONCLOUD_API_KEY"],
-    'aliyun': ["YOUR_ALIYUN_API_KEY"]
+    'google': ["API_KEY_1"],
+    'xai': ["API_KEY_2"],
+    'deepseek': ["API_KEY_3"],
+    'siliconcloud':["API_KEY_4"],
+    'aliyun': ["API_KEY_5"],
+    'oaipro': ["API_KEY_6"]
 }
 
 API_BASE_URLS = {
@@ -79,12 +98,13 @@ API_BASE_URLS = {
     'xai': "https://api.x.ai/v1",
     'deepseek': "https://api.deepseek.com/v1",
     'siliconcloud': "https://api.siliconflow.cn/v1",
-    'aliyun': "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    'aliyun': "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    'oaipro': 'https://api.oaipro.com/v1'
 }
 
 #文字+latex公式图像ocr API和网址
 #感谢https://simpletex.cn
-OCR_API_KEY = "YOUR_API_KEY"
+OCR_API_KEY = "E1QcpnpmEPMNztTTy8tLkNVtKXJCB5nPOHrz1z1KQXNCDuvuMdIcshdPyN2BmJBS"
 # OCR_TURBO_LATEX_API_URL = "https://server.simpletex.cn/api/latex_ocr_turbo" #轻量级图像提取公式
 # OCR_STANDARD_LATEX_API_URL = "https://server.simpletex.cn/api/latex_ocr" #标准图像提取公式
 OCR_COMMON_API_URL = "https://server.simpletex.cn/api/simpletex_ocr" #通用图像提取
