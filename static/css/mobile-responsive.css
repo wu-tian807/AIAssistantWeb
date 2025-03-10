@@ -281,6 +281,7 @@
         height: auto;
         flex: 1;
         overflow-y: auto;
+        overflow-x: hidden;
         padding: 10px;
         padding-bottom: 0; /* 移除底部内边距，由margin-bottom代替 */
         margin-bottom: 70px; /* 为固定定位的输入框留出空间 */
