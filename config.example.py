@@ -68,7 +68,7 @@ AVAILABLE_MODELS = {
             {'id':'gpt-4o','name':'GPT4o','description':'OpenAI的旗舰模型，支持128K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.IMAGE],'max_output_tokens':25000},
             {'id':'chatgpt-4o-latest','name':'ChatGPT4o','description':'OpenAI最新的ChatGPT4o，支持128K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.IMAGE],'max_output_tokens':25000},
             {'id':'o1','name':'OpenAI o1','description':'OpenAI的高性能推理模型，支持200K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.IMAGE],'max_output_tokens':100000,'reasoner':True},
-            {'id':'o3-mini','name':'OpenAI o3-mini','description':'OpenAI新一代，支持200K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.IMAGE],'max_output_tokens':100000,'reasoner':True}
+             {'id':'o3-mini','name':'OpenAI o3-mini','description':'OpenAI新一代，支持200K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT],'max_output_tokens':100000,'reasoner':True}
         ],
         'api_type':'openai'
     }
