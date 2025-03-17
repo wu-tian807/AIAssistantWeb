@@ -61,6 +61,15 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 监听新消息添加
     observeNewMessages();
+    
+    // 添加触摸滚动隔离
+    setupTouchIsolation();
+    
+    // 调整聊天区域高度
+    adjustMessageAreaHeight();
+    
+    // 创建返回按钮
+    createBackButton();
 });
 
 /**
@@ -147,6 +156,10 @@ function setupMessageLongPressCopy() {
         messageElement.classList.add('touch-feedback');
         
         // 设置定时器
+        if(window.isGenerating) {
+            console.log('正在生成内容，不执行长按复制');
+            return;
+        }
         touchTimer = setTimeout(() => {
             if (touchTarget) {
                 console.log('长按触发成功!');
@@ -1020,10 +1033,22 @@ function setupPullToRefresh() {
         // 检查触摸事件是否发生在model-select或其子元素上
         const modelSelect = document.getElementById('model-select');
         const modelSelector = document.querySelector('.model-selector');
+        // 检查系统提示词相关元素
+        const systemPrompt = document.getElementById('system-prompt');
+        const systemPromptHeader = document.getElementById('system-prompt-header');
+        const systemPromptContainer = document.querySelector('.system-prompt-container');
         
         // 如果触摸开始于model-select或其父容器，则不触发下拉刷新
         if (modelSelect && (modelSelect.contains(e.target) || e.target === modelSelect || 
             (modelSelector && (modelSelector.contains(e.target) || e.target === modelSelector)))) {
+            isPulling = false;
+            return;
+        }
+        
+        // 如果触摸开始于系统提示词相关元素，则不触发下拉刷新
+        if ((systemPrompt && (systemPrompt.contains(e.target) || e.target === systemPrompt)) ||
+            (systemPromptHeader && (systemPromptHeader.contains(e.target) || e.target === systemPromptHeader)) ||
+            (systemPromptContainer && (systemPromptContainer.contains(e.target) || e.target === systemPromptContainer))) {
             isPulling = false;
             return;
         }
@@ -1042,8 +1067,21 @@ function setupPullToRefresh() {
         // 再次检查，确保即使手指移动到model-select区域也不触发刷新
         const modelSelect = document.getElementById('model-select');
         const modelSelector = document.querySelector('.model-selector');
+        // 检查系统提示词相关元素
+        const systemPrompt = document.getElementById('system-prompt');
+        const systemPromptHeader = document.getElementById('system-prompt-header');
+        const systemPromptContainer = document.querySelector('.system-prompt-container');
+        
         if (modelSelect && (modelSelect.contains(e.target) || e.target === modelSelect || 
             (modelSelector && (modelSelector.contains(e.target) || e.target === modelSelector)))) {
+            isPulling = false;
+            return;
+        }
+        
+        // 如果手指移动到系统提示词相关元素，则不触发下拉刷新
+        if ((systemPrompt && (systemPrompt.contains(e.target) || e.target === systemPrompt)) ||
+            (systemPromptHeader && (systemPromptHeader.contains(e.target) || e.target === systemPromptHeader)) ||
+            (systemPromptContainer && (systemPromptContainer.contains(e.target) || e.target === systemPromptContainer))) {
             isPulling = false;
             return;
         }
@@ -1125,6 +1163,67 @@ function setupPullToRefresh() {
         setTimeout(() => {
             refreshIndicator.style.display = 'none';
         }, 300);
+    }
+}
+
+/**
+ * 设置移动端触摸与滚动隔离
+ * 防止不同区域滚动干扰
+ */
+function setupTouchIsolation() {
+    if (!window.isMobile) return;
+    
+    // 获取需要隔离滚动的元素
+    const messageInputContainer = document.getElementById('message-input-container');
+    const systemPrompt = document.getElementById('system-prompt');
+    const chatMessages = document.getElementById('chat-messages');
+    const userInput = document.getElementById('user-input');
+    
+    // 设置输入区域的滚动隔离
+    if (messageInputContainer) {
+        messageInputContainer.addEventListener('touchmove', function(e) {
+            // 阻止事件冒泡，防止触发chat-messages的滚动
+            e.stopPropagation();
+        }, { passive: false });
+    }
+    
+    // 设置系统提示词滚动隔离
+    if (systemPrompt) {
+        systemPrompt.addEventListener('touchstart', function(e) {
+            // 阻止事件冒泡，防止触发下拉刷新
+            e.stopPropagation();
+        }, { passive: false });
+        
+        systemPrompt.addEventListener('touchmove', function(e) {
+            // 检查是否在边界滚动
+            const scrollTop = this.scrollTop;
+            const scrollHeight = this.scrollHeight;
+            const height = this.clientHeight;
+            const isAtTop = scrollTop <= 0;
+            const isAtBottom = scrollTop + height >= scrollHeight;
+            
+            // 只有当滚动不在内部区域且继续朝那个方向滚动时才阻止默认行为
+            if ((isAtTop && e.touches[0].clientY > e.touches[0].clientY) || 
+                (isAtBottom && e.touches[0].clientY < e.touches[0].clientY)) {
+                e.preventDefault();
+            }
+            
+            // 阻止事件冒泡，防止触发chat-messages的滚动
+            e.stopPropagation();
+        }, { passive: false });
+    }
+    
+    // 设置用户输入框的滚动隔离
+    if (userInput) {
+        userInput.addEventListener('touchmove', function(e) {
+            // 阻止事件冒泡，防止触发chat-messages的滚动
+            e.stopPropagation();
+        }, { passive: false });
+        
+        userInput.addEventListener('scroll', function(e) {
+            // 阻止滚动事件冒泡
+            e.stopPropagation();
+        }, { passive: false });
     }
 }
 

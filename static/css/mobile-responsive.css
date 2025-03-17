@@ -5,6 +5,148 @@
 
 /* 基础移动端响应式布局 */
 @media screen and (max-width: 768px) {
+    /* 编辑文本框移动端适配 */
+    .edit-textarea {
+        min-width: unset; /* 移除最小宽度限制 */
+        width: 100%;
+        max-width: 95%; /* 确保不超出屏幕 */
+        resize: vertical; /* 仅允许垂直方向调整大小 */
+        font-size: 14px; /* 减小字体大小 */
+        padding: 8px; /* 减小内边距 */
+    }
+    
+    /* 编辑附件容器优化 */
+    .edit-attachments-container {
+        width: 95%;
+        max-width: 95%;
+        padding: 5px;
+        margin-bottom: 8px;
+    }
+    
+    /* 编辑按钮区域优化 */
+    .edit-buttons {
+        width: 95%;
+        max-width: 95%;
+        flex-wrap: wrap; /* 允许按钮换行 */
+        gap: 4px; /* 减小按钮间距 */
+    }
+    
+    /* 编辑状态下的用户消息样式 */
+    .user-message .message-wrapper.editing {
+        max-width: 95%;
+        margin-right: 5px; /* 确保右侧有一定间距 */
+    }
+    
+    /* 确保编辑区域不会超出屏幕 */
+    .user-message.editing {
+        width: 95%;
+        max-width: 95%;
+        margin-right: auto;
+        margin-left: auto;
+    }
+    /*思考框的手机端调整，支持横向滑动*/
+    .reasoning-box {
+        width: 95%;
+        max-width: 95%; 
+        font-size: 0.9rem;
+        position: relative;
+        overflow: visible;
+        margin: 8px 0;
+        padding: 12px;
+    }
+    
+    .reasoning-box-content {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-x pan-y;
+        max-width: 100%;
+        padding-bottom: 10px;
+    }
+    
+    .reasoning-box-content pre,
+    .reasoning-box-content table,
+    .reasoning-box-content .code-block-wrapper {
+        max-width: 100%;
+        overflow-x: auto !important;
+        white-space: pre;
+    }
+    
+    .reasoning-box-content ul,
+    .reasoning-box-content ol {
+        padding-left: 18px;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+    
+    .reasoning-box-content ul ul,
+    .reasoning-box-content ol ol,
+    .reasoning-box-content ul ol,
+    .reasoning-box-content ol ul {
+        padding-left: 12px;
+    }
+    
+    .reasoning-box-content::-webkit-scrollbar {
+        height: 4px;
+        width: 4px;
+    }
+    
+    .reasoning-box-content::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 4px;
+    }
+    
+    .dark-theme .reasoning-box-content::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+    }
+    
+    .reasoning-box-toggle {
+        padding: 3px 6px;
+        font-size: 0.7rem;
+        top: 8px;
+        right: 8px;
+    }
+    
+    .reasoning-box-header {
+        margin-bottom: 8px;
+        gap: 8px;
+    }
+    
+    .reasoning-box p {
+        margin: 8px 0;
+    }
+    
+    .reasoning-box-content blockquote {
+        margin-left: 8px;
+        padding-left: 8px;
+        max-width: calc(100% - 16px);
+    }
+    
+    .reasoning-box-content {
+        position: relative;
+    }
+    
+    .reasoning-box-content.scrollable::after {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 20px;
+        background: linear-gradient(to right, transparent, rgba(230, 198, 76, 0.1));
+        pointer-events: none;
+        opacity: 0;
+        animation: pulse-fade 2s ease-in-out infinite;
+    }
+    
+    .dark-theme .reasoning-box-content.scrollable::after {
+        background: linear-gradient(to right, transparent, rgba(196, 169, 58, 0.15));
+    }
+    
+    @keyframes pulse-fade {
+        0% { opacity: 0; }
+        50% { opacity: 1; }
+        100% { opacity: 0; }
+    }
     /* 应用容器的基本调整 */
     .app-container {
         flex-direction: column;
@@ -226,6 +368,10 @@
         border: 1px solid var(--border-color);
         border-radius: 4px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        touch-action: pan-y; /* 只允许垂直滚动 */
+        overflow: auto; /* 允许内部滚动 */
+        overscroll-behavior: contain; /* 避免滚动穿透 */
+        -webkit-overscroll-behavior: contain;
     }
 
     /* 点击后显示系统提示词 */
@@ -367,10 +513,14 @@
         -webkit-transform: translateZ(0);
         -webkit-backdrop-filter: blur(5px); /* 添加轻微模糊效果增强视觉分离感 */
         backdrop-filter: blur(5px);
+        /* 阻止输入区域滑动事件传播到chat-messages */
+        touch-action: pan-x; /* 只允许水平滚动 */
+        overflow: auto; /* 允许内部内容滚动 */
     }
 
     .chat-input-container {
         width: 100%;
+        touch-action: pan-x; /* 只允许水平滚动 */
     }
 
     /* 附件预览区域 */

@@ -25,6 +25,12 @@ let currentReader = null;
 window.generationStopped = false;
 // 在脚本开始处添加全局变量定义
 window.ReasoningBoxInstance = null; // 添加全局实例变量
+// 改进滚动检测和控制
+let userScrolling = false;
+let lastScrollTop = 0;
+let scrollTimeout = null;
+// 添加内容生成状态标志
+window.isGenerating = false;
 
 // 获取 DOM 元素
 const chatMessages = document.getElementById('chat-messages');
@@ -88,6 +94,9 @@ if (attachmentPreview) {
 
 // 监听回车键发送消息
 userInput.addEventListener('keydown', (e) => {
+    if(window.isMobile){
+        return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         if (!sendButton.classList.contains('stop')) {
@@ -134,9 +143,48 @@ function stopGeneration() {
                     // 获取上一条用户消息的索引
                     const lastUserMessageIndex = currentConversation.messages.length - 1;
                     
-                    // 移除最后一条用户消息，防止重复
-                    if (currentConversation.messages[lastUserMessageIndex].role === "user") {
-                        currentConversation.messages.pop();
+                    // 获取思考框的数据
+                    const reasoningData = window.ReasoningBoxInstance.getSerializableData();
+                    const reasoningContent = reasoningData.reasoning_content;
+                    const reasoningSummary = reasoningData.reasoning_summary || extractSummaryFromThinking(reasoningData);
+                    const thinkingTime = reasoningData.reasoning_time;
+                    
+                    if (reasoningContent) {
+                        console.log("保存思考内容到对话");
+                        // 获取当前选择的模型图标和ID
+                        const modelIcon = document.querySelector('#model-select option:checked').getAttribute('data-icon');
+                        const selectedModel = document.getElementById('model-select').value;
+                        
+                        // 直接添加一条助手消息，包含思考内容
+                        currentConversation.messages.push({
+                            role: "assistant",
+                            content: reasoningSummary || "(思考被中断)",  // 使用摘要或默认文本
+                            reasoning_content: reasoningContent,
+                            reasoning_summary: reasoningSummary,
+                            thinking_time: thinkingTime,
+                            modelIcon: modelIcon,
+                            modelId: selectedModel,
+                            versions: [{
+                                content: reasoningSummary || "(思考被中断)",
+                                reasoning_content: reasoningContent,
+                                reasoning_summary: reasoningSummary,
+                                thinking_time: thinkingTime,
+                                attachments: [],
+                                subsequentMessages: [],
+                                modelIcon: modelIcon,
+                                modelId: selectedModel
+                            }],
+                            currentVersion: 0,
+                            isInterrupted: true  // 标记为被中断的消息
+                        });
+                        
+                        // 更新UI，添加重新生成按钮
+                        const messageIndex = currentConversation.messages.length - 1;
+                        const messageWrapper = messageDiv.querySelector('.message-wrapper');
+                        const messageActions = messageWrapper.querySelector('.message-actions');
+                        messageActions.innerHTML = '';
+                        createRegenerateButton(messageIndex, messageActions, false);
+                        
                         // 保存对话
                         saveConversation(currentConversation.id, 'update');
                     }
@@ -169,49 +217,14 @@ function stopGeneration() {
         // 找到正在生成的消息
         const regeneratingMessage = document.querySelector('.message.regenerating');
         if (regeneratingMessage) {
-            console.log("找到正在生成的消息，移除regenerating标记");
-            // 移除regenerating标记
+            console.log("移除regenerating类");
             regeneratingMessage.classList.remove('regenerating');
-            
-            // 重新添加重新生成按钮
-            const messageActions = regeneratingMessage.querySelector('.message-actions');
-            if (messageActions) {
-                const messageIndex = regeneratingMessage.getAttribute('data-message-index');
-                if (messageIndex) {
-                    console.log("重新添加重新生成按钮，messageIndex:", messageIndex);
-                    messageActions.innerHTML = '';
-                    createRegenerateButton(parseInt(messageIndex), messageActions, false);
-                }
-            }
-        } else {
-            console.log("未找到正在生成的消息");
         }
         
-        console.log("停止生成");
-        // 重置生成状态
-        console.log("重置window.isGenerating为false");
+        console.log("设置window.isGenerating为false");
         window.isGenerating = false;
-        console.log("重置generationStopped为false");
-        window.generationStopped = false;
-        
-        console.log("===== stopGeneration函数执行完毕 =====");
-        console.log("最终状态: isGenerating =", window.isGenerating, 
-                    ", generationStopped =", generationStopped, 
-                    ", currentReader =", currentReader);
-    } else {
-        console.log("window.isGenerating为false，不执行停止操作");
-        console.log("===== stopGeneration函数执行完毕（无操作） =====");
     }
 }
-
-
-
-// 改进滚动检测和控制
-let userScrolling = false;
-let lastScrollTop = 0;
-let scrollTimeout = null;
-// 添加内容生成状态标志
-window.isGenerating = false;
 
 // 初始化滚动监听
 document.addEventListener('DOMContentLoaded', function() {
@@ -1895,6 +1908,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(() => {
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }, 100);
+
+    // 阻止message-input-container滑动穿透到chat-messages
+    const messageInputContainer = document.getElementById('message-input-container');
+    const userInput = document.getElementById('user-input');
+    
+    if (messageInputContainer && window.isMobile) {
+        // 阻止touchmove事件冒泡，避免滑动穿透
+        messageInputContainer.addEventListener('touchmove', function(e) {
+            e.stopPropagation();
+        }, { passive: false });
+        
+        // 针对用户输入文本框的特殊处理
+        if (userInput) {
+            userInput.addEventListener('touchmove', function(e) {
+                e.stopPropagation();
+            }, { passive: false });
+            
+            // 防止文本框滚动穿透
+            userInput.addEventListener('scroll', function(e) {
+                e.stopPropagation();
+            }, { passive: false });
+        }
+    }
 });
 
 // 添加复制代码功能
