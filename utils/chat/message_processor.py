@@ -236,7 +236,22 @@ def upload_large_file_to_gemini(
         
         # 上传文件
         print("开始上传文件...")
-        uploaded_file = genai_client.files.upload(path=file_path)
+        try:
+            # 使用文件路径直接上传 - 新版API方式
+            uploaded_file = genai_client.files.upload(file=file_path)
+        except TypeError as e:
+            if 'unexpected keyword argument' in str(e):
+                print("尝试不带参数名上传...")
+                uploaded_file = genai_client.files.upload(file_path)
+            elif 'file_data' in str(e) or 'file object' in str(e).lower():
+                # 如果需要文件数据而不是路径
+                print("尝试读取文件内容并上传...")
+                with open(file_path, 'rb') as f:
+                    file_data = f.read()
+                    uploaded_file = genai_client.files.upload(file_data, mime_type=mime_type, display_name=file_name)
+            else:
+                raise
+        
         print(f"上传成功！URI: {uploaded_file.uri}")
         
         # 对于视频文件，需要等待处理完成
@@ -257,7 +272,12 @@ def upload_large_file_to_gemini(
                 print('.', end='', flush=True)
                 time.sleep(wait_interval)
                 total_waited += wait_interval
-                uploaded_file = genai_client.files.get(uploaded_file.name)
+                try:
+                    # 使用命名参数访问文件 - 这是正确的方式
+                    uploaded_file = genai_client.files.get(name=uploaded_file.name)
+                except Exception as e:
+                    print(f"获取文件状态时出错: {str(e)}")
+                    break
                 
             print("\n处理完成")
             
