@@ -59,26 +59,8 @@ export class VideoUploader {
 
             this.attachments.add(videoAttachment);
 
-            // 如果有容器选项，创建并添加预览元素
-            if (this.options.container) {
-                const previewElement = videoAttachment.createUploadPreviewElement(
-                    // 删除回调
-                    () => {
-                        if (previewElement.parentNode) {
-                            previewElement.parentNode.removeChild(previewElement);
-                        }
-                        this.attachments.delete(videoAttachment);
-                        if (this.options.onDelete) {
-                            this.options.onDelete(videoAttachment);
-                        }
-                    }
-                );
-                
-                if (previewElement) {
-                    this.options.container.appendChild(previewElement);
-                }
-            }
-
+            // 移除创建预览元素的代码，统一由Uploader处理
+            
             return videoAttachment;
         } catch (error) {
             console.error('添加已有视频附件失败:', error);

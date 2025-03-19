@@ -68,7 +68,7 @@ export class TextRenderer {
             // 创建文件名
             const fileName = document.createElement('div');
             fileName.className = 'file-name';
-            fileName.textContent = attachment.fileName || '未命名文本';
+            fileName.textContent = attachment.fileName || attachment.filename || '未命名文本';
             
             // 创建文件详情
             const fileDetails = document.createElement('div');
@@ -94,13 +94,32 @@ export class TextRenderer {
                 previewItem.appendChild(deleteButton);
             }
             
+            // 确保有内容ID
+            const contentId = attachment.content_id || attachment.file_path;
+            
+            // 保存关键信息到元素数据属性
+            previewItem.dataset.contentId = contentId;
+            previewItem.dataset.fileName = attachment.fileName || attachment.filename;
+            previewItem.dataset.mimeType = attachment.mime_type;
+            previewItem.dataset.encoding = attachment.encoding || 'UTF-8';
+            previewItem.dataset.lineCount = attachment.lineCount || '0';
+            
             // 添加点击事件打开预览
-            if (!attachment.error) {
+            if (!attachment.error && contentId) {
                 previewItem.onclick = async () => {
                     try {
                         // 确保每次都创建新的模态框实例
                         const modal = new TextModal();
-                        await modal.show(attachment);
+                        // 创建完整的附件对象，确保有所有需要的属性
+                        const completeAttachment = {
+                            content_id: contentId,
+                            fileName: attachment.fileName || attachment.filename,
+                            mime_type: attachment.mime_type,
+                            encoding: attachment.encoding || 'UTF-8',
+                            lineCount: attachment.lineCount || 0,
+                            size: attachment.size || 0
+                        };
+                        await modal.show(completeAttachment);
                     } catch (error) {
                         console.error('打开预览失败:', error);
                         showToast('打开预览失败: ' + error.message, 'error');

@@ -84,47 +84,63 @@ export class AttachmentRenderer {
      */
     async render(attachment) {
         try {
-            if (!attachment || !attachment.type) {
-                console.error('无效的附件对象:', attachment);
-                return this.createErrorElement('无效的附件');
+            // 判断附件类型
+            const type = attachment.type || this.getAttachmentType(attachment);
+            if (!type) {
+                return this.createErrorElement('未知的附件类型');
             }
-
-            const renderer = this.renderers[attachment.type];
+            
+            console.log(`渲染${type}类型附件:`, attachment);
+            
+            // 确保渲染器存在
+            const renderer = this.renderers[type];
             if (!renderer) {
-                console.warn(`未找到类型 ${attachment.type} 的渲染器`);
-                return this.createErrorElement(`不支持的附件类型: ${attachment.type}`);
+                console.warn(`未找到${type}类型的渲染器`);
+                return this.createErrorElement(`不支持的附件类型: ${type}`);
             }
             
-            // 确保传递 disableDelete 属性
-            const rendererAttachment = {
-                ...attachment,
-                disableDelete: attachment.disableDelete || false
-            };
+            // 对文本附件进行特殊处理
+            if (type === AttachmentType.TEXT) {
+                console.log('处理文本附件:', attachment);
+                // 确保传递所有必要的文本附件属性
+                const textAttachment = {
+                    ...attachment,
+                    type: AttachmentType.TEXT,
+                    fileName: attachment.fileName || attachment.filename,
+                    mime_type: attachment.mime_type,
+                    content_id: attachment.content_id,
+                    encoding: attachment.encoding || 'UTF-8',
+                    lineCount: attachment.lineCount || 0,
+                    size: attachment.size || 0,
+                    disableDelete: attachment.disableDelete || false
+                };
+                
+                return await renderer.render(textAttachment);
+            }
             
-            // 处理异步渲染
+            // 渲染其他类型附件
             let element;
-            if (renderer.render) {
-                element = await renderer.render(rendererAttachment);
+            try {
+                if (renderer.render && typeof renderer.render === 'function') {
+                    element = await renderer.render(attachment);
+                } else {
+                    element = renderer(attachment);
+                }
+                
                 if (!element || !(element instanceof HTMLElement)) {
                     console.error('渲染器返回了无效的元素:', element);
-                    element = this.createErrorElement('渲染失败');
+                    return this.createErrorElement('渲染失败');
                 }
-            } else {
-                element = renderer(rendererAttachment);
-                if (!element || !(element instanceof HTMLElement)) {
-                    console.error('渲染器返回了无效的元素:', element);
-                    element = this.createErrorElement('渲染失败');
-                }
+                
+                this.addAttachmentToContainer(element);
+                return element;
+            } catch (error) {
+                console.error(`渲染${type}附件失败:`, error);
+                return this.createErrorElement(`渲染${type}附件失败: ${error.message}`);
             }
-            
-            // 将渲染后的元素添加到容器并更新可见性
-            this.addAttachmentToContainer(element);
-            return element;
         } catch (error) {
-            console.error('渲染附件时发生错误:', error);
-            const errorElement = this.createErrorElement('渲染时发生错误');
-            this.addAttachmentToContainer(errorElement);
-            return errorElement;
+            console.error('渲染附件失败:', error);
+            return this.createErrorElement('渲染失败: ' + error.message);
         }
     }
 
@@ -245,5 +261,43 @@ export class AttachmentRenderer {
         }
         
         return element;
+    }
+
+    /**
+     * 根据附件属性推断类型
+     * @param {Object} attachment 附件对象
+     * @returns {string|null} 附件类型
+     * @private
+     */
+    getAttachmentType(attachment) {
+        if (!attachment) return null;
+        
+        if (attachment.type) return attachment.type;
+        
+        // 根据特定属性推断类型
+        if (attachment.base64_id || attachment.base64) return 'image';
+        if (attachment.content_id) return 'text';
+        if (attachment.duration || (attachment.mime_type && attachment.mime_type.startsWith('video/'))) return 'video';
+        
+        // 根据MIME类型推断
+        if (attachment.mime_type) {
+            if (attachment.mime_type.startsWith('image/')) return 'image';
+            if (attachment.mime_type.startsWith('text/')) return 'text';
+            if (attachment.mime_type.startsWith('video/')) return 'video';
+            if (attachment.mime_type.startsWith('audio/')) return 'audio';
+        }
+        
+        // 根据文件扩展名推断
+        if (attachment.fileName || attachment.filename) {
+            const fileName = attachment.fileName || attachment.filename;
+            const ext = fileName.split('.').pop().toLowerCase();
+            
+            if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext)) return 'image';
+            if (['mp4', 'webm', 'ogg', 'mov', 'avi'].includes(ext)) return 'video';
+            if (['mp3', 'wav', 'ogg', 'aac'].includes(ext)) return 'audio';
+            if (['txt', 'md', 'js', 'css', 'html', 'json', 'xml', 'csv'].includes(ext)) return 'text';
+        }
+        
+        return null;
     }
 }

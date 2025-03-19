@@ -12,70 +12,91 @@ export class TextUploader {
 
     /**
      * 处理文件选择
-     * @param {File} file - 文件对象
+     * @param {File} file - 选择的文件
      * @returns {Promise<TextAttachment>}
      */
     async handleFileSelect(file) {
         try {
-            // 读取文件内容
-            const content = await this.readFileContent(file);
-            
-            // 创建上传进度提示
-            const toast = showToast('文本文件上传中...', 'info', 0);
-            const progressText = document.createElement('div');
-            progressText.className = 'upload-progress';
-            toast.appendChild(progressText);
-            
-            // 发送到服务器
-            const response = await fetch('/api/text/save', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''
-                },
-                body: JSON.stringify({
-                    content: content,
-                    fileName: file.name,
-                    encoding: 'UTF-8'  // 默认使用UTF-8编码
-                })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: '服务器响应错误' }));
-                toast.remove();
-                throw new Error(errorData.error || `上传失败: ${response.status}`);
+            if (!file) {
+                console.warn('没有选择文件');
+                throw new Error('没有选择文件');
             }
-
-            const data = await response.json();
             
-            // 创建文本附件实例
-            const textAttachment = new TextAttachment({
-                fileName: file.name,
-                mime_type: file.type || 'text/plain',
-                content_id: data.metadata.content_id,
-                encoding: data.metadata.encoding,
-                lineCount: data.metadata.line_count,
-                size: data.metadata.size,
-                lastModified: file.lastModified
-            });
-
-            // 移除上传提示并显示成功消息
-            toast.remove();
-            showToast('文本文件上传成功', 'success');
-
-            // 调用成功回调
-            if (this.options.onSuccess) {
-                this.options.onSuccess(textAttachment);
+            console.log('TextUploader处理文件:', file.name, '类型:', file.type, '大小:', file.size);
+            
+            // 验证文件类型
+            if (!this.validateFile(file)) {
+                throw new Error('文件类型不支持');
             }
-
-            return textAttachment;
             
+            // 显示上传中提示
+            const uploadingToast = showToast('文本文件上传中...', 'info', 0);
+            
+            try {
+                // 读取文件内容
+                const fileContent = await this.readFileContent(file);
+                console.log('文件内容读取成功，长度:', fileContent.length);
+                
+                // 解码base64获取原始文本内容
+                console.log('开始解码base64内容');
+                try {
+                    const decodedContent = atob(fileContent);
+                    console.log('base64解码成功，文本长度:', decodedContent.length);
+                    
+                    // 计算行数
+                    const lineCount = this.countLines(decodedContent);
+                    console.log('文本行数:', lineCount);
+                    
+                    // 将文本内容保存到后端
+                    console.log('开始向后端保存文本内容...');
+                    const savedData = await this.saveTextContent(decodedContent, file.name);
+                    console.log('保存到后端成功，返回数据:', savedData);
+                    
+                    // 移除上传中提示
+                    if (uploadingToast) {
+                        uploadingToast.remove();
+                    }
+                    
+                    // 显示上传成功提示
+                    showToast('文本文件上传成功', 'success');
+                    
+                    // 创建文本附件对象
+                    const textAttachment = new TextAttachment({
+                        fileName: file.name,
+                        mime_type: file.type || 'text/plain',
+                        content_id: savedData.content_id,
+                        encoding: savedData.encoding || 'UTF-8',
+                        lineCount: savedData.line_count || lineCount,
+                        size: file.size,
+                        lastModified: file.lastModified
+                    });
+                    
+                    console.log('创建文本附件对象:', textAttachment);
+                    
+                    // 保存到附件集合
+                    this.attachments.add(textAttachment);
+                    
+                    // 调用上传成功回调
+                    if (this.options.onUploadSuccess) {
+                        this.options.onUploadSuccess(textAttachment);
+                    }
+                    
+                    return textAttachment;
+                } catch (decodeError) {
+                    console.error('base64解码失败:', decodeError);
+                    throw new Error('文件内容解码失败');
+                }
+            } catch (error) {
+                // 确保在发生错误时移除上传中提示
+                if (uploadingToast) {
+                    uploadingToast.remove();
+                }
+                // 显示错误提示
+                showToast(`文本上传失败: ${error.message}`, 'error');
+                throw error;
+            }
         } catch (error) {
-            console.error('文本文件处理失败:', error);
-            showToast(error.message || '文本文件上传失败', 'error');
-            if (this.options.onError) {
-                this.options.onError(error);
-            }
+            console.error('处理文件选择失败:', error);
             throw error;
         }
     }
@@ -83,15 +104,57 @@ export class TextUploader {
     /**
      * 读取文件内容
      * @param {File} file - 文件对象
-     * @returns {Promise<string>}
+     * @returns {Promise<string>} 返回Base64编码的文件内容
      * @private
      */
     async readFileContent(file) {
+        console.log('开始读取文件内容:', file.name);
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.onload = (e) => resolve(e.target.result);
-            reader.onerror = reject;
-            reader.readAsText(file);
+            
+            reader.onload = (e) => {
+                try {
+                    console.log('文件内容加载完成, 结果类型:', typeof e.target.result);
+                    
+                    // 验证结果是否为DataURL格式
+                    if (typeof e.target.result !== 'string' || !e.target.result.startsWith('data:')) {
+                        console.error('读取结果不是有效的DataURL:', e.target.result.substring(0, 50) + '...');
+                        reject(new Error('文件内容格式无效'));
+                        return;
+                    }
+                    
+                    // readAsDataURL返回的格式是 data:mime/type;base64,BASE64_CONTENT
+                    // 我们需要提取出BASE64_CONTENT部分
+                    const result = e.target.result;
+                    const base64Start = result.indexOf(',') + 1;
+                    
+                    if (base64Start <= 0 || base64Start >= result.length) {
+                        console.error('无法在DataURL中找到base64内容: ', result.substring(0, 50) + '...');
+                        reject(new Error('无法解析文件内容'));
+                        return;
+                    }
+                    
+                    const base64Content = result.substring(base64Start);
+                    console.log('成功提取base64内容，长度:', base64Content.length);
+                    resolve(base64Content);
+                } catch (error) {
+                    console.error('处理文件读取结果时发生错误:', error);
+                    reject(error);
+                }
+            };
+            
+            reader.onerror = (error) => {
+                console.error('文件读取出错:', error);
+                reject(new Error('文件读取失败: ' + (error.message || '未知错误')));
+            };
+            
+            try {
+                console.log('开始以DataURL方式读取文件...');
+                reader.readAsDataURL(file);
+            } catch (error) {
+                console.error('调用readAsDataURL失败:', error);
+                reject(error);
+            }
         });
     }
 
@@ -113,19 +176,131 @@ export class TextUploader {
     /**
      * 添加已有的附件
      * @param {Object} attachment - 附件数据
-     * @returns {Promise<void>}
+     * @returns {Promise<TextAttachment>}
      */
     async addExistingAttachment(attachment) {
-        const textAttachment = new TextAttachment({
-            fileName: attachment.fileName,
-            mime_type: attachment.mime_type,
-            content_id: attachment.content_id,
-            encoding: attachment.encoding,
-            lineCount: attachment.lineCount,
-            size: attachment.size,
-            lastModified: attachment.lastModified,
-            description: attachment.description
-        });
-        this.attachments.add(textAttachment);
+        try {
+            console.log('添加已有文本附件:', attachment);
+            
+            // 确保有效的content_id
+            if (!attachment.content_id && !attachment.file_path) {
+                throw new Error('无效的文本附件，缺少content_id或file_path');
+            }
+            
+            const textAttachment = new TextAttachment({
+                fileName: attachment.fileName || attachment.filename,
+                mime_type: attachment.mime_type,
+                content_id: attachment.content_id || attachment.file_path,
+                encoding: attachment.encoding || 'UTF-8',
+                lineCount: attachment.lineCount || attachment.line_count || 0,
+                size: attachment.size || 0,
+                lastModified: attachment.lastModified,
+                description: attachment.description
+            });
+            
+            // 保存到附件集合
+            this.attachments.add(textAttachment);
+            
+            return textAttachment;
+        } catch (error) {
+            console.error('添加已有文本附件失败:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 验证文件是否为文本文件
+     * @param {File} file - 文件对象
+     * @returns {boolean}
+     * @private
+     */
+    validateFile(file) {
+        // 检查文件类型
+        const validTextTypes = [
+            'text/plain',
+            'text/html',
+            'text/css',
+            'text/javascript',
+            'text/markdown',
+            'text/xml',
+            'application/json',
+            'application/xml',
+            'application/javascript'
+        ];
+
+        // 通过MIME类型判断
+        if (file.type && validTextTypes.includes(file.type)) {
+            return true;
+        }
+
+        // 通过文件扩展名判断
+        const extensions = ['.txt', '.md', '.html', '.htm', '.css', '.js', '.json', '.xml', '.log', '.csv'];
+        const fileName = file.name.toLowerCase();
+        return extensions.some(ext => fileName.endsWith(ext));
+    }
+
+    /**
+     * 计算文本的行数
+     * @param {string} text - 文本内容
+     * @returns {number}
+     * @private
+     */
+    countLines(text) {
+        return text.split('\n').length;
+    }
+
+    /**
+     * 保存文本内容到后端
+     * @param {string} content - 文本内容
+     * @param {string} fileName - 文件名
+     * @returns {Promise<Object>} - 包含content_id的后端响应
+     * @private
+     */
+    async saveTextContent(content, fileName) {
+        console.log('saveTextContent开始执行:', fileName, '内容长度:', content.length);
+        try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+            console.log('CSRF令牌:', csrfToken ? '已获取' : '未找到');
+            
+            const requestBody = JSON.stringify({
+                content: content,
+                fileName: fileName,
+                encoding: 'UTF-8'
+            });
+            console.log('准备发送请求到 /api/text/save, 数据大小:', requestBody.length);
+            
+            const response = await fetch('/api/text/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken
+                },
+                body: requestBody
+            });
+            
+            console.log('收到后端响应:', response.status, response.statusText);
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(e => {
+                    console.error('解析错误响应失败:', e);
+                    return { error: '无法解析错误响应' };
+                });
+                console.error('保存文本失败，服务器响应:', errorData);
+                throw new Error(errorData.error || `保存文本失败 (${response.status})`);
+            }
+            
+            const responseData = await response.json();
+            console.log('保存文本成功，服务器返回:', responseData);
+            
+            if (!responseData.metadata || !responseData.metadata.content_id) {
+                console.error('服务器响应缺少content_id:', responseData);
+                throw new Error('服务器响应缺少必要的content_id');
+            }
+            
+            return responseData.metadata;
+        } catch (error) {
+            console.error('保存文本到服务器失败:', error);
+            throw error;
+        }
     }
 }

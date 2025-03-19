@@ -28,6 +28,11 @@ export class TextAttachment {
     encoding;
 
     /**
+     * @type {string}
+     */
+    contentBase64;
+
+    /**
      * @type {number}
      */
     lineCount;
@@ -59,6 +64,7 @@ export class TextAttachment {
      * @param {string} params.mime_type - MIME类型
      * @param {string} params.content_id - 文本内容唯一标识符
      * @param {string} [params.encoding='UTF-8'] - 文本编码
+     * @param {string} [params.contentBase64] - Base64编码的文本内容
      * @param {number} [params.lineCount] - 文本行数
      * @param {number} [params.size] - 文件大小
      * @param {Date} [params.uploadTime] - 上传时间
@@ -70,6 +76,7 @@ export class TextAttachment {
         this.mime_type = params.mime_type;
         this.content_id = params.content_id;
         this.encoding = params.encoding || 'UTF-8';
+        this.contentBase64 = params.contentBase64;
         this.lineCount = params.lineCount;
         this.size = params.size;
         this.uploadTime = params.uploadTime || new Date();
@@ -104,6 +111,7 @@ export class TextAttachment {
             mime_type: this.mime_type,
             content_id: this.content_id,
             encoding: this.encoding,
+            contentBase64: this.contentBase64,
             lineCount: this.lineCount,
             size: this.size,
             uploadTime: this.uploadTime,
@@ -119,7 +127,8 @@ export class TextAttachment {
      */
     createUploadPreviewElement(onDelete) {
         const previewContainer = document.createElement('div');
-        previewContainer.className = 'text-attachment-preview';
+        previewContainer.className = 'text-attachment-preview preview-item';
+        previewContainer.dataset.type = 'text';
 
         // 创建图标容器
         const iconContainer = document.createElement('div');
@@ -155,6 +164,13 @@ export class TextAttachment {
             previewContainer.appendChild(deleteButton);
         }
 
+        // 保存关键信息到元素数据属性
+        previewContainer.dataset.contentId = this.content_id;
+        previewContainer.dataset.fileName = this.fileName;
+        previewContainer.dataset.mimeType = this.mime_type;
+        previewContainer.dataset.encoding = this.encoding || 'UTF-8';
+        previewContainer.dataset.lineCount = this.lineCount || '0';
+
         // 组装元素
         infoContainer.appendChild(fileNameElement);
         infoContainer.appendChild(detailsElement);
@@ -166,7 +182,21 @@ export class TextAttachment {
             // 导入并创建模态框
             import('../modal/TextModal.js').then(({ TextModal }) => {
                 const modal = new TextModal();
-                modal.show(this);
+                
+                // 创建完整的附件对象进行预览
+                const previewAttachment = {
+                    ...this,
+                    // 强制将所有需要的属性复制一遍，避免丢失
+                    fileName: this.fileName,
+                    mime_type: this.mime_type,
+                    content_id: this.content_id,
+                    encoding: this.encoding || 'UTF-8',
+                    contentBase64: this.contentBase64,
+                    lineCount: this.lineCount || 0,
+                    size: this.size || 0
+                };
+                
+                modal.show(previewAttachment);
             }).catch(error => {
                 console.error('加载预览模态框失败:', error);
                 previewContainer.classList.add('error');

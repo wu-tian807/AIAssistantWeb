@@ -244,26 +244,8 @@ export class ImageUploader {
             // 添加到附件集合
             this.attachments.add(imageAttachment);
 
-            // 如果有容器选项，创建并添加预览元素
-            if (this.options?.container) {
-                const previewElement = imageAttachment.createUploadPreviewElement(() => {
-                    // 从容器中移除预览元素
-                    if (previewElement.parentNode) {
-                        previewElement.parentNode.removeChild(previewElement);
-                    }
-                    // 从附件集合中移除
-                    this.attachments.delete(imageAttachment);
-                    // 调用外部的 onDelete 回调
-                    if (this.options.onDelete) {
-                        this.options.onDelete(imageAttachment);
-                    }
-                });
-                
-                if (previewElement) {
-                    this.options.container.appendChild(previewElement);
-                }
-            }
-
+            // 移除创建预览元素的代码，统一由Uploader处理
+            
             return imageAttachment;
         } catch (error) {
             console.error('添加已有附件失败:', error);

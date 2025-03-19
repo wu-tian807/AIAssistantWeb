@@ -148,11 +148,50 @@ export class Uploader {
             throw new Error(`不支持的附件类型: ${attachment.type}`);
         }
 
+        let addedAttachment;
         if (uploader.addExistingAttachment) {
-            await uploader.addExistingAttachment(attachment);
+            addedAttachment = await uploader.addExistingAttachment(attachment);
+            console.log('添加已有附件成功:', addedAttachment);
+            
+            // 为所有类型的附件统一创建预览元素
+            if (this.options.container && addedAttachment) {
+                if (typeof addedAttachment.createUploadPreviewElement === 'function') {
+                    try {
+                        console.log(`开始为已有${attachment.type}附件创建预览元素`);
+                        const previewElement = await addedAttachment.createUploadPreviewElement(
+                            // 删除回调
+                            () => {
+                                // 从容器中移除预览元素
+                                if (previewElement.parentNode) {
+                                    previewElement.parentNode.removeChild(previewElement);
+                                }
+                                // 从附件集合中移除
+                                uploader.attachments.delete(addedAttachment);
+                                // 调用外部的 onDelete 回调
+                                if (this.options.onDelete) {
+                                    this.options.onDelete(addedAttachment);
+                                }
+                            }
+                        );
+                        
+                        if (previewElement) {
+                            console.log('已有附件预览元素创建成功:', previewElement);
+                            this.options.container.appendChild(previewElement);
+                        } else {
+                            console.error('已有附件预览元素创建失败');
+                        }
+                    } catch (error) {
+                        console.error('创建已有附件预览元素时出错:', error);
+                    }
+                } else {
+                    console.error('附件对象缺少createUploadPreviewElement方法:', addedAttachment);
+                }
+            }
         } else {
             console.warn(`上传器 ${attachment.type} 不支持添加已有附件`);
         }
+        
+        return addedAttachment;
     }
 
     /**
@@ -178,6 +217,7 @@ export class Uploader {
     async upload(file, options = {}) {
         console.log('开始上传文件:', file); // 调试日志
         const fileType = FileTypeDetector.detectType(file);
+        console.log('检测到文件类型:', fileType);
         const uploader = this.uploaders.get(fileType);
 
         if (!uploader) {
@@ -186,11 +226,18 @@ export class Uploader {
         }
 
         try {
+            console.log(`使用 ${fileType} 上传器处理文件`);
             const attachment = await uploader.handleFileSelect(file);
-            console.log('文件上传成功，创建预览元素');
+            console.log('文件上传成功，创建预览元素', attachment);
             
             // 如果有容器选项，创建并添加预览元素
             if (this.options.container) {
+                // 检查附件对象是否有createUploadPreviewElement方法
+                if (typeof attachment.createUploadPreviewElement !== 'function') {
+                    console.error('附件对象缺少createUploadPreviewElement方法:', attachment);
+                    throw new Error(`${fileType}附件缺少必要的createUploadPreviewElement方法`);
+                }
+                
                 const previewElement = await attachment.createUploadPreviewElement(
                     // 删除回调
                     () => {
@@ -208,6 +255,8 @@ export class Uploader {
                 );
 
                 if (previewElement) {
+                    console.log('预览元素创建成功:', previewElement);
+                    
                     // 为预览添加点击事件
                     if (fileType === AttachmentType.IMAGE) {
                         const previewImage = previewElement.querySelector('img');

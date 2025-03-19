@@ -613,12 +613,17 @@ function appendMessage(content, isUser = false, messageIndex = null, attachments
         const attachmentRenderer = new AttachmentRenderer();
         const renderPromises = currentAttachments.map(async attachment => {
             try {
+                // 确保传递所有必要属性，特别是文本附件的content_id
                 const renderedElement = await attachmentRenderer.render({
                     type: attachment.type || 'image',
                     base64_id: attachment.base64_id,
                     filename: attachment.fileName,
                     file_path: attachment.file_path,
                     mime_type: attachment.mime_type,
+                    content_id: attachment.content_id || attachment.getFilePath?.(),
+                    encoding: attachment.encoding || 'UTF-8',
+                    lineCount: attachment.lineCount || 0,
+                    size: attachment.size || 0,
                     disableDelete: true,
                     duration: attachment.duration,
                     thumbnail_base64_id: attachment.thumbnail_base64_id
@@ -2431,6 +2436,11 @@ async function editUserMessage(messageIndex, originalContent) {
                     // 视频特有属性
                     duration: attachment.duration,
                     thumbnail: attachment.thumbnail,
+                    // 文本附件特有属性
+                    content_id: attachment.content_id,
+                    encoding: attachment.encoding || 'UTF-8',
+                    lineCount: attachment.lineCount || 0,
+                    size: attachment.size || 0,
                     // 在编辑模式下允许删除
                     disableDelete: false
                 };
@@ -2487,15 +2497,38 @@ async function editUserMessage(messageIndex, originalContent) {
                     getThumbnail: attachment.getThumbnail?.()
                 });
                 
-                return {
-                    type: attachment.type || (attachment.getMimeType?.()?.startsWith('video/') ? 'video' : 'image'),
-                    base64_id: attachment.getBase64Id?.(),
-                    fileName: attachment.getFileName(),
-                    mime_type: attachment.getMimeType(),
-                    file_path: attachment.getFilePath(),
-                    duration: attachment.getDuration?.() || undefined,
-                    thumbnail: attachment.getThumbnail?.() || undefined
-                };
+                // 根据附件类型返回不同的数据结构
+                if (attachment.type === 'text') {
+                    return {
+                        type: 'text',
+                        fileName: attachment.getFileName ? attachment.getFileName() : attachment.fileName,
+                        mime_type: attachment.getMimeType ? attachment.getMimeType() : attachment.mime_type,
+                        file_path: attachment.getFilePath ? attachment.getFilePath() : attachment.file_path,
+                        content_id: attachment.content_id || attachment.getFilePath?.(),
+                        encoding: attachment.encoding || 'UTF-8',
+                        lineCount: attachment.lineCount || 0,
+                        size: attachment.size || 0
+                    };
+                } else if (attachment.type === 'video') {
+                    return {
+                        type: 'video',
+                        base64_id: attachment.getBase64Id?.(),
+                        fileName: attachment.getFileName(),
+                        mime_type: attachment.getMimeType(),
+                        file_path: attachment.getFilePath(),
+                        duration: attachment.getDuration?.() || undefined,
+                        thumbnail: attachment.getThumbnail?.() || undefined
+                    };
+                } else {
+                    // 默认图片或其他类型
+                    return {
+                        type: attachment.type || (attachment.getMimeType?.()?.startsWith('video/') ? 'video' : 'image'),
+                        base64_id: attachment.getBase64Id?.(),
+                        fileName: attachment.getFileName(),
+                        mime_type: attachment.getMimeType(),
+                        file_path: attachment.getFilePath()
+                    };
+                }
             });
             
             console.log('收集到的所有附件:', attachments);
@@ -2556,12 +2589,17 @@ async function editUserMessage(messageIndex, originalContent) {
                 const attachmentRenderer = new AttachmentRenderer();
                 const renderPromises = attachments.map(async (attachment) => {
                     try {
+                        // 确保传递所有必要属性，特别是文本附件的content_id
                         const renderedElement = await attachmentRenderer.render({
                             type: attachment.type || 'image',
                             base64_id: attachment.base64_id,
                             filename: attachment.fileName,
                             file_path: attachment.file_path,
                             mime_type: attachment.mime_type,
+                            content_id: attachment.content_id, // 添加content_id属性
+                            encoding: attachment.encoding,     // 添加编码属性
+                            lineCount: attachment.lineCount,   // 添加行数属性
+                            size: attachment.size,             // 添加大小属性
                             disableDelete: true,
                             duration: attachment.duration,
                             thumbnail_base64_id: attachment.thumbnail_base64_id

@@ -280,5 +280,37 @@
 /* 消息中的文本预览 */
 .message-attachments-container .text-attachment-preview {
     margin: 5px 0;
-    width: 200px;
+    width: 150px;
+    height: 150px;
+    overflow: visible; /* 确保删除按钮可见 */
+}
+
+.message-attachments-container .text-icon-container {
+    height: 90px;
+}
+
+.message-attachments-container .text-icon {
+    font-size: 38px;
+}
+
+/* 修复删除按钮在消息中的显示 */
+.message-attachments-container .text-attachment-preview .delete-button {
+    z-index: 100;
+    top: -8px;
+    right: -8px;
+}
+
+/* 编辑模式下的文本预览 */
+#attachment-preview .text-attachment-preview {
+    width: 180px;
+    height: 180px;
+    overflow: visible;
+}
+
+#attachment-preview .text-icon-container {
+    height: 110px;
+}
+
+#attachment-preview .text-icon {
+    font-size: 42px;
 }

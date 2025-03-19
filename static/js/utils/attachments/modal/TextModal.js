@@ -56,7 +56,7 @@ export class TextModal {
         this.modalElement.className = 'text-preview-modal modal';
         this.modalElement.setAttribute('tabindex', '-1');
         this.modalElement.setAttribute('role', 'dialog');
-        this.modalElement.setAttribute('aria-hidden', 'true');
+        this.modalElement.setAttribute('inert', 'true');
         this.modalElement.innerHTML = `
             <div class="modal-dialog modal-lg" role="document">
                 <div class="modal-content">
@@ -143,6 +143,23 @@ export class TextModal {
                 this.bsModal.hide();
             }
         });
+        
+        // 模态框打开后设置焦点和移除inert属性
+        this.modalElement.addEventListener('shown.bs.modal', () => {
+            // 移除inert属性，允许屏幕阅读器访问内容
+            this.modalElement.removeAttribute('inert');
+            
+            // 设置初始焦点到关闭按钮
+            const closeButton = this.modalElement.querySelector('.btn-close');
+            if (closeButton) {
+                closeButton.focus();
+            }
+        });
+        
+        // 模态框隐藏时重新添加inert属性
+        this.modalElement.addEventListener('hide.bs.modal', () => {
+            this.modalElement.setAttribute('inert', 'true');
+        });
     }
 
     /**
@@ -152,6 +169,8 @@ export class TextModal {
      */
     async show(attachment) {
         try {
+            console.log('TextModal.show开始，附件信息:', JSON.stringify(attachment, null, 2));
+            
             // 确保模态框已初始化
             await this.initModal();
             
@@ -167,15 +186,45 @@ export class TextModal {
             this.contentElement.textContent = '加载中...';
             
             // 使用 content_id 获取内容
-            if (attachment.content_id) {
-                const content = await this.fetchContent(attachment.content_id);
-                this.contentElement.textContent = content;
+            const contentId = attachment.content_id;
+            console.log('准备获取文本内容，使用content_id:', contentId);
+            
+            if (contentId) {
+                try {
+                    // 如果附件对象包含完整的文本内容，直接使用不再请求
+                    if (attachment.contentBase64) {
+                        console.log('发现附件自带文本内容，直接使用而不请求后端');
+                        try {
+                            const decodedContent = atob(attachment.contentBase64);
+                            this.contentElement.textContent = decodedContent;
+                            
+                            // 如果有代码高亮库，应用它
+                            if (window.hljs) {
+                                window.hljs.highlightElement(this.contentElement);
+                            }
+                            return;
+                        } catch (decodeError) {
+                            console.error('解码附件中的base64内容失败:', decodeError);
+                            // 解码失败时继续尝试从后端获取
+                        }
+                    }
+                    
+                    // 从后端请求内容
+                    console.log('开始从后端请求文本内容...');
+                    const content = await this.fetchContent(contentId);
+                    console.log('成功获取文本内容，长度:', content.length);
+                    this.contentElement.textContent = content;
 
-                // 如果有代码高亮库，应用它
-                if (window.hljs) {
-                    window.hljs.highlightElement(this.contentElement);
+                    // 如果有代码高亮库，应用它
+                    if (window.hljs) {
+                        window.hljs.highlightElement(this.contentElement);
+                    }
+                } catch (error) {
+                    console.error('获取文本内容失败:', error);
+                    this.contentElement.textContent = '无法加载文本内容: ' + error.message;
                 }
             } else {
+                console.error('无效的文本内容ID:', contentId);
                 throw new Error('无效的文本内容ID');
             }
 
@@ -215,16 +264,31 @@ export class TextModal {
      * @private
      */
     async fetchContent(contentId) {
-        const response = await fetch(`/api/text/content/${contentId}`, {
-            headers: {
-                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''
+        try {
+            console.log(`请求文本内容: /api/text/content/${contentId}`);
+            const response = await fetch(`/api/text/content/${contentId}`, {
+                headers: {
+                    'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                }
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: '未知错误' }));
+                console.error('获取文本内容响应错误:', response.status, errorData);
+                throw new Error(errorData.error || `获取内容失败 (${response.status})`);
             }
-        });
-        if (!response.ok) {
-            throw new Error('获取内容失败');
+            
+            const data = await response.json();
+            if (!data.content) {
+                console.error('响应中没有文本内容:', data);
+                throw new Error('响应数据格式错误，找不到文本内容');
+            }
+            
+            return data.content;
+        } catch (error) {
+            console.error('获取文本内容失败:', error);
+            throw error;
         }
-        const data = await response.json();
-        return data.content;
     }
 
     /**
