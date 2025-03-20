@@ -51,8 +51,14 @@ def get_text_content(content_id):
         content, metadata = TextHandler.get_text_content(content_id, user_id)
         # 从元数据中提取文件名和大小
         file_name = metadata.get('file_name', '')
-        file_extension = os.path.splitext(file_name)[1] or '.txt'
+        # 从文件名中提取扩展名，如果没有扩展名，强制使用.txt
+        file_extension = os.path.splitext(file_name)[1]
+        if not file_extension:  # 如果文件名没有扩展名
+            file_extension = '.txt'  # 强制使用.txt扩展名
+            
         file_size = metadata.get('size', 0)
+        
+        print(f"获取文本内容 - ID: {content_id}, 文件名: {file_name}, 扩展名: {file_extension}, 大小: {file_size}")
         
         return jsonify({
             'content': content,
@@ -119,6 +125,11 @@ def save_text():
         timestamp = int(time.time() * 1000)
         unique_id = f"{timestamp}"
         
+        # 确保文件名包含扩展名
+        file_name = data['fileName']
+        if not os.path.splitext(file_name)[1]:  # 如果没有扩展名
+            file_name = file_name + '.txt'  # 添加默认扩展名
+        
         # 保存文本内容
         file_path = text_dir / f"{unique_id}.txt"
         with open(str(file_path), 'w', encoding=encoding) as f:
@@ -126,7 +137,7 @@ def save_text():
         
         # 创建基本元数据
         basic_metadata = {
-            'file_name': data['fileName'],
+            'file_name': file_name,  # 已确保包含扩展名
             'content_id': unique_id,
             'created_at': timestamp,
             'encoding': encoding,
@@ -218,10 +229,18 @@ def upload_text():
         timestamp = int(time.time() * 1000)
         unique_id = f"{timestamp}"
         
-        # 保存文本内容
-        file_path = text_dir / f"{unique_id}.txt"
+        # 获取原始文件扩展名
+        original_extension = os.path.splitext(file_name)[1]
+        if not original_extension:  # 如果没有扩展名
+            original_extension = '.txt'  # 默认使用.txt
+            file_name = file_name + original_extension  # 确保文件名有扩展名
+            
+        # 保存文本内容 - 使用唯一ID+扩展名作为文件名
+        file_path = text_dir / f"{unique_id}.txt"  # 始终使用.txt保存
         with open(str(file_path), 'w', encoding=encoding) as f:
             f.write(text_content)
+            
+        print(f"保存文本文件 - ID: {unique_id}, 原始文件名: {file_name}, 扩展名: {original_extension}, 大小: {len(file_content)} 字节")
         
         # 创建基本元数据
         metadata = {
