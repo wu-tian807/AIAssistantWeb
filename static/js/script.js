@@ -1341,11 +1341,29 @@ const uploader = new Uploader({
         }
         // 从 imageUploader 中也删除附件
         imageUploader.attachments.delete(attachment);
+        
+        // 检查是否还有附件，如果没有则隐藏容器
+        // 使用uploader.getAttachments()来判断是否还有附件
+        if (uploader.getAttachments().length === 0) {
+            const previewContainer = document.getElementById('attachment-preview');
+            if (previewContainer) {
+                console.log('没有附件了，隐藏预览容器');
+                previewContainer.style.display = 'none';
+            }
+        } else {
+            console.log('还有其他附件，保持预览容器可见');
+        }
     },
     onUploadSuccess: (attachment) => {
         console.log('文件上传成功，添加到 imageUploader:', attachment);
         // 将上传的附件添加到 imageUploader 中
         imageUploader.attachments.add(attachment);
+        
+        // 确保预览容器可见
+        const previewContainer = document.getElementById('attachment-preview');
+        if (previewContainer) {
+            previewContainer.style.display = 'flex';
+        }
     },
     previewHandler: async (previewElement) => {
         // 使用 AttachmentRenderer 处理预览元素

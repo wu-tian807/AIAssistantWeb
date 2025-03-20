@@ -29,13 +29,18 @@ export class AttachmentRenderer {
 
     /**
      * 根据附件数量更新容器可见性
+     * 注意：此方法仅在clearAll()或初始化时调用
+     * 删除附件时的容器可见性由Uploader控制
      */
     updateContainerVisibility() {
+        // 此方法现在仅在特定场景使用
+        // 大部分情况下，容器显示/隐藏由Uploader控制
         if (!this.container) return;
         
         if (this.attachmentCount > 0) {
             this.container.style.display = ''; // 恢复默认显示
         } else {
+            // 只有在完全清空时才隐藏
             this.container.style.display = 'none'; // 隐藏容器
         }
     }
@@ -62,18 +67,8 @@ export class AttachmentRenderer {
         if (this.container && element) {
             this.container.appendChild(element);
             this.attachmentCount++;
-            this.updateContainerVisibility();
-            
-            // 为元素添加删除事件监听，以便在删除时更新计数
-            const deleteButton = element.querySelector('.delete-button');
-            if (deleteButton) {
-                const originalOnClick = deleteButton.onclick;
-                deleteButton.onclick = (e) => {
-                    if (originalOnClick) originalOnClick(e);
-                    this.attachmentCount--;
-                    this.updateContainerVisibility();
-                };
-            }
+            // 注意: 容器显示/隐藏由Uploader的onDelete负责
+            // 我们这里只管理计数
         }
     }
 
@@ -180,12 +175,10 @@ export class AttachmentRenderer {
             const deleteButton = document.createElement('button');
             deleteButton.className = 'delete-button';
             deleteButton.innerHTML = '×';
-            deleteButton.onclick = () => {
-                previewItem.remove();
-                // 更新附件计数并检查可见性
-                this.attachmentCount--;
-                this.updateContainerVisibility();
-            };
+            
+            // 记录引用，供Uploader调用
+            attachment.previewElement = previewItem;
+            
             previewItem.appendChild(deleteButton);
         }
         
@@ -220,12 +213,10 @@ export class AttachmentRenderer {
             const deleteButton = document.createElement('button');
             deleteButton.className = 'delete-button';
             deleteButton.innerHTML = '×';
-            deleteButton.onclick = () => {
-                previewItem.remove();
-                // 更新附件计数并检查可见性
-                this.attachmentCount--;
-                this.updateContainerVisibility();
-            };
+            
+            // 记录引用，供Uploader调用
+            attachment.previewElement = previewItem;
+            
             previewItem.appendChild(deleteButton);
         }
         
@@ -248,17 +239,8 @@ export class AttachmentRenderer {
         
         this.addAttachmentToContainer(element);
         
-        // 查找并修改删除按钮的事件处理
-        const deleteButton = element.querySelector('.delete-button');
-        if (deleteButton) {
-            const originalOnClick = deleteButton.onclick;
-            deleteButton.onclick = (e) => {
-                if (originalOnClick) originalOnClick(e);
-                // 确保计数器减少并更新容器可见性
-                this.attachmentCount--;
-                this.updateContainerVisibility();
-            };
-        }
+        // 注意: 我们不再修改删除按钮的事件处理
+        // 删除操作已由Uploader完全控制
         
         return element;
     }

@@ -271,6 +271,24 @@ export class Uploader {
                         }
                     }
                     
+                    // 确保删除按钮有正确的事件处理
+                    const deleteButton = previewElement.querySelector('.delete-button');
+                    if (deleteButton && !deleteButton.onclick) {
+                        deleteButton.onclick = (e) => {
+                            e.stopPropagation();
+                            // 从容器中移除预览元素
+                            if (previewElement.parentNode) {
+                                previewElement.parentNode.removeChild(previewElement);
+                            }
+                            // 从附件集合中移除
+                            uploader.attachments.delete(attachment);
+                            // 调用外部的 onDelete 回调
+                            if (this.options.onDelete) {
+                                this.options.onDelete(attachment);
+                            }
+                        };
+                    }
+                    
                     // 如果有自定义预览处理器，使用预览处理器处理预览元素
                     if (this.options.previewHandler && typeof this.options.previewHandler === 'function') {
                         const handled = await this.options.previewHandler(previewElement);

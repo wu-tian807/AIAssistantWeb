@@ -67,9 +67,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 调整聊天区域高度
     adjustMessageAreaHeight();
-    
-    // 创建返回按钮
-    createBackButton();
 });
 
 /**
@@ -1224,41 +1221,6 @@ function setupTouchIsolation() {
             // 阻止滚动事件冒泡
             e.stopPropagation();
         }, { passive: false });
-    }
-}
-
-/**
- * 创建移动端返回按钮
- * 在历史记录中有多个页面时显示返回按钮
- */
-function createBackButton() {
-    // 检查是否已存在返回按钮
-    if (document.querySelector('.back-button')) {
-        return;
-    }
-    
-    // 创建返回按钮
-    const backButton = document.createElement('button');
-    backButton.className = 'back-button';
-    backButton.innerHTML = '<i class="fas fa-arrow-left"></i>';
-    backButton.setAttribute('aria-label', '返回');
-    
-    // 只在移动设备且有历史记录时显示
-    if (window.isMobile && window.history.length > 1) {
-        backButton.style.display = 'flex';
-    } else {
-        backButton.style.display = 'none';
-    }
-    
-    // 添加点击事件
-    backButton.addEventListener('click', function() {
-        window.history.back();
-    });
-    
-    // 添加到页面
-    const chatHeader = document.querySelector('.chat-header');
-    if (chatHeader) {
-        chatHeader.insertBefore(backButton, chatHeader.firstChild);
     }
 }
 

@@ -92,38 +92,32 @@
     transform: scale(1.05);
 }
 
-.image-preview-item .delete-button,
-.image-preview-item .delete-image {
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background-color: #dc3545;
-    color: white;
-    border: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 14px;
-    padding: 0;
-    opacity: 0;
-    transition: opacity 0.2s ease, transform 0.2s ease;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    z-index: 100;
+/* 统一删除按钮样式 */
+.delete-button,
+.delete-image {
+    position: absolute !important;
+    top: -8px !important;
+    right: -8px !important;
+    width: 24px !important;
+    height: 24px !important;
+    border-radius: 50% !important;
+    background-color: #dc3545 !important;
+    color: white !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    cursor: pointer !important;
+    opacity: 1 !important;
+    z-index: 100 !important;
+    border: 2px solid white !important;
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.3) !important;
+    transition: all 0.2s ease !important;
 }
 
-.image-preview-item:hover .delete-button,
-.image-preview-item:hover .delete-image {
-    opacity: 1;
-}
-
-.image-preview-item .delete-button:hover,
-.image-preview-item .delete-image:hover {
-    background-color: #c82333;
-    transform: scale(1.1);
+.delete-button:hover,
+.delete-image:hover {
+    background-color: #c82333 !important;
+    transform: scale(1.1) !important;
 }
 
 .image-preview-item .image-name {
@@ -336,7 +330,9 @@ body.modal-open {
     transform: scale(1.05);
 }
 
-.message-attachments-container .file-name {
+.message-attachments-container .file-name,
+.file-name,
+.text-info .file-name {
     position: absolute;
     bottom: 0;
     left: 0;
@@ -349,6 +345,7 @@ body.modal-open {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    z-index: 5;
 }
 
 .attachment-error {
@@ -379,7 +376,7 @@ body.modal-open {
     align-items: center;
     justify-content: center;
     border-radius: 8px;
-    overflow: hidden;
+    overflow: visible; /* 确保删除按钮可见 */
     background-color: #f8f9fa;
 }
 
@@ -388,36 +385,6 @@ body.modal-open {
     max-width: 150px;
     max-height: 150px;
     object-fit: cover;
-}
-
-.preview-item .delete-button {
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background-color: #dc3545;
-    color: white;
-    border: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 14px;
-    padding: 0;
-    z-index: 100; /* 提高层级 */
-    transition: opacity 0.2s ease, transform 0.2s ease;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
-
-.preview-item:hover .delete-button {
-    opacity: 1;
-}
-
-.preview-item .delete-button:hover {
-    background-color: #c82333;
-    transform: scale(1.1);
 }
 
 /* 调整消息样式以匹配附件容器 */
@@ -430,7 +397,115 @@ body.modal-open {
 }
 
 /* 编辑模式下的附件预览 */
+#attachment-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 10px;
+    min-height: 50px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    overflow-x: auto;
+    overflow-y: visible; /* 确保删除按钮可见 */
+}
+
+/* 编辑模式下的附件预览项 */
 #attachment-preview .preview-item {
     overflow: visible;
     margin: 5px;
+}
+
+/* 移动端响应式样式 */
+@media (max-width: 768px) {
+    .preview-item {
+        width: 110px !important;
+        height: 110px !important;
+        margin: 3px !important;
+        position: relative;
+    }
+    
+    .preview-item img, 
+    .preview-item video {
+        max-width: 100% !important;
+        max-height: 100% !important;
+        object-fit: cover !important;
+    }
+    
+    .delete-button, 
+    .delete-image {
+        width: 20px !important;
+        height: 20px !important;
+        top: -5px !important;
+        right: -5px !important;
+        font-size: 12px !important;
+    }
+    
+    #attachment-preview,
+    .attachment-container {
+        max-width: 95% !important;
+        padding: 5px !important;
+        overflow-x: auto !important;
+        overflow-y: visible !important;
+    }
+    
+    .text-attachment-preview {
+        width: 120px !important;
+        height: 120px !important;
+        font-size: 11px !important;
+        padding: 5px !important;
+    }
+    
+    .text-icon-container {
+        height: 40px !important;
+    }
+    
+    .text-icon {
+        font-size: 24px !important;
+    }
+    
+    .attachment-info {
+        font-size: 10px !important;
+        padding: 2px !important;
+    }
+}
+
+/* 所有附件预览项的基本样式 */
+.preview-item,
+.image-preview-item,
+.video-preview-item,
+.text-attachment-preview,
+.binary-attachment-wrapper {
+    position: relative;
+    overflow: visible !important; /* 确保删除按钮可见 */
+}
+
+/* 文本附件特定样式 */
+.text-attachment-preview {
+    width: 150px !important;
+    height: 150px !important;
+    overflow: visible !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    background-color: #f8f9fa !important;
+    border: 1px solid #e9ecef !important;
+    border-radius: 6px !important;
+    padding: 8px !important;
+}
+
+.text-icon-container {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    height: 60px !important;
+}
+
+.text-icon {
+    font-size: 32px !important;
+    color: #6c757d !important;
+}
+
+.text-info {
+    width: 100% !important;
+    text-align: center !important;
 }
