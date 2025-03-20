@@ -117,8 +117,9 @@ export class TextRenderer {
                             mime_type: attachment.mime_type,
                             encoding: attachment.encoding || 'UTF-8',
                             lineCount: attachment.lineCount || 0,
-                            size: attachment.size || 0
+                            size: Number(attachment.size || 0)
                         };
+                        console.log('打开预览，附件大小:', attachment.size, '类型:', typeof attachment.size);
                         await modal.show(completeAttachment);
                     } catch (error) {
                         console.error('打开预览失败:', error);

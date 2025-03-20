@@ -74,6 +74,9 @@ export class TextUploader {
                 // 显示上传成功提示
                 showToast('文本文件上传成功', 'success');
                 
+                // 记录文件大小信息
+                console.log('原始文件大小:', file.size, '类型:', typeof file.size);
+                
                 // 创建文本附件对象
                 const textAttachment = new TextAttachment({
                     fileName: file.name,
@@ -81,11 +84,11 @@ export class TextUploader {
                     content_id: responseData.metadata.content_id,
                     encoding: responseData.metadata.encoding || 'UTF-8',
                     lineCount: responseData.metadata.line_count || 0,
-                    size: file.size,
+                    size: Number(file.size) || 0, // 确保转换为数字
                     lastModified: file.lastModified
                 });
                 
-                console.log('创建文本附件对象:', textAttachment);
+                console.log('创建文本附件对象:', textAttachment, '文件大小:', textAttachment.size, '类型:', typeof textAttachment.size);
                 
                 // 保存到附件集合
                 this.attachments.add(textAttachment);
@@ -197,13 +200,16 @@ export class TextUploader {
                 throw new Error('无效的文本附件，缺少content_id或file_path');
             }
             
+            // 确保size是数字类型
+            const fileSize = parseInt(attachment.size || 0);
+            
             const textAttachment = new TextAttachment({
                 fileName: attachment.fileName || attachment.filename,
                 mime_type: attachment.mime_type,
                 content_id: attachment.content_id || attachment.file_path,
                 encoding: attachment.encoding || 'UTF-8',
                 lineCount: attachment.lineCount || attachment.line_count || 0,
-                size: attachment.size || 0,
+                size: fileSize,
                 lastModified: attachment.lastModified,
                 description: attachment.description
             });

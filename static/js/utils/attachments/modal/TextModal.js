@@ -194,9 +194,24 @@ export class TextModal {
             
             this.currentAttachment = attachment;
 
+            // 确保size是数字类型 - 尝试多种方式确保获取到有效的数字
+            let fileSize = 0;
+            if (attachment.size !== undefined && attachment.size !== null) {
+                if (typeof attachment.size === 'number') {
+                    fileSize = attachment.size;
+                } else if (typeof attachment.size === 'string') {
+                    fileSize = Number(attachment.size);
+                    if (isNaN(fileSize)) {
+                        fileSize = parseInt(attachment.size, 10) || 0;
+                    }
+                }
+            }
+            
+            console.log('处理后的文件大小:', fileSize, '字节', '原始大小:', attachment.size, '类型:', typeof attachment.size);
+
             // 更新文件信息
             this.modalElement.querySelector('.file-name').textContent = attachment.fileName || '未命名文本';
-            this.modalElement.querySelector('.file-size').textContent = this.formatFileSize(attachment.size || 0);
+            this.modalElement.querySelector('.file-size').textContent = this.formatFileSize(fileSize);
             this.modalElement.querySelector('.line-count').textContent = attachment.lineCount || '0';
             this.modalElement.querySelector('.encoding').textContent = attachment.encoding || 'UTF-8';
 
@@ -335,10 +350,9 @@ export class TextModal {
     }
 
     /**
-     * 获取完整文本内容
-     * @param {string} contentId - 内容ID
-     * @returns {Promise<string>}
-     * @private
+     * 从服务器获取文本内容
+     * @param {string} contentId - 内容唯一ID
+     * @returns {Promise<string>} - 文本内容
      */
     async fetchContent(contentId) {
         try {
@@ -361,6 +375,23 @@ export class TextModal {
                 throw new Error('响应数据格式错误，找不到文本内容');
             }
             
+            // 更新附件属性
+            if (this.currentAttachment) {
+                // 更新文件大小
+                if (data.size !== undefined) {
+                    this.currentAttachment.size = Number(data.size);
+                    console.log('从响应更新文件大小:', this.currentAttachment.size);
+                    // 立即更新UI上的文件大小显示
+                    this.modalElement.querySelector('.file-size').textContent = this.formatFileSize(this.currentAttachment.size);
+                }
+                
+                // 更新文件扩展名
+                if (data.extension) {
+                    this.currentAttachment.extension = data.extension;
+                    console.log('从响应更新文件扩展名:', this.currentAttachment.extension);
+                }
+            }
+            
             return data.content;
         } catch (error) {
             console.error('获取文本内容失败:', error);
@@ -376,44 +407,111 @@ export class TextModal {
     renderCodeTable(content) {
         if (!content || !this.contentElement) return;
         
-        // 统一换行符，处理Windows格式(\r\n)和旧Mac格式(\r)
-        const normalizedContent = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        console.log('原始内容长度:', content.length);
+        
+        // 统一换行符处理，避免\r\n和\r的问题
+        // 使用特殊标记避免重复替换
+        let normalizedContent = content.replace(/\r\n/g, '\uE000')  // 先将\r\n替换为特殊字符
+                                      .replace(/\r/g, '\n')       // 将单独的\r替换为\n
+                                      .replace(/\uE000/g, '\n');  // 将特殊字符恢复为\n
         
         // 按行分割内容
         let lines = normalizedContent.split('\n');
         
-        // 检测是否是表格样式的文本（隔行数据模式）
-        const isAlternatingFormat = this.detectAlternatingFormat(lines);
+        console.log('分割后总行数:', lines.length);
         
-        // 如果检测到是隔行数据格式，过滤掉空白行
-        if (isAlternatingFormat) {
-            lines = lines.filter((line, index) => {
-                // 保留所有非空行和第一行/最后一行的空行
-                return line.trim() !== '' || index === 0 || index === lines.length - 1;
-            });
+        // 检查并打印前几行的内容，帮助调试
+        console.log('前10行内容预览:');
+        for (let i = 0; i < Math.min(10, lines.length); i++) {
+            console.log(`第${i+1}行 [${lines[i].length}]: "${lines[i]}"`);
         }
         
-        // 直接构建HTML字符串，性能更好
+        // 检查文本模式（是否为表格式数据）
+        let isTableFormat = false;
+        
+        // 计算非空行和空行的数量和比例
+        let emptyLines = 0;
+        let nonEmptyLines = 0;
+        let alternatingPattern = 0;
+        
+        // 只检查前20行或全部行（取较少值）
+        const linesToCheck = Math.min(20, lines.length);
+        for (let i = 0; i < linesToCheck; i++) {
+            if (lines[i].trim() === '') {
+                emptyLines++;
+                // 检查是否形成交替模式：内容行后空行
+                if (i > 0 && lines[i-1].trim() !== '') {
+                    alternatingPattern++;
+                }
+            } else {
+                nonEmptyLines++;
+            }
+        }
+        
+        // 计算空行比例和交替模式比例
+        const emptyLineRatio = emptyLines / linesToCheck;
+        const alternatingRatio = (alternatingPattern * 2) / linesToCheck;
+        
+        console.log(`空行比例: ${emptyLineRatio.toFixed(2)}, 交替模式比例: ${alternatingRatio.toFixed(2)}`);
+        
+        // 如果空行比例在30%-70%之间，且交替比例较高，认为是表格式数据
+        if (emptyLineRatio >= 0.3 && emptyLineRatio <= 0.7 && alternatingRatio >= 0.5) {
+            isTableFormat = true;
+            console.log('检测到表格式数据，将移除所有空行');
+            lines = lines.filter(line => line.trim() !== '');
+        } else {
+            // 标准文本格式，只处理连续空行问题
+            // 一个重要的发现：HTML渲染会让每个空行本身变成一个空行，我们不需要保留原始空行
+            
+            // 我们使用一个新的数组来收集处理后的行
+            let processedLines = [];
+            let consecutiveEmptyLines = 0;
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const isEmptyLine = line.trim() === '';
+                
+                if (isEmptyLine) {
+                    consecutiveEmptyLines++;
+                    
+                    // 对于连续空行，只保留第一个
+                    if (consecutiveEmptyLines === 1) {
+                        // 使用一个空格替代完全空白行，避免HTML渲染问题
+                        processedLines.push(' ');
+                    }
+                } else {
+                    // 遇到非空行，重置计数器并添加该行
+                    consecutiveEmptyLines = 0;
+                    processedLines.push(line);
+                }
+            }
+            
+            console.log(`处理前行数: ${lines.length}, 处理后行数: ${processedLines.length}`);
+            lines = processedLines;
+        }
+        
+        // 生成HTML内容
         let html = '';
         
-        // 为每行创建一个表格行
         lines.forEach((line, index) => {
+            // 转义HTML特殊字符
             const escapedLine = line.replace(/&/g, '&amp;')
-                                     .replace(/</g, '&lt;')
-                                     .replace(/>/g, '&gt;');
+                                    .replace(/</g, '&lt;')
+                                    .replace(/>/g, '&gt;');
             
-            // 空行处理
+            // 对于完全空白行需要特殊处理，确保在表格中显示一个空行
             const displayLine = escapedLine || '&nbsp;';
             
-            // 构建表格行HTML
             html += `<tr>
                 <td class="line-number">${index + 1}</td>
                 <td class="code-content">${displayLine}</td>
             </tr>`;
         });
         
-        // 一次性设置HTML内容
+        // 设置内容
         this.contentElement.innerHTML = html;
+        
+        console.log('渲染完成，最终行数:', lines.length);
     }
 
     /**
@@ -423,40 +521,8 @@ export class TextModal {
      * @private
      */
     detectAlternatingFormat(lines) {
-        if (lines.length < 6) return false; // 太短无法可靠检测
-        
-        // 检查前10行或全部行（取较小值）
-        const linesToCheck = Math.min(20, lines.length);
-        let emptyLineCount = 0;
-        let contentLineCount = 0;
-        let alternatingPattern = 0;
-        
-        for (let i = 0; i < linesToCheck; i++) {
-            const isEmpty = lines[i].trim() === '';
-            
-            if (isEmpty) {
-                emptyLineCount++;
-                // 检查是否形成模式：非空行后跟空行
-                if (i > 0 && lines[i-1].trim() !== '') {
-                    alternatingPattern++;
-                }
-            } else {
-                contentLineCount++;
-                // 检查是否形成模式：空行后跟非空行
-                if (i > 0 && lines[i-1].trim() === '') {
-                    alternatingPattern++;
-                }
-            }
-        }
-        
-        // 计算空行比例和交替模式匹配度
-        const emptyLineRatio = emptyLineCount / linesToCheck;
-        const alternatingRatio = alternatingPattern / (linesToCheck - 1);
-        
-        // 如果空行比例在30%-70%之间，且交替模式匹配度高于50%，判定为隔行数据格式
-        return (emptyLineRatio >= 0.3 && 
-                emptyLineRatio <= 0.7 && 
-                alternatingRatio >= 0.4);
+        // 由于我们有了更精确的detectEmptyLinePattern方法，可以直接使用其判断
+        return this.detectEmptyLinePattern(lines) === 'alternating';
     }
 
     /**

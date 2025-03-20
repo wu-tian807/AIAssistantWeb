@@ -49,9 +49,16 @@ def get_text_content(content_id):
         
     try:
         content, metadata = TextHandler.get_text_content(content_id, user_id)
+        # 从元数据中提取文件名和大小
+        file_name = metadata.get('file_name', '')
+        file_extension = os.path.splitext(file_name)[1] or '.txt'
+        file_size = metadata.get('size', 0)
+        
         return jsonify({
             'content': content,
-            'metadata': metadata
+            'metadata': metadata,
+            'size': file_size,
+            'extension': file_extension
         })
     except FileNotFoundError as e:
         return jsonify({'error': str(e), 'type': 'file_not_found'}), 404

@@ -43,6 +43,11 @@ export class TextAttachment {
     size;
 
     /**
+     * @type {string}
+     */
+    extension;
+
+    /**
      * @type {Date}
      */
     uploadTime;
@@ -67,6 +72,7 @@ export class TextAttachment {
      * @param {string} [params.contentBase64] - Base64编码的文本内容
      * @param {number} [params.lineCount] - 文本行数
      * @param {number} [params.size] - 文件大小
+     * @param {string} [params.extension] - 文件扩展名
      * @param {Date} [params.uploadTime] - 上传时间
      * @param {number} [params.lastModified] - 最后修改时间
      * @param {string} [params.description] - 文件描述
@@ -77,8 +83,35 @@ export class TextAttachment {
         this.content_id = params.content_id;
         this.encoding = params.encoding || 'UTF-8';
         this.contentBase64 = params.contentBase64;
-        this.lineCount = params.lineCount;
-        this.size = params.size;
+        this.lineCount = params.lineCount ? Number(params.lineCount) : 0;
+        
+        // 确保size属性是数字类型
+        let fileSize = 0;
+        if (params.size !== undefined && params.size !== null) {
+            if (typeof params.size === 'number') {
+                fileSize = params.size;
+            } else {
+                // 尝试转换为数字
+                fileSize = Number(params.size);
+                if (isNaN(fileSize)) {
+                    fileSize = parseInt(params.size, 10) || 0;
+                }
+            }
+        }
+        this.size = fileSize;
+        
+        // 设置扩展名，如果没有提供，则从文件名中提取
+        if (params.extension) {
+            this.extension = params.extension;
+        } else if (params.fileName) {
+            const extMatch = params.fileName.match(/\.([^.]+)$/);
+            this.extension = extMatch ? `.${extMatch[1]}` : '.txt';
+        } else {
+            this.extension = '.txt';
+        }
+        
+        console.log('TextAttachment构造函数 - 原始size:', params.size, '类型:', typeof params.size, '转换后size:', this.size, '扩展名:', this.extension);
+        
         this.uploadTime = params.uploadTime || new Date();
         this.lastModified = params.lastModified;
         this.description = params.description;
@@ -114,6 +147,7 @@ export class TextAttachment {
             contentBase64: this.contentBase64,
             lineCount: this.lineCount,
             size: this.size,
+            extension: this.extension,
             uploadTime: this.uploadTime,
             lastModified: this.lastModified,
             description: this.description
@@ -170,6 +204,8 @@ export class TextAttachment {
         previewContainer.dataset.mimeType = this.mime_type;
         previewContainer.dataset.encoding = this.encoding || 'UTF-8';
         previewContainer.dataset.lineCount = this.lineCount || '0';
+        previewContainer.dataset.extension = this.extension || '.txt';
+        previewContainer.dataset.size = this.size || '0';
 
         // 组装元素
         infoContainer.appendChild(fileNameElement);
@@ -193,7 +229,8 @@ export class TextAttachment {
                     encoding: this.encoding || 'UTF-8',
                     contentBase64: this.contentBase64,
                     lineCount: this.lineCount || 0,
-                    size: this.size || 0
+                    size: this.size || 0,
+                    extension: this.extension || '.txt'
                 };
                 
                 modal.show(previewAttachment);
