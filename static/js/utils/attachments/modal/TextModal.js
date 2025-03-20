@@ -77,15 +77,18 @@ export class TextModal {
                                 </div>
                             </div>
                         </div>
-                        <div class="text-content">
-                            <pre><code></code></pre>
+                        <div class="text-content-wrapper">
+                            <table class="code-table">
+                                <tbody></tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
             </div>
+            <button class="modal-mobile-close-btn" data-bs-dismiss="modal" aria-label="关闭">&times;</button>
         `;
 
-        this.contentElement = this.modalElement.querySelector('.text-content code');
+        this.contentElement = this.modalElement.querySelector('.code-table tbody');
         document.body.appendChild(this.modalElement);
 
         // 立即初始化 Bootstrap 模态框
@@ -134,7 +137,7 @@ export class TextModal {
         // 模态框关闭时清理
         this.modalElement.addEventListener('hidden.bs.modal', () => {
             this.currentAttachment = null;
-            this.contentElement.textContent = '';
+            this.contentElement.innerHTML = '';
         });
 
         // 处理ESC键关闭
@@ -160,6 +163,21 @@ export class TextModal {
         this.modalElement.addEventListener('hide.bs.modal', () => {
             this.modalElement.setAttribute('inert', 'true');
         });
+        
+        // 移动端关闭按钮事件
+        const mobileCloseBtn = this.modalElement.querySelector('.modal-mobile-close-btn');
+        if (mobileCloseBtn) {
+            mobileCloseBtn.addEventListener('click', () => {
+                if (this.bsModal) {
+                    this.bsModal.hide();
+                }
+            });
+        }
+        
+        // 适配屏幕尺寸变化
+        window.addEventListener('resize', () => {
+            this.adaptToMobileIfNeeded();
+        });
     }
 
     /**
@@ -182,8 +200,10 @@ export class TextModal {
             this.modalElement.querySelector('.line-count').textContent = attachment.lineCount || '0';
             this.modalElement.querySelector('.encoding').textContent = attachment.encoding || 'UTF-8';
 
-            // 显示加载状态
-            this.contentElement.textContent = '加载中...';
+            // 清空内容
+            if (this.contentElement) {
+                this.contentElement.innerHTML = '<tr><td class="line-number">1</td><td class="code-content">加载中...</td></tr>';
+            }
             
             // 使用 content_id 获取内容
             const contentId = attachment.content_id;
@@ -191,55 +211,112 @@ export class TextModal {
             
             if (contentId) {
                 try {
+                    let content = '';
+                    
                     // 如果附件对象包含完整的文本内容，直接使用不再请求
                     if (attachment.contentBase64) {
                         console.log('发现附件自带文本内容，直接使用而不请求后端');
                         try {
-                            const decodedContent = atob(attachment.contentBase64);
-                            this.contentElement.textContent = decodedContent;
-                            
-                            // 如果有代码高亮库，应用它
-                            if (window.hljs) {
-                                window.hljs.highlightElement(this.contentElement);
-                            }
-                            return;
+                            content = atob(attachment.contentBase64);
                         } catch (decodeError) {
                             console.error('解码附件中的base64内容失败:', decodeError);
                             // 解码失败时继续尝试从后端获取
+                            content = await this.fetchContent(contentId);
                         }
+                    } else {
+                        // 从后端请求内容
+                        console.log('开始从后端请求文本内容...');
+                        content = await this.fetchContent(contentId);
                     }
                     
-                    // 从后端请求内容
-                    console.log('开始从后端请求文本内容...');
-                    const content = await this.fetchContent(contentId);
                     console.log('成功获取文本内容，长度:', content.length);
-                    this.contentElement.textContent = content;
-
+                    
+                    // 显示模态框
+                    if (this.bsModal) {
+                        this.bsModal.show();
+                        
+                        // 强制重新计算布局
+                        this.modalElement.style.display = 'block';
+                        this.modalElement.classList.add('show');
+                    }
+                    
+                    // 确保模态框已显示后再渲染内容
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    
+                    // 渲染文本内容到表格中
+                    this.renderCodeTable(content);
+                    
                     // 如果有代码高亮库，应用它
                     if (window.hljs) {
-                        window.hljs.highlightElement(this.contentElement);
+                        const codeElements = this.modalElement.querySelectorAll('.code-content code');
+                        codeElements.forEach(codeElement => {
+                            window.hljs.highlightElement(codeElement);
+                        });
                     }
+                    
                 } catch (error) {
                     console.error('获取文本内容失败:', error);
-                    this.contentElement.textContent = '无法加载文本内容: ' + error.message;
+                    if (this.contentElement) {
+                        this.contentElement.innerHTML = `<tr><td class="line-number">1</td><td class="code-content">无法加载文本内容: ${error.message}</td></tr>`;
+                    }
                 }
             } else {
                 console.error('无效的文本内容ID:', contentId);
                 throw new Error('无效的文本内容ID');
             }
 
-            // 显示模态框
-            if (this.bsModal) {
-                this.bsModal.show();
-                // 强制重新计算布局
-                this.modalElement.style.display = 'block';
-                this.modalElement.classList.add('show');
-            } else {
-                throw new Error('模态框未正确初始化');
-            }
+            // 检测是否是移动设备，适配移动端显示
+            this.adaptToMobileIfNeeded();
         } catch (error) {
             console.error('显示文本预览失败:', error);
-            this.contentElement.textContent = '加载失败：' + error.message;
+            if (this.contentElement) {
+                this.contentElement.innerHTML = `<tr><td class="line-number">1</td><td class="code-content">加载失败：${error.message}</td></tr>`;
+            }
+        }
+    }
+    
+    /**
+     * 根据屏幕大小适配移动端显示
+     * @private
+     */
+    adaptToMobileIfNeeded() {
+        const isMobile = window.innerWidth <= 768;
+        if (isMobile) {
+            // 为移动端添加额外的类
+            this.modalElement.classList.add('mobile-view');
+            
+            // 确保移动端关闭按钮可见
+            const mobileCloseBtn = this.modalElement.querySelector('.modal-mobile-close-btn');
+            if (mobileCloseBtn) {
+                mobileCloseBtn.style.display = 'block';
+            }
+            
+            // 在移动端下，将模态框内容居中显示
+            const modalDialog = this.modalElement.querySelector('.modal-dialog');
+            if (modalDialog) {
+                modalDialog.style.width = '100%';
+                modalDialog.style.margin = '0 auto';
+            }
+            
+            // 调整模态框内容的最大高度
+            const modalContent = this.modalElement.querySelector('.modal-content');
+            if (modalContent) {
+                modalContent.style.maxHeight = '100vh';
+            }
+        } else {
+            this.modalElement.classList.remove('mobile-view');
+            
+            // 恢复桌面端样式
+            const modalDialog = this.modalElement.querySelector('.modal-dialog');
+            if (modalDialog) {
+                modalDialog.style.width = '';
+                modalDialog.style.margin = '30px auto';
+            }
+            
+            const modalContent = this.modalElement.querySelector('.modal-content');
+            if (modalContent) {
+                modalContent.style.maxHeight = '';
+            }
         }
     }
 
@@ -289,6 +366,97 @@ export class TextModal {
             console.error('获取文本内容失败:', error);
             throw error;
         }
+    }
+
+    /**
+     * 将文本内容渲染到表格中
+     * @param {string} content - 文本内容
+     * @private
+     */
+    renderCodeTable(content) {
+        if (!content || !this.contentElement) return;
+        
+        // 统一换行符，处理Windows格式(\r\n)和旧Mac格式(\r)
+        const normalizedContent = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        
+        // 按行分割内容
+        let lines = normalizedContent.split('\n');
+        
+        // 检测是否是表格样式的文本（隔行数据模式）
+        const isAlternatingFormat = this.detectAlternatingFormat(lines);
+        
+        // 如果检测到是隔行数据格式，过滤掉空白行
+        if (isAlternatingFormat) {
+            lines = lines.filter((line, index) => {
+                // 保留所有非空行和第一行/最后一行的空行
+                return line.trim() !== '' || index === 0 || index === lines.length - 1;
+            });
+        }
+        
+        // 直接构建HTML字符串，性能更好
+        let html = '';
+        
+        // 为每行创建一个表格行
+        lines.forEach((line, index) => {
+            const escapedLine = line.replace(/&/g, '&amp;')
+                                     .replace(/</g, '&lt;')
+                                     .replace(/>/g, '&gt;');
+            
+            // 空行处理
+            const displayLine = escapedLine || '&nbsp;';
+            
+            // 构建表格行HTML
+            html += `<tr>
+                <td class="line-number">${index + 1}</td>
+                <td class="code-content">${displayLine}</td>
+            </tr>`;
+        });
+        
+        // 一次性设置HTML内容
+        this.contentElement.innerHTML = html;
+    }
+
+    /**
+     * 检测文本是否是隔行数据格式（内容行后跟空行的模式）
+     * @param {Array<string>} lines - 文本行数组
+     * @returns {boolean} - 是否检测到隔行数据格式
+     * @private
+     */
+    detectAlternatingFormat(lines) {
+        if (lines.length < 6) return false; // 太短无法可靠检测
+        
+        // 检查前10行或全部行（取较小值）
+        const linesToCheck = Math.min(20, lines.length);
+        let emptyLineCount = 0;
+        let contentLineCount = 0;
+        let alternatingPattern = 0;
+        
+        for (let i = 0; i < linesToCheck; i++) {
+            const isEmpty = lines[i].trim() === '';
+            
+            if (isEmpty) {
+                emptyLineCount++;
+                // 检查是否形成模式：非空行后跟空行
+                if (i > 0 && lines[i-1].trim() !== '') {
+                    alternatingPattern++;
+                }
+            } else {
+                contentLineCount++;
+                // 检查是否形成模式：空行后跟非空行
+                if (i > 0 && lines[i-1].trim() === '') {
+                    alternatingPattern++;
+                }
+            }
+        }
+        
+        // 计算空行比例和交替模式匹配度
+        const emptyLineRatio = emptyLineCount / linesToCheck;
+        const alternatingRatio = alternatingPattern / (linesToCheck - 1);
+        
+        // 如果空行比例在30%-70%之间，且交替模式匹配度高于50%，判定为隔行数据格式
+        return (emptyLineRatio >= 0.3 && 
+                emptyLineRatio <= 0.7 && 
+                alternatingRatio >= 0.4);
     }
 
     /**

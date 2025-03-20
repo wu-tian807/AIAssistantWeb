@@ -348,6 +348,43 @@ body.modal-open {
     z-index: 5;
 }
 
+/* 修复模态框内的file-name样式 */
+.text-preview-modal .text-info .file-name,
+.text-preview-modal .modal-body .text-info span.file-name {
+    position: static;
+    padding: 0;
+    background-color: transparent;
+    color: inherit;
+    font-size: inherit;
+    text-align: left;
+    white-space: normal;
+    display: inline;
+}
+
+/* 添加file-details的样式以防止被覆盖 */
+.text-attachment-preview .text-info .file-details {
+    font-size: 12px;
+    margin: 0;
+    padding: 5px 8px;
+    text-align: center;
+    color: white;
+    position: absolute;
+    bottom: 30px;
+    left: 0;
+    right: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    z-index: 5;
+}
+
+/* 暗色主题下的file-details样式 */
+body.dark-theme .text-attachment-preview .text-info .file-details {
+    color: #ffffff;
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
 .attachment-error {
     color: #ff4444;
     padding: 8px;
@@ -477,35 +514,4 @@ body.modal-open {
 .binary-attachment-wrapper {
     position: relative;
     overflow: visible !important; /* 确保删除按钮可见 */
-}
-
-/* 文本附件特定样式 */
-.text-attachment-preview {
-    width: 150px !important;
-    height: 150px !important;
-    overflow: visible !important;
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: space-between !important;
-    background-color: #f8f9fa !important;
-    border: 1px solid #e9ecef !important;
-    border-radius: 6px !important;
-    padding: 8px !important;
-}
-
-.text-icon-container {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    height: 60px !important;
-}
-
-.text-icon {
-    font-size: 32px !important;
-    color: #6c757d !important;
-}
-
-.text-info {
-    width: 100% !important;
-    text-align: center !important;
 }

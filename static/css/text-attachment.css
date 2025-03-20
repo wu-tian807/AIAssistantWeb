@@ -1,454 +1,423 @@
-/* 文本预览项样式 */
-.text-attachment-preview {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    width: 200px;
-    margin: 5px;
-    border-radius: 8px;
-    overflow: visible;
-    background-color: #f5f5f5;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.text-attachment-preview:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-/* 文本图标容器 */
-.text-icon-container {
-    position: relative;
-    width: 100%;
-    height: 120px;
-    background-color: #f8f9fa;
-    cursor: pointer;
-    overflow: hidden;
-    border-radius: 8px 8px 0 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background-color 0.3s ease;
-}
-
-.text-icon-container:hover {
-    background-color: #e9ecef;
-}
-
-/* 文本图标 */
-.text-icon {
-    font-size: 48px;
-    color: #6c757d;
-    transition: transform 0.3s ease;
-}
-
-.text-attachment-preview:hover .text-icon {
-    transform: scale(1.1);
-}
-
-/* 文件信息容器 */
-.text-info {
-    width: 100%;
-    padding: 8px;
-    background-color: white;
-    border-radius: 0 0 8px 8px;
-}
-
-/* 文件名 */
-.text-info .file-name {
-    font-size: 12px;
-    color: #495057;
-    margin-bottom: 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* 文件详情 */
-.text-info .file-details {
-    font-size: 11px;
-    color: #6c757d;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* 删除按钮 */
-.text-attachment-preview .delete-button {
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    background-color: #ff4d4f;
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    font-size: 14px;
-    line-height: 1;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100; /* 确保按钮位于顶层 */
-    opacity: 1; /* 确保按钮可见 */
-    padding: 0;
-}
-
-/* 文本预览模态框 */
+/* 文本预览模态框样式 */
 .text-preview-modal {
-    display: none;
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
+    right: 0;
+    bottom: 0;
     z-index: 1050;
-    overflow-x: hidden;
-    overflow-y: auto;
-    animation: modalFadeIn 0.3s ease;
+    display: none;
+    overflow: hidden;
+    outline: 0;
 }
 
+.text-preview-modal .modal-dialog {
+    max-width: 90%;
+    margin: 30px auto;
+    transform: translate(0, -50px);
+    transition: transform 0.3s ease-out;
+}
+
+.text-preview-modal .modal-content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+.text-preview-modal .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 20px;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.text-preview-modal .modal-title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 500;
+    color: #343a40;
+}
+
+.text-preview-modal .btn-close {
+    padding: 1rem;
+    background: transparent;
+    border: 0;
+    font-size: 1.5rem;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.text-preview-modal .btn-close:hover {
+    opacity: 1;
+}
+
+.text-preview-modal .modal-body {
+    position: relative;
+    flex: 1 1 auto;
+    padding: 20px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.text-preview-modal .text-info {
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    padding: 15px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.text-preview-modal .text-info p {
+    margin: 5px 0;
+    display: flex;
+    align-items: center;
+}
+
+.text-preview-modal .text-info strong {
+    margin-right: 5px;
+    min-width: 70px;
+    display: inline-block;
+}
+
+/* 确保模态框中的文件名正确显示 */
+.text-preview-modal .text-info span.file-name,
+.text-preview-modal .text-info span.encoding,
+.text-preview-modal .text-info span.line-count,
+.text-preview-modal .text-info span.file-size {
+    display: inline-block !important;
+    position: static !important;
+    background: none !important;
+    color: inherit !important;
+    padding: 0 !important;
+    font-size: inherit !important;
+    text-align: left !important;
+    margin: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    overflow: visible !important;
+    z-index: auto !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
+.text-preview-modal .text-content-wrapper {
+    margin-top: 15px;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    overflow: hidden;
+    background-color: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+/* 代码表格样式 */
+.text-preview-modal .code-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.text-preview-modal .line-number {
+    width: 50px;
+    min-width: 50px;
+    padding: 2px 8px;
+    text-align: right;
+    color: #6c757d;
+    background-color: #f8f9fa;
+    border-right: 1px solid #e9ecef;
+    user-select: none;
+}
+
+.text-preview-modal .code-content {
+    padding: 2px 10px;
+    white-space: pre;
+    overflow-x: auto;
+    color: #212529;
+}
+
+/* 移动设备样式 */
+@media (max-width: 768px) {
+    .text-preview-modal .modal-dialog {
+        max-width: 100%;
+        margin: 0;
+        height: 100%;
+        display: flex;
+        align-items: center;
+    }
+    
+    .text-preview-modal .modal-content {
+        height: 100vh;
+        border-radius: 0;
+    }
+    
+    .text-preview-modal .modal-body {
+        padding: 10px;
+        max-height: calc(100vh - 120px);
+    }
+    
+    .text-preview-modal .text-info {
+        padding: 10px;
+    }
+    
+    .text-preview-modal .text-info .row {
+        flex-direction: column;
+    }
+    
+    .text-preview-modal .text-info .col-md-6 {
+        width: 100%;
+    }
+    
+    .text-preview-modal .text-content-wrapper {
+        max-height: calc(100vh - 230px);
+    }
+    
+    .text-preview-modal .code-table {
+        font-size: 12px;
+    }
+    
+    .text-preview-modal .modal-mobile-close-btn {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        width: 40px;
+        height: 40px;
+        background-color: rgba(0, 0, 0, 0.5);
+        color: white;
+        border-radius: 50%;
+        border: none;
+        font-size: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 1060;
+    }
+    
+    .text-preview-modal.mobile-view .modal-header {
+        padding: 10px;
+    }
+    
+    .text-preview-modal.mobile-view .btn-close {
+        display: none;
+    }
+    
+    .text-preview-modal.mobile-view .mobile-close-btn {
+        display: block;
+    }
+}
+
+/* 显示模态框时的动画 */
 .text-preview-modal.show {
     display: block;
 }
 
-.text-preview-modal .modal-dialog {
-    max-width: 800px;
-    margin: 30px auto;
-    animation: modalSlideIn 0.3s ease;
+.text-preview-modal.show .modal-dialog {
+    transform: translate(0, 0);
 }
 
-.text-preview-modal .modal-content {
-    background-color: #fff;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    border: none;
-}
-
-.text-preview-modal .modal-header {
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid #dee2e6;
+/* 文本附件预览样式 */
+.text-attachment-preview {
+    width: 150px;
+    height: 170px;
+    position: relative;
     background-color: #f8f9fa;
-    border-radius: 8px 8px 0 0;
-}
-
-.text-preview-modal .modal-title {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #212529;
-    margin: 0;
-}
-
-.text-preview-modal .modal-body {
-    padding: 1.5rem;
-}
-
-/* 文件信息区域 */
-.text-preview-modal .text-info {
-    background-color: #f8f9fa;
-    padding: 1rem;
+    border: 1px solid #e9ecef;
     border-radius: 6px;
-    margin-bottom: 1rem;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    overflow: visible;
 }
 
-.text-preview-modal .text-info p {
-    margin-bottom: 0.5rem;
-    color: #495057;
+.text-attachment-preview:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-.text-preview-modal .text-info strong {
-    color: #212529;
-    font-weight: 600;
+.text-icon-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 60px;
 }
 
-/* 文本内容区域 */
-.text-preview-modal .text-content {
-    background-color: #f8f9fa;
-    border-radius: 6px;
+.text-icon {
+    font-size: 32px;
+    color: #6c757d;
+}
+
+.text-attachment-preview .text-info {
+    width: 100%;
+    text-align: center;
+    padding-top: 5px;
+    margin-top: auto;
+}
+
+.text-attachment-preview .file-name {
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
     overflow: hidden;
-}
-
-.text-preview-modal .text-content pre {
+    text-overflow: ellipsis;
     margin: 0;
-    padding: 1rem;
-    max-height: 60vh;
-    overflow: auto;
+    text-align: center;
 }
 
-.text-preview-modal .text-content code {
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-    font-size: 0.9rem;
-    line-height: 1.5;
-    color: #212529;
-    white-space: pre-wrap;
-    word-wrap: break-word;
+.text-attachment-preview .file-details {
+    font-size: 12px;
+    margin: 0;
+    text-align: center;
 }
 
-/* 滚动条美化 */
-.text-preview-modal .text-content pre::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+/* 删除按钮样式 */
+.text-attachment-preview .delete-button {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 24px;
+    height: 24px;
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 5;
+    transition: all 0.2s ease;
 }
 
-.text-preview-modal .text-content pre::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
-}
-
-.text-preview-modal .text-content pre::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 4px;
-}
-
-.text-preview-modal .text-content pre::-webkit-scrollbar-thumb:hover {
-    background: #a8a8a8;
-}
-
-/* 动画效果 */
-@keyframes modalFadeIn {
-    from {
-        opacity: 0;
-    }
-    to {
-        opacity: 1;
-    }
-}
-
-@keyframes modalSlideIn {
-    from {
-        transform: translateY(-10%);
-        opacity: 0;
-    }
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-    .text-attachment-preview {
-        width: 100%;
-        margin: 10px 0;
-    }
-
-    .text-preview-modal .modal-dialog {
-        margin: 10px;
-        max-width: calc(100% - 20px);
-    }
-
-    .text-preview-modal .text-content pre {
-        max-height: 50vh;
-    }
+.text-attachment-preview .delete-button:hover {
+    background-color: #c82333;
+    transform: scale(1.1);
 }
 
 /* 错误状态样式 */
 .text-attachment-preview.error {
     border-color: #dc3545;
-}
-
-.text-attachment-preview.error .text-icon-container {
-    background-color: #fff5f5;
+    background-color: #fff8f8;
 }
 
 .text-attachment-preview.error .text-icon {
     color: #dc3545;
 }
 
-/* 加载状态 */
-.text-content.loading {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 200px;
-    color: #6c757d;
+.text-attachment-preview.error .file-details.error {
+    color: #dc3545;
 }
 
-/* 消息中的文本预览 */
-.message-attachments-container .text-attachment-preview {
-    margin: 5px 0;
-    width: 150px;
-    height: 150px;
-    overflow: visible; /* 确保删除按钮可见 */
+/* 适配暗色主题 */
+body.dark-theme .text-preview-modal .modal-content {
+    background-color: #2d2d2d;
+    border-color: #404040;
 }
 
-.message-attachments-container .text-icon-container {
-    height: 90px;
+body.dark-theme .text-preview-modal .modal-header {
+    background-color: #1a1a1a;
+    border-bottom-color: #404040;
 }
 
-.message-attachments-container .text-icon {
-    font-size: 38px;
+body.dark-theme .text-preview-modal .modal-title {
+    color: #e0e0e0;
 }
 
-/* 修复删除按钮在消息中的显示 */
-.message-attachments-container .text-attachment-preview .delete-button {
-    z-index: 100;
-    top: -8px;
-    right: -8px;
+body.dark-theme .text-preview-modal .btn-close {
+    color: #e0e0e0;
+    filter: invert(1);
 }
 
-/* 编辑模式下的文本预览 */
-#attachment-preview .text-attachment-preview {
-    width: 180px;
-    height: 180px;
-    overflow: visible; /* 确保删除按钮可见 */
-    position: relative; /* 确保定位上下文正确 */
-    z-index: 1; /* 设置基础z-index */
+body.dark-theme .text-preview-modal .text-info {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
 }
 
-#attachment-preview .text-icon-container {
-    height: 110px;
+body.dark-theme .text-preview-modal .text-info p {
+    color: #e0e0e0;
 }
 
-#attachment-preview .text-icon {
-    font-size: 42px;
+body.dark-theme .text-preview-modal .text-info strong {
+    color: #e0e0e0;
 }
 
-/* 确保编辑模式下删除按钮正确显示 */
-#attachment-preview .text-attachment-preview .delete-button {
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    z-index: 100; /* 确保按钮在最上层 */
-    opacity: 1; /* 编辑模式下总是显示删除按钮 */
+body.dark-theme .text-preview-modal .text-content-wrapper {
+    background-color: #2d2d2d;
+    border-color: #404040;
 }
 
-/* 确保在edit-attachment-container中的文本附件删除按钮总是可见 */
-.edit-attachment-container .text-attachment-preview .delete-button,
-.edit-attachments-container .text-attachment-preview .delete-button {
-    opacity: 1;
-    z-index: 100;
-    display: flex !important;
-    visibility: visible !important;
-    pointer-events: auto !important;
+body.dark-theme .text-preview-modal .line-number {
+    background-color: #1a1a1a;
+    color: #a0a0a0;
+    border-right-color: #404040;
 }
 
-/* 特别针对编辑框内的删除按钮进行修复 */
-.edit-attachments-container .text-attachment-preview {
-    z-index: 1;
-    position: relative;
-    overflow: visible !important;
+body.dark-theme .text-preview-modal .code-content {
+    color: #e0e0e0;
 }
 
-/* 修复附件容器中可能的溢出问题 */
-.attachment-container,
-.edit-attachment-container,
-.edit-attachments-container,
-#attachment-preview {
-    overflow: visible !important; /* 确保删除按钮不被剪裁 */
-    padding-top: 10px; /* 为删除按钮提供额外空间 */
+body.dark-theme .text-attachment-preview {
+    background-color: #2d2d2d;
+    border-color: #404040;
 }
 
-/* 确保预览项有足够的外边距，防止删除按钮被挡住 */
-.edit-attachment-container .preview-item,
-#attachment-preview .preview-item {
-    margin: 10px 5px;
+body.dark-theme .text-attachment-preview:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
-/* 通用样式 */
-.text-attachment-preview {
-    display: flex;
-    align-items: center;
-    padding: 10px;
-    border: 1px solid #e0e0e0;
-    border-radius: 5px;
-    background-color: #f9f9f9;
-    margin-bottom: 10px;
-    position: relative; /* 确保相对定位 */
-    overflow: visible !important; /* 确保溢出内容可见 */
+body.dark-theme .text-icon {
+    color: #a0a0a0;
 }
 
-.edit-attachments-container .text-attachment-preview {
-    position: relative; /* 确保相对定位 */
-    overflow: visible !important; /* 确保溢出内容（如删除按钮）可见 */
+body.dark-theme .text-attachment-preview .file-name {
+    color: #e0e0e0;
 }
 
-/* 确保编辑附件容器本身也不会剪切内容 */
-.edit-attachments-container {
-    overflow: visible !important;
+body.dark-theme .text-attachment-preview .file-details {
+    color: #a0a0a0;
 }
 
-/* 图标容器 */
-.text-icon-container {
-    width: 50px;
-    height: 50px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-right: 15px;
+body.dark-theme .text-attachment-preview.error {
+    background-color: #2d2d2d;
+    border-color: #dc3545;
 }
 
-.text-icon {
-    font-size: 24px;
-}
-
-/* 信息容器 */
-.text-info {
-    flex: 1;
-    overflow: hidden;
-}
-
-.text-info .file-name {
-    font-weight: 500;
-    margin-bottom: 5px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.text-info .file-details {
-    color: #666;
-    font-size: 0.9em;
-}
-
-/* 确保文本附件中的删除按钮样式统一 */
-.text-attachment-preview .delete-button {
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    background-color: #ff4d4f;
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    font-size: 14px;
-    line-height: 1;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100; /* 确保按钮位于顶层 */
-    opacity: 1; /* 确保按钮可见 */
-    padding: 0;
-}
-
-/* 特别为编辑附件容器中的删除按钮添加明确的样式 */
-.edit-attachments-container .text-attachment-preview .delete-button {
-    position: absolute !important;
-    top: -8px !important;
-    right: -8px !important;
-    z-index: 100 !important;
-    opacity: 1 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    background-color: #ff4d4f !important;
-    color: white !important;
-    border: none !important;
-    border-radius: 50% !important;
-    width: 20px !important;
-    height: 20px !important;
-    font-size: 14px !important;
-    line-height: 1 !important;
-    cursor: pointer !important;
-    padding: 0 !important;
-}
-
-/* 悬停效果 */
-.text-attachment-preview .delete-button:hover {
-    background-color: #ff7875;
+/* 移动端适配 */
+@media (max-width: 768px) {
+    .text-attachment-preview {
+        width: 120px;
+        height: 140px;
+        padding: 8px;
+    }
+    
+    .text-icon-container {
+        height: 40px;
+    }
+    
+    .text-icon {
+        font-size: 24px;
+    }
+    
+    .text-attachment-preview .file-name {
+        font-size: 10px;
+        padding: 4px;
+    }
+    
+    .text-attachment-preview .file-details {
+        font-size: 10px;
+        padding: 4px;
+        bottom: 26px;
+    }
 }
