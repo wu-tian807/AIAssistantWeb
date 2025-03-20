@@ -5,16 +5,21 @@ from pathlib import Path
 from typing import Dict, Any, List, Tuple
 import numpy as np
 from initialization import app, oaipro_client
+import asyncio
 
 class TextEmbedding:
     """文本嵌入处理类，用于生成和管理文本的嵌入向量"""
     
     # 配置常量
-    DEFAULT_CHUNK_SIZE = 1000  # 默认分块大小（字符数）
-    MIN_CHUNK_SIZE = 300       # 最小分块大小
-    MAX_CHUNK_SIZE = 4000      # 最大分块大小
-    OVERLAP_RATIO = 0.1        # 分块重叠比例
+    DEFAULT_CHUNK_SIZE = 3000  # 默认分块大小（字符数）- 提高默认大小
+    MIN_CHUNK_SIZE = 1500      # 最小分块大小 - 大幅提高最小块大小
+    MAX_CHUNK_SIZE = 8000      # 最大分块大小 - 增加最大块大小
+    OVERLAP_RATIO = 0.05       # 分块重叠比例 - 减少重叠，避免过多小块
     EMBEDDING_MODEL = "text-embedding-3-large"  # 使用的嵌入模型
+    
+    # 新增常量
+    MAX_CHUNKS = 10            # 最大分块数量
+    SMALL_TEXT_THRESHOLD = 10000  # 小文本阈值（字符数）
     
     def __init__(self):
         self.model = self.EMBEDDING_MODEL
@@ -42,12 +47,31 @@ class TextEmbedding:
             # 获取文本行
             lines = text.splitlines()
             total_lines = len(lines)
+            text_length = len(text)
             
-            # 根据专业度动态计算分块大小
-            chunk_size = self._calculate_chunk_size(creativity_score, len(text))
-            
-            # 分割文本
-            chunks, line_ranges = self._split_text(text, lines, chunk_size)
+            # 对于小文本（包括单行文本），使用整体嵌入
+            if text_length <= self.SMALL_TEXT_THRESHOLD or total_lines <= 5:
+                print(f"文本较小（{text_length}字符，{total_lines}行），使用整体嵌入")
+                chunks = [text]
+                line_ranges = [{
+                    'start_line': 1,
+                    'end_line': total_lines
+                }]
+            else:
+                # 根据专业度动态计算分块大小
+                chunk_size = self._calculate_chunk_size(creativity_score, text_length)
+                
+                # 智能分割文本，限制最大分块数量
+                chunks, line_ranges = self._smart_split_text(text, lines, chunk_size, text_length)
+                
+                # 如果分块过多，重新调整分块大小
+                if len(chunks) > self.MAX_CHUNKS:
+                    print(f"分块过多({len(chunks)}块)，进行重新分块...")
+                    # 根据文本长度和最大分块数计算新的分块大小
+                    new_chunk_size = max(self.MIN_CHUNK_SIZE, text_length // self.MAX_CHUNKS)
+                    chunks, line_ranges = self._smart_split_text(text, lines, new_chunk_size, text_length)
+                
+                print(f"分块完成，共{len(chunks)}块，平均每块{text_length/len(chunks):.1f}字符")
             
             # 获取每个分块的嵌入向量
             embeddings = await self._get_embeddings(chunks)
@@ -102,15 +126,82 @@ class TextEmbedding:
         # 基础块大小在最小和最大之间
         base_size = self.MIN_CHUNK_SIZE + (self.MAX_CHUNK_SIZE - self.MIN_CHUNK_SIZE) * adjustment_factor
         
-        # 根据文本总长度微调
-        if text_length < 10000:  # 短文本
-            base_size *= 0.7
+        # 根据文本总长度微调 - 减少对短文本的分块惩罚
+        if text_length < self.SMALL_TEXT_THRESHOLD:  # 短文本
+            # 对极短文本不分块
+            if text_length < self.MIN_CHUNK_SIZE * 2:
+                return text_length
+            # 对短文本减少分块
+            base_size = max(base_size, text_length / 3)
         elif text_length > 50000:  # 长文本
             base_size *= 1.2
             
         # 确保在允许范围内
         return max(self.MIN_CHUNK_SIZE, min(int(base_size), self.MAX_CHUNK_SIZE))
     
+    def _smart_split_text(self, text: str, lines: List[str], chunk_size: int, text_length: int) -> Tuple[List[str], List[Dict[str, int]]]:
+        """
+        智能分割文本，避免过度分块
+        
+        Args:
+            text: 完整文本
+            lines: 文本按行分割
+            chunk_size: 分块大小（字符数）
+            text_length: 文本总长度
+            
+        Returns:
+            Tuple[List[str], List[Dict[str, int]]]: 分块列表和每块对应的行号范围
+        """
+        # 如果文本不需要分块
+        if text_length <= chunk_size:
+            return [text], [{
+                'start_line': 1,
+                'end_line': len(lines)
+            }]
+            
+        # 估算分块数量
+        estimated_chunks = max(1, text_length // chunk_size)
+        if estimated_chunks <= 3:
+            # 文本较小，可以采用简单分割策略，每块尽量平均
+            return self._simple_split_text(text, lines, estimated_chunks)
+        else:
+            # 文本较大，使用原有的自然断点分割策略，但更大块
+            return self._split_text(text, lines, chunk_size)
+    
+    def _simple_split_text(self, text: str, lines: List[str], num_chunks: int) -> Tuple[List[str], List[Dict[str, int]]]:
+        """
+        简单分割策略，将文本尽量均匀地分成指定数量的块
+        
+        Args:
+            text: 完整文本
+            lines: 文本按行分割
+            num_chunks: 目标分块数量
+            
+        Returns:
+            Tuple[List[str], List[Dict[str, int]]]: 分块列表和每块对应的行号范围
+        """
+        chunks = []
+        line_ranges = []
+        total_lines = len(lines)
+        
+        # 计算每个块包含的行数
+        lines_per_chunk = max(1, total_lines // num_chunks)
+        
+        # 按行分块
+        for i in range(0, total_lines, lines_per_chunk):
+            end_idx = min(i + lines_per_chunk, total_lines)
+            
+            # 获取当前块的行范围
+            chunk_lines = lines[i:end_idx]
+            chunks.append('\n'.join(chunk_lines))
+            
+            line_ranges.append({
+                'start_line': i + 1,  # 1-based索引
+                'end_line': end_idx
+            })
+        
+        return chunks, line_ranges
+
     def _split_text(self, text: str, lines: List[str], chunk_size: int) -> Tuple[List[str], List[Dict[str, int]]]:
         """
         将文本分割成块，保持语义和行号完整性
@@ -158,8 +249,8 @@ class TextEmbedding:
                 'end_line': end_line + 1
             })
             
-            # 更新下一个块的起始位置，考虑重叠
-            current_pos = max(current_pos + 1, end_pos - overlap_size)
+            # 更新下一个块的起始位置，大幅度前进以减少分块数量
+            current_pos = end_pos - (0 if end_pos == text_length else overlap_size)
         
         return chunks, line_ranges
     
@@ -239,7 +330,7 @@ class TextEmbedding:
     
     async def _get_embeddings(self, chunks: List[str]) -> List[List[float]]:
         """
-        获取文本块的嵌入向量
+        并行获取文本块的嵌入向量
         
         Args:
             chunks: 文本块列表
@@ -247,22 +338,63 @@ class TextEmbedding:
         Returns:
             List[List[float]]: 嵌入向量列表
         """
+        # 使用异步并行处理，每批最多5个请求
+        batch_size = 5
         embeddings = []
         
-        for chunk in chunks:
+        for i in range(0, len(chunks), batch_size):
+            batch_chunks = chunks[i:i+batch_size]
+            tasks = []
+            
+            # 创建所有任务
+            for chunk in batch_chunks:
+                tasks.append(self._get_single_embedding(chunk))
+            
+            # 等待所有任务完成
+            print(f"并行处理嵌入向量，批次 {i//batch_size + 1}/{(len(chunks) + batch_size - 1)//batch_size}")
+            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # 处理结果，如果有异常，使用零向量
+            for j, result in enumerate(batch_results):
+                if isinstance(result, Exception):
+                    print(f"获取嵌入向量失败: {str(result)}")
+                    embeddings.append([0.0] * 3072)  # text-embedding-3-large 的维度是3072
+                else:
+                    embeddings.append(result)
+            
+            # 添加短暂延迟避免API限流
+            await asyncio.sleep(0.5)
+        
+        return embeddings
+    
+    async def _get_single_embedding(self, chunk: str) -> List[float]:
+        """
+        获取单个文本块的嵌入向量
+        
+        Args:
+            chunk: 文本块
+            
+        Returns:
+            List[float]: 嵌入向量
+        """
+        retry_count = 3
+        for attempt in range(retry_count):
             try:
                 response = self.client.embeddings.create(
                     model=self.model,
                     input=chunk
                 )
-                embedding = response.data[0].embedding
-                embeddings.append(embedding)
+                return response.data[0].embedding
             except Exception as e:
-                print(f"获取嵌入向量失败: {str(e)}")
-                # 使用零向量作为占位符
-                embeddings.append([0.0] * 3072)  # text-embedding-3-large 的维度是3072
+                if attempt < retry_count - 1:
+                    # 指数退避重试
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                raise e
         
-        return embeddings
+        # 如果所有重试都失败，返回零向量
+        print(f"获取嵌入向量失败，所有重试都失败")
+        return [0.0] * 3072  # text-embedding-3-large 的维度是3072
     
     def _save_embeddings(self, file_id: str, base_path: str, chunks: List[str], 
                        embeddings: List[List[float]], line_ranges: List[Dict[str, int]],

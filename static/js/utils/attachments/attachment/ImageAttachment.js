@@ -125,7 +125,7 @@ export class ImageAttachment {
             
             const deleteButton = document.createElement('button');
             deleteButton.textContent = '×';
-            deleteButton.className = 'delete-image';
+            deleteButton.className = 'delete-button';
             deleteButton.onclick = (e) => {
                 e.stopPropagation();
                 if (typeof onDelete === 'function') {

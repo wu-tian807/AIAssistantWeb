@@ -147,15 +147,15 @@ export class TextAttachment {
         fileNameElement.className = 'file-name';
         fileNameElement.textContent = this.fileName;
 
-        // 添加文件大小和行数信息
+        // 添加文件详情（统一显示行数和编码方式）
         const detailsElement = document.createElement('div');
         detailsElement.className = 'file-details';
-        detailsElement.textContent = `${this.formatSize(this.size)} | ${this.lineCount || 0} 行`;
+        detailsElement.textContent = `${this.lineCount || 0} 行 | ${this.encoding || 'UTF-8'}`;
 
-        // 添加删除按钮
+        // 添加删除按钮 - 使用与图片附件一致的className
         if (onDelete) {
             const deleteButton = document.createElement('button');
-            deleteButton.className = 'delete-button';
+            deleteButton.className = 'delete-button'; // 统一使用delete-button类名
             deleteButton.textContent = '×';
             deleteButton.onclick = (e) => {
                 e.stopPropagation();

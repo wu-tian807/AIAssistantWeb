@@ -34,3 +34,6 @@ opencv-python==4.11.0.86
 
 # 分词
 morfessor==2.0.6
+
+#文本编码
+chardet==5.2.0

@@ -33,59 +33,69 @@ export class TextUploader {
             const uploadingToast = showToast('文本文件上传中...', 'info', 0);
             
             try {
-                // 读取文件内容
-                const fileContent = await this.readFileContent(file);
-                console.log('文件内容读取成功，长度:', fileContent.length);
+                // 使用FormData直接上传文件，不再使用base64处理
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('fileName', file.name);
                 
-                // 解码base64获取原始文本内容
-                console.log('开始解码base64内容');
-                try {
-                    const decodedContent = atob(fileContent);
-                    console.log('base64解码成功，文本长度:', decodedContent.length);
-                    
-                    // 计算行数
-                    const lineCount = this.countLines(decodedContent);
-                    console.log('文本行数:', lineCount);
-                    
-                    // 将文本内容保存到后端
-                    console.log('开始向后端保存文本内容...');
-                    const savedData = await this.saveTextContent(decodedContent, file.name);
-                    console.log('保存到后端成功，返回数据:', savedData);
-                    
-                    // 移除上传中提示
-                    if (uploadingToast) {
-                        uploadingToast.remove();
-                    }
-                    
-                    // 显示上传成功提示
-                    showToast('文本文件上传成功', 'success');
-                    
-                    // 创建文本附件对象
-                    const textAttachment = new TextAttachment({
-                        fileName: file.name,
-                        mime_type: file.type || 'text/plain',
-                        content_id: savedData.content_id,
-                        encoding: savedData.encoding || 'UTF-8',
-                        lineCount: savedData.line_count || lineCount,
-                        size: file.size,
-                        lastModified: file.lastModified
+                // 获取CSRF令牌
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+                console.log('CSRF令牌:', csrfToken ? '已获取' : '未找到');
+                
+                // 发送请求到新的上传端点
+                console.log('开始上传文件...');
+                const response = await fetch('/api/text/upload', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-Token': csrfToken
+                    },
+                    body: formData
+                });
+                
+                console.log('收到后端响应:', response.status, response.statusText);
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(e => {
+                        console.error('解析错误响应失败:', e);
+                        return { error: '无法解析错误响应' };
                     });
-                    
-                    console.log('创建文本附件对象:', textAttachment);
-                    
-                    // 保存到附件集合
-                    this.attachments.add(textAttachment);
-                    
-                    // 调用上传成功回调
-                    if (this.options.onUploadSuccess) {
-                        this.options.onUploadSuccess(textAttachment);
-                    }
-                    
-                    return textAttachment;
-                } catch (decodeError) {
-                    console.error('base64解码失败:', decodeError);
-                    throw new Error('文件内容解码失败');
+                    console.error('上传文本失败，服务器响应:', errorData);
+                    throw new Error(errorData.error || `上传文本失败 (${response.status})`);
                 }
+                
+                const responseData = await response.json();
+                console.log('上传成功，服务器返回:', responseData);
+                
+                // 移除上传中提示
+                if (uploadingToast) {
+                    uploadingToast.remove();
+                }
+                
+                // 显示上传成功提示
+                showToast('文本文件上传成功', 'success');
+                
+                // 创建文本附件对象
+                const textAttachment = new TextAttachment({
+                    fileName: file.name,
+                    mime_type: file.type || 'text/plain',
+                    content_id: responseData.metadata.content_id,
+                    encoding: responseData.metadata.encoding || 'UTF-8',
+                    lineCount: responseData.metadata.line_count || 0,
+                    size: file.size,
+                    lastModified: file.lastModified
+                });
+                
+                console.log('创建文本附件对象:', textAttachment);
+                
+                // 保存到附件集合
+                this.attachments.add(textAttachment);
+                
+                // 调用上传成功回调
+                if (this.options.onUploadSuccess) {
+                    this.options.onUploadSuccess(textAttachment);
+                }
+                
+                return textAttachment;
             } catch (error) {
                 // 确保在发生错误时移除上传中提示
                 if (uploadingToast) {

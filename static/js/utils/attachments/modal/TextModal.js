@@ -69,11 +69,11 @@ export class TextModal {
                             <div class="row">
                                 <div class="col-md-6">
                                     <p><strong>文件名：</strong><span class="file-name"></span></p>
-                                    <p><strong>大小：</strong><span class="file-size"></span></p>
+                                    <p><strong>编码：</strong><span class="encoding"></span></p>
                                 </div>
                                 <div class="col-md-6">
                                     <p><strong>行数：</strong><span class="line-count"></span></p>
-                                    <p><strong>编码：</strong><span class="encoding"></span></p>
+                                    <p><strong>大小：</strong><span class="file-size"></span></p>
                                 </div>
                             </div>
                         </div>

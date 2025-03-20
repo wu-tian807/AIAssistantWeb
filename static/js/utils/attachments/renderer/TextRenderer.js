@@ -70,7 +70,7 @@ export class TextRenderer {
             fileName.className = 'file-name';
             fileName.textContent = attachment.fileName || attachment.filename || '未命名文本';
             
-            // 创建文件详情
+            // 创建文件详情（统一显示行数和编码）
             const fileDetails = document.createElement('div');
             fileDetails.className = 'file-details';
             fileDetails.textContent = `${attachment.lineCount || '0'} 行 | ${attachment.encoding || 'UTF-8'}`;

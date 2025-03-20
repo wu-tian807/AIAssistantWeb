@@ -3,96 +3,130 @@ from openai.types.chat.chat_completion import ChatCompletion
 from typing import Union, Dict, Any
 import json
 import random
+import time
 from initialization import xai_client
 
-def evaluate_text_type(text: str,max_retry:int=3):
+def evaluate_text_type(text: str, max_retry: int = 1):
+    """
+    优化版的文本类型评估函数
+    
+    Args:
+        text: 文本内容
+        max_retry: 重试次数
+        
+    Returns:
+        Dict[str, Any]: 文本类型分析结果
+    """
+    # 默认返回值，避免API故障时系统崩溃
+    default_result = {
+        "type": "普通文章",
+        "line_length": 100,
+        "creativity_score": 0.5,
+        "type_reason": "默认分类",
+        "creativity_reason": "默认评分"
+    }
+    
+    # 文本太小时直接返回默认值
+    if len(text) < 100:
+        print("文本太短，使用默认值")
+        return default_result
+    
     client = xai_client
     
-    # 处理过长文本，抽样中间部分进行分析
-    MAX_SAMPLE_LENGTH = 2000
+    # 处理过长文本，更高效的抽样策略
+    MAX_SAMPLE_LENGTH = 1500  # 减小样本大小，降低API负担
     if len(text) > MAX_SAMPLE_LENGTH:
-        # 随机抽取开头、中间和结尾部分
-        start_sample = text[:500]
-        mid_start = random.randint(0, len(text) - 1000)
-        mid_sample = text[mid_start:mid_start+1000]
-        end_sample = text[-500:]
+        # 抽取开头、中间和结尾部分，减小中间样本
+        start_sample = text[:400]
+        mid_start = len(text) // 2 - 350
+        mid_sample = text[mid_start:mid_start+700]
+        end_sample = text[-400:]
         sample_text = f"{start_sample}\n...\n{mid_sample}\n...\n{end_sample}"
     else:
         sample_text = text
     
     # 构建系统提示
-    system_prompt = """你是一个专业的文本分析专家。你的任务是分析给定文本的类型和专业度，并提供自动换行建议。
+    system_prompt = """你是一个专业的文本分析专家。你的任务是分析给定文本的类型和专业度，并提供自动换行建议。请简短快速地完成分析。
 
 请分析以下几个方面：
 1. 文本类型及建议换行长度：
-   - 代码：0（不自动换行，代码需要保持原有格式）
-   - 技术文档：80-100（保持适当的宽度便于阅读）
-   - 学术论文：60-80（较短的行有助于专注阅读）
-   - 普通文章：100-120（中等宽度适合普通阅读）
-   - 散文/随笔：120-150（较长的行有助于流畅阅读）
-   - 创意文学：100-120（平衡艺术性和可读性）
+   - 代码：0（不自动换行）
+   - 技术文档：80-100
+   - 学术论文：60-80
+   - 普通文章：100-120
+   - 散文/随笔：120-150
+   - 创意文学：100-120
 
 2. 专业度/创意性评分（0.0-1.0）：
-   - 接近1.0：高度创意性、艺术性文本（诗歌、创意散文等）
+   - 接近1.0：高度创意性、艺术性文本
    - 0.6-0.9：普通文学作品、生活随笔
    - 0.3-0.6：普通文章、技术文档
    - 0.0-0.3：学术论文、程序代码等高专业性内容
 
-请以JSON格式返回以下字段：
-{
-  "type": "文本类型",
-  "line_length": 数字（0表示不自动换行）,
-  "creativity_score": 0.0到1.0之间的小数,
-  "type_reason": "判断文本类型的理由",
-  "creativity_reason": "判断专业度/创意性的理由"
-}"""
+以JSON格式返回：{"type": "文本类型", "line_length": 数字, "creativity_score": 0.0到1.0, "type_reason": "简短理由", "creativity_reason": "简短理由"}"""
     
-    if max_retry <= 0:
-        raise Exception("文本类型分析失败，持续性的缺失参数或返回错误范围")
-    # 调用大模型进行评估
-    try:
-        response = client.chat.completions.create(
-            model="grok-2-latest",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"请分析以下文本:\n\n{sample_text}"}
-            ],
-            response_format={"type": "json_object"}
-        )
-        
-        result_text = response.choices[0].message.content
-        
-        # 解析结果并验证JSON完整性
-        flag = True
+    # 使用非递归的重试方式
+    for retry in range(max_retry + 1):
         try:
-            result = json.loads(result_text)
-            required_fields = ["type", "line_length", "creativity_score", "type_reason", "creativity_reason"]
+            start_time = time.time()
+            print(f"文本分析尝试 #{retry+1}")
             
-            # 检查所有字段是否存在
-            missing_fields = [field for field in required_fields if field not in result]
-            if missing_fields:
-                print(f"缺少字段: {missing_fields}，重试中...")
-                return evaluate_text_type(text, client,max_retry-1)  # 递归重试
+            # 设置超时
+            response = client.chat.completions.create(
+                model="grok-2-latest",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"请快速分析以下文本:\n\n{sample_text}"}
+                ],
+                response_format={"type": "json_object"},
+                max_tokens=300  # 限制返回长度，加快响应速度
+            )
+            
+            result_text = response.choices[0].message.content
+            process_time = time.time() - start_time
+            print(f"Grok API响应时间: {process_time:.2f}秒")
+            
+            # 解析结果
+            try:
+                result = json.loads(result_text)
                 
-            # 验证数值范围
-            if not isinstance(result["line_length"], (int, float)) or result["line_length"] < 0:
-                result["line_length"] = 100  # 默认值
-                print("line_length 默认值")
-                flag = False
+                # 验证所需字段是否存在
+                required_fields = ["type", "line_length", "creativity_score"]
+                missing_fields = [field for field in required_fields if field not in result]
                 
-            if not isinstance(result["creativity_score"], (int, float)) or not (0 <= result["creativity_score"] <= 1):
-                result["creativity_score"] = 0.5  # 默认值
-                print("creativity_score 默认值")
-                flag = False
-            if flag:
+                if missing_fields:
+                    print(f"缺少字段: {missing_fields}")
+                    if retry >= max_retry:
+                        # 最后一次重试失败，补充缺失字段
+                        for field in missing_fields:
+                            result[field] = default_result[field]
+                    else:
+                        # 继续下一次重试
+                        continue
+                
+                # 验证数值范围并修正
+                if not isinstance(result.get("line_length"), (int, float)) or not (0 <= result.get("line_length", 0) <= 200):
+                    print("修正行长度为默认值100")
+                    result["line_length"] = 100
+                
+                if not isinstance(result.get("creativity_score"), (int, float)) or not (0 <= result.get("creativity_score", 0) <= 1):
+                    print("修正创意度为默认值0.5")
+                    result["creativity_score"] = 0.5
+                
                 return result
-            else:
-                return evaluate_text_type(text, client,max_retry-1)  # 递归重试
-            
-        except json.JSONDecodeError:
-            print("返回格式错误，重试中...")
-            return evaluate_text_type(text, client,max_retry-1)  # 递归重试
-            
-    except Exception as e:
-        print(f"调用模型出错: {str(e)}")
-        return evaluate_text_type(text,max_retry-1)
+                
+            except json.JSONDecodeError:
+                print(f"JSON解析错误，Grok返回: {result_text[:100]}...")
+                if retry >= max_retry:
+                    return default_result
+                
+        except Exception as e:
+            print(f"文本类型分析出错 (尝试 {retry+1}/{max_retry+1}): {str(e)}")
+            if retry >= max_retry:
+                return default_result
+            # 短暂休息后重试
+            time.sleep(1)
+    
+    # 所有重试都失败
+    print("所有文本分析尝试都失败，使用默认值")
+    return default_result

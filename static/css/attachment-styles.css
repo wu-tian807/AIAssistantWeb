@@ -92,6 +92,7 @@
     transform: scale(1.05);
 }
 
+.image-preview-item .delete-button,
 .image-preview-item .delete-image {
     position: absolute;
     top: -8px;
@@ -114,10 +115,12 @@
     z-index: 100;
 }
 
+.image-preview-item:hover .delete-button,
 .image-preview-item:hover .delete-image {
     opacity: 1;
 }
 
+.image-preview-item .delete-button:hover,
 .image-preview-item .delete-image:hover {
     background-color: #c82333;
     transform: scale(1.1);
