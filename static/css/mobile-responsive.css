@@ -454,48 +454,51 @@
     }
 
     /* 消息包装器样式调整 */
-    .assistant-message .message-wrapper{
+    .assistant-message .message-wrapper {
         width: 100%;
-        overflow-x: visible !important; /* 改为visible以避免强制横向滚动 */
         max-width: 100%;
-        white-space: normal; /* 允许正常换行 */
-        word-break: break-word; /* 允许单词内换行 */
+        overflow-x: visible !important;
+        padding: 10px 15px; /* 减小内边距以显示更多内容 */
+        word-break: break-word;
+        border-radius: 8px;
     }
     
     .assistant-message .message-wrapper .message-content {
         width: 100%;
-        overflow-x: visible !important; /* 改为visible以避免强制横向滚动 */
         max-width: 100%;
-        white-space: normal; /* 允许正常换行 */
-        word-break: break-word; /* 允许单词内换行 */
+        overflow-x: visible !important;
+        white-space: normal;
+        word-break: break-word;
     }
 
     .assistant-message {
-        margin-left: 5px;
-        margin-right: auto;
+        margin-left: 0;
+        margin-right: 0;
         display: flex;
         align-items: flex-start;
         gap: 4px;
-        width: 95%;
-        max-width: 95%;
+        width: 100%; /* 修改为100%宽度 */
+        max-width: 100%; /* 修改为100%最大宽度 */
+        padding: 0 5px; /* 添加少量内边距防止紧贴屏幕边缘 */
     }
 
-    /* 添加模型图标包装器移动端适配样式 */
+    /* 调整模型图标包装器样式以匹配新的布局 */
     .model-icon-wrapper {
         position: relative;
         left: 0;
-        margin-right: 8px;
-        width: 20px;
-        height: 20px;
+        margin-right: 4px; /* 减小右边距 */
+        width: 16px; /* 减小图标尺寸 */
+        height: 16px;
         display: flex;
         align-items: center;
         justify-content: center;
+        flex-shrink: 0; /* 防止图标被压缩 */
     }
 
     /* 模型图标样式 */
     .model-icon {
-        width: 20px;
-        height: 20px;
+        width: 16px;
+        height: 16px;
     }
 
     /* 输入区域调整 */
