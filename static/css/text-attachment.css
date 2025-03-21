@@ -46,17 +46,30 @@
 }
 
 .text-preview-modal .btn-close {
-    padding: 1rem;
-    background: transparent;
-    border: 0;
+    padding: 0.5rem;
+    background: #f1f1f1;
+    border: 1px solid #dee2e6;
+    border-radius: 50%;
     font-size: 1.5rem;
     cursor: pointer;
-    opacity: 0.5;
-    transition: opacity 0.2s;
+    opacity: 0.8;
+    transition: all 0.2s;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .text-preview-modal .btn-close:hover {
     opacity: 1;
+    background: #e9e9e9;
+}
+
+.text-preview-modal .btn-close svg {
+    width: 16px;
+    height: 16px;
+    color: #555;
 }
 
 .text-preview-modal .modal-body {
@@ -195,12 +208,16 @@
         color: white;
         border-radius: 50%;
         border: none;
-        font-size: 24px;
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
         z-index: 1060;
+    }
+    
+    .text-preview-modal .modal-mobile-close-btn svg {
+        width: 20px;
+        height: 20px;
     }
     
     .text-preview-modal.mobile-view .modal-header {
@@ -337,7 +354,24 @@ body.dark-theme .text-preview-modal .modal-title {
 
 body.dark-theme .text-preview-modal .btn-close {
     color: #e0e0e0;
-    filter: invert(1);
+    background-color: #333;
+    border-color: #555;
+}
+
+body.dark-theme .text-preview-modal .btn-close svg {
+    color: #e0e0e0;
+}
+
+body.dark-theme .text-preview-modal .btn-close:hover {
+    background-color: #444;
+}
+
+body.dark-theme .text-preview-modal .modal-mobile-close-btn {
+    background-color: rgba(60, 60, 60, 0.8);
+}
+
+body.dark-theme .text-preview-modal .modal-mobile-close-btn svg {
+    color: #e0e0e0;
 }
 
 body.dark-theme .text-preview-modal .text-info {
