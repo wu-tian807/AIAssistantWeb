@@ -481,36 +481,35 @@ class ReasoningBox {
         }
     }
 
+    // 判断是否应该自动滚动
+    shouldAutoScroll(container) {
+        // 仅使用全局函数检查是否应该滚动
+        if (typeof window.shouldAutoScroll === 'function') {
+            return window.shouldAutoScroll(container);
+        }
+        // 如果全局函数不可用，使用更保守的滚动策略
+        const threshold = 30; // 更小的阈值，减少自动滚动的触发频率
+        return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+    }
+
     // 如果需要，滚动到可见区域
     scrollIntoViewIfNeeded() {
         const chatMessages = document.getElementById('chat-messages');
         if (this.shouldAutoScroll(chatMessages)) {
-            // 使用更加平滑的滚动
-            setTimeout(() => {
-                if (window.scrollToBottom) {
-                    // 使用全局滚动函数
-                    window.scrollToBottom(true);
-                } else {
-                    // 后备方案
-                    this.container.scrollIntoView({ 
-                        behavior: 'smooth', 
-                        block: 'end',
-                        inline: 'nearest'
-                    });
-                }
-            }, 10);
+            // 使用全局滚动函数
+            if (window.ensureScrollToBottom) {
+                // 延迟执行，等待内容渲染完成
+                setTimeout(() => {
+                    window.ensureScrollToBottom(chatMessages);
+                }, 10);
+            } else if (window.scrollToBottom) {
+                // 使用备用全局滚动函数
+                setTimeout(() => {
+                    window.scrollToBottom(false); // 使用非平滑滚动，减少视觉干扰
+                }, 10);
+            }
+            // 不再使用container.scrollIntoView，避免激进的滚动行为
         }
-    }
-
-    // 判断是否应该自动滚动
-    shouldAutoScroll(container) {
-        // 使用全局函数检查是否应该滚动
-        if (typeof window.shouldAutoScroll === 'function') {
-            return window.shouldAutoScroll(container);
-        }
-        // 兼容逻辑（如果全局函数不可用）
-        const threshold = 100;
-        return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
     }
 
     // 显示思考框

@@ -255,16 +255,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // 改进的shouldAutoScroll函数
 window.shouldAutoScroll = function(container) {
-    // 检查是否已经滚动到接近底部（距离底部100px以内）
+    // 检查是否已经滚动到接近底部（距离底部30px以内）
     const scrollPosition = container.scrollHeight - container.scrollTop - container.clientHeight;
-    const isNearBottom = scrollPosition < 100;
-    
+    const isNearBottom = scrollPosition < 30;
     // 正在生成内容且用户未主动滚动上方，或已经在底部附近，则允许自动滚动
     if ((window.isGenerating && !userScrolling) || isNearBottom) {
         return true;
     }
     
     return false;
+    
+    // // 控制自动滚动的阈值，较小的值意味着更少的自动滚动
+    // // 这里使用30px作为阈值，用户必须更接近底部才会触发自动滚动
+    // const threshold = 30;
+    // return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
 };
 
 // 重置用户滚动状态的函数
@@ -3323,6 +3327,9 @@ function ensureScrollToBottom(container) {
         });
     }
 }
+
+// 导出为全局函数
+window.ensureScrollToBottom = ensureScrollToBottom;
 
 /**
  * 处理流式响应，用于从服务器读取和处理SSE数据流
