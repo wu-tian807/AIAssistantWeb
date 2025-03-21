@@ -528,10 +528,45 @@
 
     /* 附件预览区域 */
     .attachment-preview {
-        max-height: 80px;
+        max-height: 90px;  /* 增加高度，允许更大的图片展示 */
+        overflow-y: auto;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        align-items: center;
+    }
+    
+    /* 添加对附件预览中图片的特定控制 */
+    .attachment-preview img {
+        max-height: 80px; /* 增加图片最大高度 */
+        max-width: 80px;  /* 增加图片最大宽度 */
+        object-fit: contain; /* 改为contain以保持比例且显示完整图片 */
+        border-radius: 4px;
+    }
+    
+    /* 改善附件容器在手机端的显示 */
+    .attachment-container {
+        padding: 5px;
+        max-height: 100px; /* 增加容器高度 */
         overflow-y: auto;
     }
-
+    
+    /* 附件预览项在手机端的尺寸调整 */
+    .attachment-preview .preview-item {
+        width: 80px !important; /* 增加预览项宽度 */
+        height: 80px !important; /* 增加预览项高度 */
+        margin: 2px !important;
+    }
+    
+    /* 确保删除按钮在小尺寸下依然可见可用 */
+    .attachment-preview .delete-button {
+        width: 18px !important;
+        height: 18px !important;
+        top: -5px !important;
+        right: -5px !important;
+        font-size: 10px !important;
+    }
+    
     /* 隐藏桌面端不需要的元素 */
     .menu-toggle-desktop {
         display: none;

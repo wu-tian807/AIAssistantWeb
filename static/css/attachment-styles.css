@@ -455,9 +455,9 @@ body.dark-theme .text-attachment-preview .text-info .file-details {
 /* 移动端响应式样式 */
 @media (max-width: 768px) {
     .preview-item {
-        width: 110px !important;
-        height: 110px !important;
-        margin: 3px !important;
+        width: 80px !important;
+        height: 80px !important;
+        margin: 2px !important;
         position: relative;
     }
     
@@ -470,39 +470,63 @@ body.dark-theme .text-attachment-preview .text-info .file-details {
     
     .delete-button, 
     .delete-image {
-        width: 20px !important;
-        height: 20px !important;
+        width: 18px !important;
+        height: 18px !important;
         top: -5px !important;
         right: -5px !important;
-        font-size: 12px !important;
+        font-size: 10px !important;
     }
     
     #attachment-preview,
     .attachment-container {
         max-width: 95% !important;
-        padding: 5px !important;
+        padding: 4px !important;
         overflow-x: auto !important;
         overflow-y: visible !important;
+        max-height: 90px !important;
     }
     
     .text-attachment-preview {
-        width: 120px !important;
-        height: 120px !important;
-        font-size: 11px !important;
-        padding: 5px !important;
+        width: 80px !important;
+        height: 80px !important;
+        font-size: 10px !important;
+        padding: 4px !important;
     }
     
     .text-icon-container {
-        height: 40px !important;
+        height: 30px !important;
     }
     
     .text-icon {
-        font-size: 24px !important;
+        font-size: 20px !important;
     }
     
     .attachment-info {
-        font-size: 10px !important;
+        font-size: 9px !important;
         padding: 2px !important;
+    }
+    
+    /* 消息内的附件预览优化 */
+    .message-attachments-container {
+        gap: 5px;
+        padding: 5px;
+        max-height: 90px;
+    }
+    
+    .message-attachments-container .preview-item {
+        flex: 0 0 80px;
+        height: 80px;
+    }
+    
+    .file-name {
+        font-size: 9px !important;
+        padding: 4px !important;
+    }
+    
+    /* 图片附件调整 */
+    .image-preview-item {
+        width: 80px !important;
+        height: 80px !important;
     }
 }
 

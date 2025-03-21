@@ -203,4 +203,44 @@
         width: 100%;
         max-height: 70vh;
     }
+    
+    /* 移动端视频时长显示调整 */
+    .video-duration {
+        bottom: 30px; /* 提高位置，避免被文件名遮挡 */
+        right: 8px;
+        padding: 2px 6px;
+        font-size: 10px;
+        z-index: 10; /* 增加层级确保显示在上方 */
+        background: rgba(0, 0, 0, 0.8); /* 稍微加深背景色提高可见度 */
+    }
+    
+    /* 针对附件预览中的视频优化 */
+    .attachment-preview .video-preview-item,
+    .attachment-container .video-preview-item {
+        width: 80px !important;
+        height: 80px !important;
+        margin: 2px !important;
+        overflow: visible !important;
+    }
+    
+    .attachment-preview .video-thumbnail-container,
+    .attachment-container .video-thumbnail-container {
+        width: 80px !important;
+        height: 80px !important;
+    }
+    
+    .attachment-preview .video-duration,
+    .attachment-container .video-duration {
+        bottom: 20px !important;
+        right: 4px !important;
+        padding: 1px 4px !important;
+        font-size: 9px !important;
+    }
+    
+    .attachment-preview .video-play-button,
+    .attachment-container .video-play-button {
+        width: 24px !important;
+        height: 24px !important;
+        font-size: 14px !important;
+    }
 } 
