@@ -261,7 +261,7 @@ body.modal-open {
     scrollbar-color: #ccc transparent;
     max-width: 600px;
     width: fit-content;
-    min-width: 216px;
+    min-width: 170px;
     margin: 10px 0;
     border: 1px solid #e9ecef;
     align-self: flex-end;
