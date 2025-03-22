@@ -89,7 +89,7 @@ export class VideoUploader {
                 filePath: attachment.file_path,
                 thumbnail: attachment.thumbnail,
                 duration: attachment.duration,
-                type: 'video' // 使用字符串表示类型
+                type: 'video' // 使用固定的小写字符串表示类型
             });
 
             this.attachments.add(videoAttachment);

@@ -264,7 +264,7 @@ export class ImageUploader {
                 mimeType: attachment.mime_type,
                 filePath: attachment.file_path,
                 base64_id: attachment.base64_id,
-                type: 'image' // 使用字符串表示类型
+                type: 'image' // 使用固定的小写字符串表示类型
             });
 
             // 添加到附件集合

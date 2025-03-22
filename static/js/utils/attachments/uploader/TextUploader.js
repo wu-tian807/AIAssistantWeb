@@ -213,7 +213,7 @@ export class TextUploader {
                 size: fileSize,
                 lastModified: attachment.lastModified,
                 description: attachment.description,
-                type: 'text' // 使用字符串表示类型
+                type: 'text' // 使用固定的小写字符串表示类型
             });
             
             // 保存到附件集合

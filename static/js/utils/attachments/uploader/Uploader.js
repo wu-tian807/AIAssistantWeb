@@ -134,15 +134,27 @@ export class Uploader {
     async addExistingAttachment(attachment) {
         console.log('添加已有附件:', attachment);
         
+        // 确保上传器已初始化
+        if (!this.uploaders || this.uploaders.size === 0) {
+            console.warn('上传器尚未初始化，尝试初始化...');
+            await this.initialize();
+            console.log('初始化后的上传器:', [...this.uploaders.keys()]);
+        }
+        
         // 获取正确的上传器，兼容后端返回的字符串类型和枚举类型
         let uploader;
         if (typeof attachment.type === 'string') {
             // 后端返回的类型是字符串，需要找到对应的上传器
-            const typeName = attachment.type.toLowerCase();
+            const typeName = attachment.type.toLowerCase(); // 确保类型名称是小写的
+            console.log(`查找类型为 "${typeName}" 的上传器，可用类型:`, [...this.uploaders.keys()]);
+            
             // 尝试找到匹配的上传器
             for (const [key, value] of this.uploaders.entries()) {
-                if (key.toLowerCase() === typeName) {
+                console.log(`比较键: "${key}" 与类型: "${typeName}"`);
+                // 不区分大小写比较
+                if (typeof key === 'string' && key.toLowerCase() === typeName) {
                     uploader = value;
+                    console.log(`找到匹配的上传器，键: "${key}"`);
                     break;
                 }
             }
@@ -150,14 +162,21 @@ export class Uploader {
             // 如果找不到对应的上传器，尝试直接使用类型名称
             if (!uploader) {
                 uploader = this.uploaders.get(typeName);
+                if (uploader) {
+                    console.log(`通过直接查找类型名称 "${typeName}" 找到上传器`);
+                }
             }
         } else {
             // 如果类型不是字符串，直接查找
             uploader = this.uploaders.get(attachment.type);
+            if (uploader) {
+                console.log(`通过非字符串类型 "${attachment.type}" 找到上传器`);
+            }
         }
 
         if (!uploader) {
-            console.error(`找不到类型为 "${attachment.type}" 的上传器`);
+            console.error(`找不到类型为 "${attachment.type}" 的上传器，可用类型:`, [...this.uploaders.keys()]);
+            console.error('上传器映射详情:', Array.from(this.uploaders.entries()).map(([k, v]) => `${k}: ${v.constructor.name}`));
             throw new Error(`不支持的附件类型: ${attachment.type}`);
         }
 

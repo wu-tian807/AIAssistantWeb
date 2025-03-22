@@ -2433,6 +2433,10 @@ async function editUserMessage(messageIndex, originalContent) {
             attachmentsContainer.style.display = 'flex';
         }
     });
+    
+    // 确保上传器完全初始化
+    await uploader.initialize();
+    console.log('上传器初始化完成，可用上传器:', [...uploader.uploaders.keys()]);
 
     // 如果有原有附件，加载到编辑器中
     if (originalMessage.attachments && originalMessage.attachments.length > 0) {
@@ -2450,7 +2454,8 @@ async function editUserMessage(messageIndex, originalContent) {
                 // 确保附件对象包含所有必要的属性
                 const fullAttachment = {
                     ...attachment,
-                    type: attachment.type || (attachment.mime_type?.startsWith('video/') ? 'video' : 'image'),
+                    // 确保type是小写的，并处理可能的大小写不一致问题
+                    type: (attachment.type || (attachment.mime_type?.startsWith('video/') ? 'video' : 'image')).toLowerCase(),
                     base64_id: attachment.base64_id,
                     fileName: attachment.fileName,
                     mime_type: attachment.mime_type,
