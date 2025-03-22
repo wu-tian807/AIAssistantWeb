@@ -185,6 +185,31 @@ export function html2Markdown(html) {
         block.parentNode.replaceChild(replacement, block);
     });
     
+    // 处理<eq>标签包裹的行内公式
+    const eqTags = tempDiv.querySelectorAll('eq');
+    eqTags.forEach(eqTag => {
+        // 查找KaTeX元素
+        const katexElement = eqTag.querySelector('.katex');
+        if (!katexElement) return;
+        
+        // 查找annotation元素获取原始LaTeX
+        const annotation = eqTag.querySelector('annotation[encoding="application/x-tex"]');
+        if (!annotation) return;
+        
+        const latex = annotation.textContent || '';
+        if (!latex.trim()) return;
+        
+        // 创建行内公式的Markdown表示
+        const markdown = `$${latex}$`;
+        
+        // 创建替换元素
+        const replacement = document.createElement('span');
+        replacement.setAttribute('data-markdown', markdown);
+        
+        // 替换原eq标签
+        eqTag.parentNode.replaceChild(replacement, eqTag);
+    });
+    
     // 处理LaTeX公式
     const mathElements = tempDiv.querySelectorAll('.katex-mathml');
     mathElements.forEach(mathElement => {
@@ -199,6 +224,9 @@ export function html2Markdown(html) {
         let markdown;
         if (latex.includes('\\begin{align}') && latex.includes('\\end{align}')) {
             // 对于align环境的多行公式，保留原格式并使用$$环境
+            markdown = `$$\n${latex}\n$$`;
+        } else if (latex.includes('\\begin{') && latex.includes('\\end{')) {
+            // 处理其他环境的公式（如matrix, cases等）
             markdown = `$$\n${latex}\n$$`;
         } else {
             // 对于行内公式，使用单个$
@@ -239,8 +267,15 @@ export function html2Markdown(html) {
         const latex = annotation.textContent || '';
         if (!latex.trim()) return;
         
-        // 为section>eqn结构创建块级公式
-        const markdown = `$$\n${latex}\n$$`;
+        // 确定是否需要保留原始公式的换行格式
+        let markdown;
+        if (latex.includes('\\begin{align}') || latex.includes('\\begin{equation}') || 
+            latex.includes('\\begin{cases}') || latex.includes('\\begin{pmatrix}')) {
+            // 保留换行和原始格式
+            markdown = `$$\n${latex}\n$$`;
+        } else {
+            markdown = `$$${latex}$$`;
+        }
         
         const replacement = document.createElement('div');
         replacement.setAttribute('data-markdown', markdown);
@@ -250,6 +285,43 @@ export function html2Markdown(html) {
         const section = eqn.parentNode;
         if (section && section.tagName === 'SECTION' && section.parentNode) {
             section.parentNode.replaceChild(replacement, section);
+        }
+    });
+    
+    // 处理嵌套在段落中的独立公式块
+    const paragraphEqns = tempDiv.querySelectorAll('p > .katex-display, p > eqn, p > section > eqn');
+    paragraphEqns.forEach(eqn => {
+        // 找到公式的annotation元素
+        const annotation = eqn.querySelector('annotation[encoding="application/x-tex"]');
+        if (!annotation) return;
+        
+        const latex = annotation.textContent || '';
+        if (!latex.trim()) return;
+        
+        // 确定适当的Markdown格式
+        let markdown;
+        if (latex.includes('\\begin{') && latex.includes('\\end{')) {
+            markdown = `$$\n${latex}\n$$`;
+        } else {
+            markdown = `$$${latex}$$`;
+        }
+        
+        // 创建替换元素
+        const replacement = document.createElement('div');
+        replacement.setAttribute('data-markdown', markdown);
+        replacement.style.display = 'none';
+        
+        // 根据嵌套情况选择要替换的元素
+        let elementToReplace = eqn;
+        if (eqn.parentNode.tagName === 'EQN' && eqn.parentNode.parentNode.tagName === 'SECTION') {
+            elementToReplace = eqn.parentNode.parentNode; // section>eqn结构
+        } else if (eqn.parentNode.tagName === 'SECTION') {
+            elementToReplace = eqn.parentNode; // section元素
+        }
+        
+        // 执行替换
+        if (elementToReplace.parentNode) {
+            elementToReplace.parentNode.replaceChild(replacement, elementToReplace);
         }
     });
     
@@ -267,7 +339,11 @@ export function html2Markdown(html) {
             let processedMarkdown = markdown;
             
             // 如果是多行公式且未被$$包裹，则添加包裹
-            if (markdown.includes('\\begin{align}') && !markdown.startsWith('$$')) {
+            if ((markdown.includes('\\begin{align}') || 
+                 markdown.includes('\\begin{equation}') || 
+                 markdown.includes('\\begin{cases}') || 
+                 markdown.includes('\\begin{pmatrix}')) && 
+                !markdown.startsWith('$$')) {
                 processedMarkdown = `$$\n${markdown}\n$$`;
             }
             
@@ -551,6 +627,16 @@ export function html2Markdown(html) {
     resultMarkdown = resultMarkdown
         .replace(/\n{3,}/g, '\n\n')  // 超过2个换行的替换为2个
         .replace(/^\s+|\s+$/g, '');  // 去除开头和结尾的空白
+    
+    // 确保公式块的格式正确
+    resultMarkdown = resultMarkdown
+        // 确保多行块级公式两侧有空行
+        .replace(/([^\n])\n\$\$/g, '$1\n\n$$')
+        .replace(/\$\$\n([^\n])/g, '$$\n\n$1')
+        // 修复被分割的行内公式（可能因为换行被分割）
+        .replace(/\$\s*\n\s*([^$\n]+)\s*\n\s*\$/g, '$$1$')
+        // 修复被分割的块级公式
+        .replace(/\$\$\s*\n\s*([^$]+?)\s*\n\s*\$\$/g, '$$\n$1\n$$');
     
     // 缓存结果
     window._markdownCache.set(contentHash, resultMarkdown);

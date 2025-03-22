@@ -488,7 +488,7 @@ class ReasoningBox {
             return window.shouldAutoScroll(container);
         }
         // 如果全局函数不可用，使用更保守的滚动策略
-        const threshold = 30; // 更小的阈值，减少自动滚动的触发频率
+        const threshold = 50; // 增加阈值，让自动滚动更容易触发
         return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
     }
 
@@ -502,11 +502,28 @@ class ReasoningBox {
                 setTimeout(() => {
                     window.ensureScrollToBottom(chatMessages);
                 }, 10);
+                
+                // 添加额外的延迟检查，处理可能的渲染延迟
+                const delays = [100, 300, 500];
+                delays.forEach(delay => {
+                    setTimeout(() => {
+                        if (this.shouldAutoScroll(chatMessages)) {
+                            window.ensureScrollToBottom(chatMessages);
+                        }
+                    }, delay);
+                });
             } else if (window.scrollToBottom) {
                 // 使用备用全局滚动函数
                 setTimeout(() => {
                     window.scrollToBottom(false); // 使用非平滑滚动，减少视觉干扰
                 }, 10);
+                
+                // 添加额外检查
+                setTimeout(() => {
+                    if (this.shouldAutoScroll(chatMessages)) {
+                        window.scrollToBottom(false);
+                    }
+                }, 300);
             }
             // 不再使用container.scrollIntoView，避免激进的滚动行为
         }

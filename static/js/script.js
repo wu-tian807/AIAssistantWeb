@@ -249,33 +249,33 @@ document.addEventListener('DOMContentLoaded', function() {
             if (scrollPosition < 50) {
                 userScrolling = false;
             }
-        }, 300);
+        }, 100); // 减少检测延迟，从300ms改为100ms，使检测更灵敏
     });
 });
 
 // 改进的shouldAutoScroll函数
 window.shouldAutoScroll = function(container) {
-    // 检查是否已经滚动到接近底部（距离底部30px以内）
+    // 检查是否已经滚动到接近底部（距离底部50px以内）
     const scrollPosition = container.scrollHeight - container.scrollTop - container.clientHeight;
-    const isNearBottom = scrollPosition < 30;
+    const isNearBottom = scrollPosition < 50; // 增加阈值从30px到50px，让自动滚动更容易触发
+    
     // 正在生成内容且用户未主动滚动上方，或已经在底部附近，则允许自动滚动
     if ((window.isGenerating && !userScrolling) || isNearBottom) {
         return true;
     }
     
     return false;
-    
-    // // 控制自动滚动的阈值，较小的值意味着更少的自动滚动
-    // // 这里使用30px作为阈值，用户必须更接近底部才会触发自动滚动
-    // const threshold = 30;
-    // return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
 };
 
 // 重置用户滚动状态的函数
 window.resetScrollState = function() {
     userScrolling = false;
     const chatMessages = document.getElementById('chat-messages');
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    // 使用平滑滚动效果
+    chatMessages.scrollTo({
+        top: chatMessages.scrollHeight,
+        behavior: 'smooth'
+    });
 };
 
 // 强制滚动到底部的函数
@@ -3310,13 +3310,13 @@ function isReasonerModel(modelId) {
 function ensureScrollToBottom(container) {
     if (shouldAutoScroll(container)) {
         // 计算需要额外滚动的距离，确保内容不被工具栏覆盖
-        const extraScrollPadding = 40; // 添加额外的底部空间
+        const extraScrollPadding = 60; // 增加额外的底部空间，从40px改为60px
         
         // 立即滚动，确保内容完全可见
         container.scrollTop = container.scrollHeight + extraScrollPadding;
         
         // 设置多个延时滚动，以处理不同类型内容的加载时间差异
-        const delays = [50, 150, 300, 500];  // 增加更多的延迟检查点
+        const delays = [10, 50, 150, 300, 500, 800];  // 增加更多的延迟检查点，添加更短和更长的延迟
         delays.forEach(delay => {
             setTimeout(() => {
                 // 再次检查是否应该滚动，以尊重用户可能的新滚动行为
@@ -3325,6 +3325,14 @@ function ensureScrollToBottom(container) {
                 }
             }, delay);
         });
+        
+        // 添加一个最终检查，处理可能延迟加载的内容（如图片等）
+        setTimeout(() => {
+            if (shouldAutoScroll(container) && 
+                container.scrollHeight - container.scrollTop - container.clientHeight > 20) {
+                container.scrollTop = container.scrollHeight + extraScrollPadding;
+            }
+        }, 1000);
     }
 }
 

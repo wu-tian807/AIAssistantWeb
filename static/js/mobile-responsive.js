@@ -77,6 +77,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 添加复制相关的CSS样式
     addCopyStyles();
+    
+    // 监听版本切换事件
+    monitorVersionSwitching();
 });
 
 /**
@@ -196,8 +199,9 @@ function addMobileCopyButtonToMessage(messageElement) {
     
     // 添加点击事件 - 直接复制为Markdown
     copyButton.addEventListener('click', function() {
-        // 获取内容
-        const htmlContent = messageContent.innerHTML;
+        // 获取当前显示的内容（考虑版本切换后的实际显示内容）
+        const messageContentElement = messageElement.querySelector('.text-content') || 
+                                    messageElement.querySelector('.message-content');
         
         // 显示加载状态
         copyButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i>复制中...';
@@ -205,6 +209,7 @@ function addMobileCopyButtonToMessage(messageElement) {
         // 使用setTimeout让UI有时间更新
         setTimeout(() => {
             // 将HTML转换为Markdown并复制
+            const htmlContent = messageContentElement.innerHTML;
             const markdownText = html2Markdown(htmlContent);
             copyToClipboard(markdownText);
             
@@ -1242,8 +1247,12 @@ function addCopyButtonToMessage(messageElement) {
     
     // 添加点击事件
     copyMarkdownButton.addEventListener('click', function() {
+        // 获取当前显示的内容（考虑版本切换后的实际显示内容）
+        const messageContentElement = messageElement.querySelector('.text-content') || 
+                                    messageElement.querySelector('.message-content');
+        
         // 获取HTML内容
-        const htmlContent = messageContent.innerHTML;
+        const htmlContent = messageContentElement.innerHTML;
         
         // 转换为Markdown并复制
         const markdownText = html2Markdown(htmlContent);
@@ -1283,6 +1292,51 @@ function addCopyButtonToMessage(messageElement) {
     
     // 将容器添加到消息底部
     messageElement.appendChild(copyButtonContainer);
+}
+
+/**
+ * 监听版本切换事件，确保复制按钮获取正确的版本内容
+ */
+function monitorVersionSwitching() {
+    // 监听整个聊天区域的点击事件，捕获版本切换按钮的点击
+    const chatMessages = document.getElementById('chat-messages');
+    if (!chatMessages) return;
+    
+    chatMessages.addEventListener('click', function(e) {
+        // 检查点击的是否是版本切换按钮
+        const target = e.target;
+        if (target && (target.classList.contains('version-btn') || target.closest('.version-btn'))) {
+            // 找到按钮所在的消息元素
+            const messageActions = target.closest('.message-actions');
+            if (!messageActions) return;
+            
+            const messageElement = messageActions.closest('.message-wrapper');
+            if (!messageElement) return;
+            
+            // 等待版本切换完成后再更新复制按钮
+            setTimeout(() => {
+                // 移除现有的复制按钮
+                const mobileCopyContainer = messageElement.querySelector('.mobile-copy-button-container');
+                if (mobileCopyContainer) {
+                    mobileCopyContainer.remove();
+                }
+                
+                const desktopCopyContainer = messageElement.querySelector('.desktop-copy-button-container');
+                if (desktopCopyContainer) {
+                    desktopCopyContainer.remove();
+                }
+                
+                // 重新添加复制按钮
+                if (window.isMobile) {
+                    addMobileCopyButtonToMessage(messageElement);
+                } else {
+                    addCopyButtonToMessage(messageElement);
+                }
+                
+                console.log('版本切换后更新了复制按钮');
+            }, 500); // 等待500ms确保版本已切换完成
+        }
+    });
 }
 
 // 暴露公共方法
