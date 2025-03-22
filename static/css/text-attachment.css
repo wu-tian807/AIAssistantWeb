@@ -124,7 +124,7 @@
     margin-top: 15px;
     border: 1px solid #e9ecef;
     border-radius: 6px;
-    overflow: hidden;
+    overflow: auto;
     background-color: #fff;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     max-height: 50vh;
@@ -138,6 +138,8 @@
     font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
     font-size: 14px;
     line-height: 1.5;
+    table-layout: auto;
+    min-width: 100%;
 }
 
 .text-preview-modal .line-number {
@@ -156,6 +158,27 @@
     white-space: pre;
     overflow-x: auto;
     color: #212529;
+    max-width: none;
+}
+
+/* 添加美观的滚动条样式 */
+.text-preview-modal .text-content-wrapper::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+
+.text-preview-modal .text-content-wrapper::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.text-preview-modal .text-content-wrapper::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.text-preview-modal .text-content-wrapper::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
 }
 
 /* 移动设备样式 */
@@ -454,4 +477,22 @@ body.dark-theme .text-attachment-preview.error {
         padding: 4px;
         bottom: 26px;
     }
+}
+
+/* 暗色主题滚动条样式 */
+body.dark-theme .text-preview-modal .text-content-wrapper::-webkit-scrollbar-track {
+    background: #2d2d2d;
+}
+
+body.dark-theme .text-preview-modal .text-content-wrapper::-webkit-scrollbar-thumb {
+    background: #555;
+}
+
+body.dark-theme .text-preview-modal .text-content-wrapper::-webkit-scrollbar-thumb:hover {
+    background: #777;
+}
+
+body.dark-theme .text-preview-modal .modal-content {
+    background-color: #2d2d2d;
+    border-color: #404040;
 }
