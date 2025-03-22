@@ -812,11 +812,66 @@
         /* 为多行公式添加额外右侧边距，给行号留出空间 */
         .assistant-message .katex-display > .katex {
             padding-right: 30px; /* 为行号留出空间 */
+            /* 取消其他样式以避免冲突 */
+            padding-left: 0;
+            min-width: unset;
+            max-width: unset;
+            display: block;
         }
         
         /* 处理align环境等多行公式的间距 */
         .assistant-message .katex .align {
             margin-right: 20px; /* 为行号留出足够空间 */
+        }
+
+        /* 独立行公式容器 - 最外层 */
+        .assistant-message .katex-display {
+            position: relative;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            width: 100% !important;
+            margin: 1.2em 0 !important;
+            padding: 0.2em 0 !important;
+            text-align: center !important;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* 公式内部居中处理 */
+        .assistant-message .katex-display .katex {
+            text-align: center !important;
+            margin: 0 auto !important;
+            width: fit-content !important;
+        }
+
+        /* 确保内容本身居中显示 */
+        .assistant-message .katex-display .katex-html {
+            text-align: center !important;
+            width: fit-content !important;
+            margin: 0 auto !important;
+        }
+
+        /* 添加滑动提示 */
+        .assistant-message .katex-display::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            height: 100%;
+            width: 15px;
+            background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.7));
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        /* 检测溢出时显示滑动指示器 */
+        .assistant-message .katex-display.overflow::after {
+            opacity: 1;
+        }
+
+        /* 确保暗色主题下滑动提示可见 */
+        .dark-theme .assistant-message .katex-display::after {
+            background: linear-gradient(to right, transparent, rgba(30, 30, 30, 0.7));
         }
     }
 
