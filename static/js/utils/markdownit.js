@@ -210,7 +210,57 @@ export function html2Markdown(html) {
         eqTag.parentNode.replaceChild(replacement, eqTag);
     });
     
-    // 处理LaTeX公式
+    // 处理所有KaTeX相关元素以提取LaTeX公式
+    // 优先尝试找到annotation元素，它包含原始的LaTeX代码
+    const processKatexElement = (element) => {
+        // 查找annotation元素
+        const annotation = element.querySelector('annotation[encoding="application/x-tex"]');
+        if (!annotation) return null;
+        
+        const latex = annotation.textContent || '';
+        if (!latex.trim()) return null;
+        
+        return latex;
+    };
+    
+    // 处理.katex-html元素（用户提交的问题中出现的结构）
+    const katexHtmlElements = tempDiv.querySelectorAll('.katex-html');
+    katexHtmlElements.forEach(element => {
+        // 向上查找可能存在的.katex-mathml元素，它包含原始LaTeX
+        let mathml = element.closest('.katex')?.querySelector('.katex-mathml');
+        if (!mathml) {
+            // 如果找不到.katex-mathml，尝试向上查找是否有包含annotation的父元素
+            let parent = element.parentNode;
+            while (parent && !parent.querySelector('annotation[encoding="application/x-tex"]')) {
+                parent = parent.parentNode;
+            }
+            
+            if (parent) mathml = parent.querySelector('.katex-mathml');
+        }
+        
+        // 如果找到了包含annotation的元素，处理它
+        if (mathml) {
+            const latex = processKatexElement(mathml);
+            if (latex) {
+                // 判断是否是行内公式还是块级公式
+                const isDisplayMode = element.closest('.katex-display') !== null;
+                const markdown = isDisplayMode ? `$$${latex}$$` : `$${latex}$`;
+                
+                // 创建替换元素
+                const replacement = document.createElement(isDisplayMode ? 'div' : 'span');
+                replacement.setAttribute('data-markdown', markdown);
+                if (isDisplayMode) replacement.style.display = 'none';
+                
+                // 替换整个包含该公式的元素
+                const elementToReplace = element.closest('.katex-display') || element.closest('.katex') || element;
+                if (elementToReplace.parentNode) {
+                    elementToReplace.parentNode.replaceChild(replacement, elementToReplace);
+                }
+            }
+        }
+    });
+    
+    // 处理标准的LaTeX公式
     const mathElements = tempDiv.querySelectorAll('.katex-mathml');
     mathElements.forEach(mathElement => {
         // 查找annotation元素，它包含原始的LaTeX代码
@@ -251,6 +301,41 @@ export function html2Markdown(html) {
             const mathInline = mathElement.closest('eq') || mathElement.closest('.katex') || mathElement;
             if (mathInline.parentNode) {
                 mathInline.parentNode.replaceChild(replacement, mathInline);
+            }
+        }
+    });
+    
+    // 处理被包裹在boxed环境中的公式（如用户提供的例子）
+    const boxedElements = tempDiv.querySelectorAll('.stretchy.fbox');
+    boxedElements.forEach(boxElement => {
+        // 查找包含的公式内容
+        const katexBase = boxElement.parentNode.querySelector('.base');
+        if (!katexBase) return;
+        
+        // 向上查找可能包含annotation的元素
+        let parent = boxElement;
+        while (parent && !parent.querySelector('annotation[encoding="application/x-tex"]')) {
+            parent = parent.parentNode;
+        }
+        
+        if (parent) {
+            const annotation = parent.querySelector('annotation[encoding="application/x-tex"]');
+            if (annotation) {
+                const latex = annotation.textContent || '';
+                if (latex.trim()) {
+                    // 为boxed内容创建特殊标记，使用\boxed命令
+                    const markdown = `$\\boxed{${latex}}$`;
+                    
+                    // 创建替换元素
+                    const replacement = document.createElement('span');
+                    replacement.setAttribute('data-markdown', markdown);
+                    
+                    // 替换整个包含该公式的元素
+                    const elementToReplace = boxElement.closest('.katex-html') || boxElement.closest('.katex') || boxElement;
+                    if (elementToReplace.parentNode) {
+                        elementToReplace.parentNode.replaceChild(replacement, elementToReplace);
+                    }
+                }
             }
         }
     });
@@ -626,7 +711,10 @@ export function html2Markdown(html) {
     // 清理额外的空行并确保段落分隔
     resultMarkdown = resultMarkdown
         .replace(/\n{3,}/g, '\n\n')  // 超过2个换行的替换为2个
-        .replace(/^\s+|\s+$/g, '');  // 去除开头和结尾的空白
+        .replace(/^\s+|\s+$/g, '')   // 去除开头和结尾的空白
+        .replace(/\$1\$/g, '$')      // 修复错误的$1$替换为$
+        .replace(/\$(\s*)\$/g, '$1') // 删除空的行内公式
+        .replace(/\$\$(\s*)\$\$/g, ''); // 删除空的块级公式
     
     // 确保公式块的格式正确
     resultMarkdown = resultMarkdown
