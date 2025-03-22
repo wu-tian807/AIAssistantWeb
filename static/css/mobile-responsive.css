@@ -51,7 +51,7 @@
         font-size: 0.9rem;
         position: relative;
         overflow: visible;
-        margin: 8px 0;
+        margin: 8px 5px; /* 修改为左右都是5px，不使用auto */
         padding: 12px;
     }
     
@@ -61,6 +61,8 @@
         touch-action: pan-x pan-y;
         max-width: 100%;
         padding-bottom: 10px;
+        margin-left: 0; /* 移除左边距 */
+        padding-right: 5px; /* 保留右侧内边距 */
     }
     
     .reasoning-box-content pre,
@@ -458,9 +460,10 @@
         width: 100%;
         max-width: 100%;
         overflow-x: visible !important;
-        padding: 10px 15px; /* 减小内边距以显示更多内容 */
+        padding: 10px 15px; /* 保持原有内边距 */
         word-break: break-word;
         border-radius: 8px;
+        margin-left: 0; /* 移除左边距 */
     }
     
     .assistant-message .message-wrapper .message-content {
@@ -472,14 +475,14 @@
     }
 
     .assistant-message {
-        margin-left: 0;
-        margin-right: 0;
+        margin-left: 5px; /* 向左移动，添加更小的左边距 */
+        margin-right: auto;
         display: flex;
         align-items: flex-start;
         gap: 4px;
-        width: 100%; /* 修改为100%宽度 */
-        max-width: 100%; /* 修改为100%最大宽度 */
-        padding: 0 5px; /* 添加少量内边距防止紧贴屏幕边缘 */
+        width: 95%; /* 增加宽度 */
+        max-width: 95%; /* 增加最大宽度 */
+        padding: 0; /* 保持无内边距 */
     }
 
     /* 调整模型图标包装器样式以匹配新的布局 */
