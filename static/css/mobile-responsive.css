@@ -950,17 +950,70 @@
     
     /* 确保消息可以长按 */
     .assistant-message, .user-message {
-        -webkit-touch-callout: none; /* 禁止iOS默认的长按菜单 */
-        -webkit-user-select: none;   /* 禁止用户默认选择 */
-        -khtml-user-select: none;
-        -moz-user-select: none;
-        -ms-user-select: none;
-        user-select: none;
-        touch-action: pan-y; /* 允许垂直滚动但处理其他触摸事件 */
+        /* 删除阻止文本选择的属性，允许默认文本选择 */
+        touch-action: pan-y; /* 允许垂直滚动 */
         position: relative;
     }
     
+    /* 重新启用消息内容的文本选择 */
     .message-content, .text-content {
         pointer-events: auto;
+        -webkit-user-select: text;
+        -khtml-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        user-select: text;
+        -webkit-touch-callout: default; /* 允许iOS默认的长按菜单 */
+    }
+
+    /* 消息复制按钮样式 */
+    .message-copy-btn {
+        position: absolute;
+        right: 10px;
+        top: 10px;
+        background: rgba(240, 240, 240, 0.8);
+        border: none;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        z-index: 10;
+        color: #555;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .message-copy-btn:hover {
+        background: rgba(230, 230, 230, 0.9);
+    }
+
+    .message-copy-btn:active {
+        transform: scale(0.95);
+    }
+
+    .message:hover .message-copy-btn {
+        opacity: 0.8;
+    }
+
+    .dark-theme .message-copy-btn {
+        background: rgba(60, 60, 60, 0.8);
+        color: #e0e0e0;
+    }
+
+    .dark-theme .message-copy-btn:hover {
+        background: rgba(70, 70, 70, 0.9);
+    }
+
+    @media (max-width: 768px) {
+        .message-copy-btn {
+            width: 28px;
+            height: 28px;
+            right: 5px;
+            top: 5px;
+        }
     }
 }

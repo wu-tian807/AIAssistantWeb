@@ -131,3 +131,455 @@ export function initializeCodeBlocks(container) {
         });
     });
 }
+
+/**
+ * HTML转Markdown函数
+ * 将HTML内容转换为Markdown格式
+ * @param {string} html - 要转换的HTML内容
+ * @return {string} 转换后的Markdown文本
+ */
+export function html2Markdown(html) {
+    // 缓存机制，避免重复转换相同内容
+    if (!window._markdownCache) {
+        window._markdownCache = new Map();
+    }
+    
+    // 计算内容的唯一标识（可以是内容的哈希值）
+    const contentHash = hashString(html);
+    
+    // 检查缓存中是否已存在转换结果
+    if (window._markdownCache.has(contentHash)) {
+        console.log('使用HTML转Markdown缓存结果');
+        return window._markdownCache.get(contentHash);
+    }
+    
+    console.log('开始HTML转Markdown转换');
+    
+    // 创建一个临时容器
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    
+    // 处理代码块
+    const codeBlocks = tempDiv.querySelectorAll('.code-block-wrapper');
+    codeBlocks.forEach(block => {
+        const codeElement = block.querySelector('code');
+        const langSpan = block.querySelector('.code-block-header span');
+        let lang = langSpan ? langSpan.textContent : '';
+        const code = codeElement ? codeElement.textContent : '';
+        
+        // 规范化语言标识，去除"代码"文本
+        if (lang === '代码') {
+            lang = 'text';
+        }
+        
+        // 检查代码内容是否已经去除了前后空白
+        const trimmedCode = code.trim();
+        
+        // 创建markdown格式的代码块
+        const markdownCodeBlock = `\`\`\`${lang}\n${trimmedCode}\n\`\`\``;
+        
+        // 替换原HTML代码块
+        const replacement = document.createElement('div');
+        replacement.setAttribute('data-markdown', markdownCodeBlock);
+        replacement.style.display = 'none';
+        block.parentNode.replaceChild(replacement, block);
+    });
+    
+    // 处理LaTeX公式
+    const mathElements = tempDiv.querySelectorAll('.katex-mathml');
+    mathElements.forEach(mathElement => {
+        // 查找annotation元素，它包含原始的LaTeX代码
+        const annotation = mathElement.querySelector('annotation[encoding="application/x-tex"]');
+        if (!annotation) return;
+        
+        const latex = annotation.textContent || '';
+        if (!latex.trim()) return;
+        
+        // 判断是否是align环境的多行公式
+        let markdown;
+        if (latex.includes('\\begin{align}') && latex.includes('\\end{align}')) {
+            // 对于align环境的多行公式，保留原格式并使用$$环境
+            markdown = `$$\n${latex}\n$$`;
+        } else {
+            // 对于行内公式，使用单个$
+            const isDisplayMode = mathElement.closest('.katex-display') !== null;
+            markdown = isDisplayMode ? `$$${latex}$$` : `$${latex}$`;
+        }
+        
+        // 创建替换元素
+        const replacement = document.createElement('div');
+        replacement.setAttribute('data-markdown', markdown);
+        
+        // 根据公式类型决定是否显示为块级元素
+        if (markdown.startsWith('$$\n')) {
+            replacement.style.display = 'none';
+            // 替换整个公式块
+            const mathBlock = mathElement.closest('section') || mathElement.closest('.katex-display') || mathElement;
+            if (mathBlock.parentNode) {
+                mathBlock.parentNode.replaceChild(replacement, mathBlock);
+            }
+        } else {
+            // 替换行内公式
+            const mathInline = mathElement.closest('eq') || mathElement.closest('.katex') || mathElement;
+            if (mathInline.parentNode) {
+                mathInline.parentNode.replaceChild(replacement, mathInline);
+            }
+        }
+    });
+    
+    // 特别处理section>eqn结构的公式块
+    const sectionEqns = tempDiv.querySelectorAll('section > eqn');
+    sectionEqns.forEach(eqn => {
+        const katexDisplay = eqn.querySelector('.katex-display');
+        if (!katexDisplay) return;
+        
+        const annotation = katexDisplay.querySelector('annotation[encoding="application/x-tex"]');
+        if (!annotation) return;
+        
+        const latex = annotation.textContent || '';
+        if (!latex.trim()) return;
+        
+        // 为section>eqn结构创建块级公式
+        const markdown = `$$\n${latex}\n$$`;
+        
+        const replacement = document.createElement('div');
+        replacement.setAttribute('data-markdown', markdown);
+        replacement.style.display = 'none';
+        
+        // 替换整个section元素
+        const section = eqn.parentNode;
+        if (section && section.tagName === 'SECTION' && section.parentNode) {
+            section.parentNode.replaceChild(replacement, section);
+        }
+    });
+    
+    // 处理可能包含LaTeX公式的data-markdown属性
+    const latexSpans = tempDiv.querySelectorAll('span[data-markdown]');
+    latexSpans.forEach(span => {
+        const markdown = span.getAttribute('data-markdown');
+        if (!markdown) return;
+        
+        // 检查是否是LaTeX公式
+        if ((markdown.startsWith('$') && markdown.endsWith('$')) || 
+            markdown.includes('\\begin{') || markdown.includes('\\end{')) {
+            
+            // 处理多行公式，确保保留换行
+            let processedMarkdown = markdown;
+            
+            // 如果是多行公式且未被$$包裹，则添加包裹
+            if (markdown.includes('\\begin{align}') && !markdown.startsWith('$$')) {
+                processedMarkdown = `$$\n${markdown}\n$$`;
+            }
+            
+            // 创建正确的替换元素
+            const replacement = document.createElement(processedMarkdown.includes('\n') ? 'div' : 'span');
+            replacement.setAttribute('data-markdown', processedMarkdown);
+            
+            // 如果是块级公式，设置为块级元素
+            if (processedMarkdown.startsWith('$$\n')) {
+                replacement.style.display = 'none';
+            }
+            
+            // 替换原span元素
+            span.parentNode.replaceChild(replacement, span);
+        }
+    });
+    
+    // 处理内联代码
+    const inlineCodes = tempDiv.querySelectorAll('code:not(.code-block-wrapper code)');
+    inlineCodes.forEach(code => {
+        const text = code.textContent;
+        if (!text) return;
+        
+        const markdown = `\`${text}\``;
+        
+        const replacement = document.createElement('span');
+        replacement.setAttribute('data-markdown', markdown);
+        code.parentNode.replaceChild(replacement, code);
+    });
+    
+    // 处理标题
+    for (let i = 1; i <= 6; i++) {
+        const headers = tempDiv.querySelectorAll(`h${i}`);
+        headers.forEach(header => {
+            const text = header.textContent;
+            const markdown = `${'#'.repeat(i)} ${text}`;
+            
+            const replacement = document.createElement('div');
+            replacement.setAttribute('data-markdown', markdown);
+            replacement.style.display = 'none';
+            header.parentNode.replaceChild(replacement, header);
+        });
+    }
+    
+    // 处理列表
+    const processList = (listElement, isOrdered) => {
+        // 检查是否是嵌套列表
+        const isNested = listElement.parentNode.tagName === 'LI';
+        let markdown = '';
+        
+        // 处理列表项
+        Array.from(listElement.children).forEach((item, index) => {
+            if (item.tagName !== 'LI') return;
+            
+            const prefix = isOrdered ? `${index + 1}. ` : '- ';
+            let indent = isNested ? '  ' : ''; // 嵌套列表增加缩进
+            
+            // 获取列表项文本（不包括子列表）
+            let content = '';
+            Array.from(item.childNodes).forEach(node => {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    content += node.textContent;
+                } else if (node.nodeType === Node.ELEMENT_NODE && 
+                          node.tagName !== 'UL' && 
+                          node.tagName !== 'OL') {
+                    content += node.textContent;
+                }
+            });
+            
+            // 添加当前列表项
+            markdown += `${indent}${prefix}${content.trim()}\n`;
+            
+            // 处理嵌套列表
+            const nestedLists = item.querySelectorAll(':scope > ul, :scope > ol');
+            nestedLists.forEach(nestedList => {
+                const nestedMarkdown = processList(nestedList, nestedList.tagName === 'OL');
+                markdown += nestedMarkdown;
+            });
+        });
+        
+        if (!isNested) {
+            // 只有非嵌套列表才替换原HTML
+            const replacement = document.createElement('div');
+            replacement.setAttribute('data-markdown', markdown);
+            replacement.style.display = 'none';
+            listElement.parentNode.replaceChild(replacement, listElement);
+        }
+        
+        return markdown;
+    };
+    
+    // 处理有序列表和无序列表（仅处理顶层列表）
+    const topLevelLists = Array.from(tempDiv.querySelectorAll('ul, ol')).filter(list => {
+        return list.parentNode.tagName !== 'LI';
+    });
+    
+    topLevelLists.forEach(list => {
+        processList(list, list.tagName === 'OL');
+    });
+    
+    // 处理链接
+    const links = tempDiv.querySelectorAll('a');
+    links.forEach(link => {
+        const text = link.textContent;
+        const href = link.getAttribute('href');
+        if (!href) return;
+        
+        const markdown = `[${text}](${href})`;
+        
+        const replacement = document.createElement('span');
+        replacement.setAttribute('data-markdown', markdown);
+        link.parentNode.replaceChild(replacement, link);
+    });
+    
+    // 处理强调(粗体)
+    const bolds = tempDiv.querySelectorAll('strong, b');
+    bolds.forEach(bold => {
+        const text = bold.textContent;
+        if (!text.trim()) return;
+        
+        const markdown = `**${text}**`;
+        
+        const replacement = document.createElement('span');
+        replacement.setAttribute('data-markdown', markdown);
+        bold.parentNode.replaceChild(replacement, bold);
+    });
+    
+    // 处理斜体
+    const italics = tempDiv.querySelectorAll('em, i');
+    italics.forEach(italic => {
+        const text = italic.textContent;
+        if (!text.trim()) return;
+        
+        const markdown = `*${text}*`;
+        
+        const replacement = document.createElement('span');
+        replacement.setAttribute('data-markdown', markdown);
+        italic.parentNode.replaceChild(replacement, italic);
+    });
+    
+    // 处理图片
+    const images = tempDiv.querySelectorAll('img');
+    images.forEach(img => {
+        const alt = img.getAttribute('alt') || '';
+        const src = img.getAttribute('src') || '';
+        if (!src) return;
+        
+        const markdown = `![${alt}](${src})`;
+        
+        const replacement = document.createElement('span');
+        replacement.setAttribute('data-markdown', markdown);
+        img.parentNode.replaceChild(replacement, img);
+    });
+    
+    // 处理水平线
+    const hrs = tempDiv.querySelectorAll('hr');
+    hrs.forEach(hr => {
+        const markdown = `---`;
+        
+        const replacement = document.createElement('div');
+        replacement.setAttribute('data-markdown', markdown);
+        replacement.style.display = 'none';
+        hr.parentNode.replaceChild(replacement, hr);
+    });
+    
+    // 处理引用块
+    const blockquotes = tempDiv.querySelectorAll('blockquote');
+    blockquotes.forEach(blockquote => {
+        const text = blockquote.textContent.trim();
+        if (!text) return;
+        
+        const lines = text.split('\n');
+        let markdown = '';
+        
+        lines.forEach(line => {
+            markdown += `> ${line}\n`;
+        });
+        
+        const replacement = document.createElement('div');
+        replacement.setAttribute('data-markdown', markdown);
+        replacement.style.display = 'none';
+        blockquote.parentNode.replaceChild(replacement, blockquote);
+    });
+    
+    // 处理表格
+    const tables = tempDiv.querySelectorAll('table');
+    tables.forEach(table => {
+        let markdown = '';
+        
+        // 处理表头
+        const headers = table.querySelectorAll('th');
+        if (headers.length > 0) {
+            // 第一行：表头内容
+            markdown += '| ';
+            headers.forEach(header => {
+                markdown += `${header.textContent.trim()} | `;
+            });
+            markdown += '\n';
+            
+            // 第二行：分隔行
+            markdown += '| ';
+            headers.forEach(() => {
+                markdown += '--- | ';
+            });
+            markdown += '\n';
+        }
+        
+        // 处理表格数据行
+        const rows = table.querySelectorAll('tr');
+        rows.forEach(row => {
+            // 跳过表头行
+            if (row.querySelector('th')) return;
+            
+            const cells = row.querySelectorAll('td');
+            if (cells.length === 0) return;
+            
+            markdown += '| ';
+            cells.forEach(cell => {
+                markdown += `${cell.textContent.trim()} | `;
+            });
+            markdown += '\n';
+        });
+        
+        if (markdown) {
+            const replacement = document.createElement('div');
+            replacement.setAttribute('data-markdown', markdown);
+            replacement.style.display = 'none';
+            table.parentNode.replaceChild(replacement, table);
+        }
+    });
+    
+    // 提取所有markdown标记
+    let resultMarkdown = '';
+    const extractMarkdown = (node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+            // 处理文本节点
+            const text = node.textContent.replace(/\s+/g, ' ');
+            if (text.trim()) {
+                resultMarkdown += text;
+            }
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+            if (node.hasAttribute('data-markdown')) {
+                // 如果节点有markdown数据属性，直接使用
+                const markdown = node.getAttribute('data-markdown');
+                resultMarkdown += markdown;
+                
+                // 在markdown后添加适当的换行
+                if (!resultMarkdown.endsWith('\n')) {
+                    resultMarkdown += '\n';
+                }
+                if (!resultMarkdown.endsWith('\n\n') && 
+                    (node.style.display === 'none' || 
+                     ['DIV', 'P', 'BLOCKQUOTE', 'TABLE'].includes(node.nodeName))) {
+                    resultMarkdown += '\n';
+                }
+            } else {
+                // 否则递归处理子节点
+                for (let i = 0; i < node.childNodes.length; i++) {
+                    extractMarkdown(node.childNodes[i]);
+                }
+                
+                // 根据元素类型添加换行
+                if (['DIV', 'P', 'BR'].includes(node.nodeName)) {
+                    if (!resultMarkdown.endsWith('\n')) {
+                        resultMarkdown += '\n';
+                    }
+                    if (node.nodeName !== 'BR' && !resultMarkdown.endsWith('\n\n')) {
+                        resultMarkdown += '\n';
+                    }
+                }
+            }
+        }
+    };
+    
+    // 提取所有节点的markdown
+    for (let i = 0; i < tempDiv.childNodes.length; i++) {
+        extractMarkdown(tempDiv.childNodes[i]);
+    }
+    
+    // 清理额外的空行并确保段落分隔
+    resultMarkdown = resultMarkdown
+        .replace(/\n{3,}/g, '\n\n')  // 超过2个换行的替换为2个
+        .replace(/^\s+|\s+$/g, '');  // 去除开头和结尾的空白
+    
+    // 缓存结果
+    window._markdownCache.set(contentHash, resultMarkdown);
+    
+    // 限制缓存大小，防止内存泄漏
+    if (window._markdownCache.size > 50) {
+        // 删除最早添加的缓存项
+        const firstKey = window._markdownCache.keys().next().value;
+        window._markdownCache.delete(firstKey);
+    }
+    
+    console.log('HTML转Markdown转换完成');
+    return resultMarkdown;
+}
+
+/**
+ * 生成字符串的哈希值，用于缓存key
+ * @param {string} str - 要哈希的字符串
+ * @return {string} 哈希结果
+ */
+function hashString(str) {
+    let hash = 0;
+    if (str.length === 0) return hash.toString();
+    
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // 转换为32位整数
+    }
+    
+    return hash.toString();
+}

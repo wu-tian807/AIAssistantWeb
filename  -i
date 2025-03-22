@@ -1,0 +1,25 @@
+d16b940cef9b95d75d024cf1a9cbf0286b85c197<|ENT|><|RY|>改进移动端公式显示：居中优化和滑动体验提升<|COM|><|MIT|>
+e51b0b1195d2dc78e73b183c7630535d17629442<|ENT|><|RY|>修改手机端模型消息框，使其居中<|COM|><|MIT|>
+2a2bf45aae9557eebbcb27fc46220e95e1b6cde9<|ENT|><|RY|>恢复了nginx上传文件大小限制扩大<|COM|><|MIT|>
+82369e447d0ce503f8e8a610893d8d250166c367<|ENT|><|RY|>优化了自动滚动的逻辑，进一步缩小了附件框的最小宽度以适应最新的手机端attachment-item宽度大小。<|COM|><|MIT|>
+fc2fe5e5e941ab405f435dae158ad1c175ca8646<|ENT|><|RY|>优化手机端的附件预览框的item渲染，让他们变小了些<|COM|><|MIT|>
+7a1a0587edec0db852a02a967bdf8414fa6b43e8<|ENT|><|RY|>修复了附件容器最小宽度过大问题<|COM|><|MIT|>
+5a4e8a8f009fa5ac60ca0a699ae38b71092f09c2<|ENT|><|RY|>优化了手机端消息框的长度，看着更舒服<|COM|><|MIT|>
+2b5b533fb863ae95430e423634fbfad016d8e1ad<|ENT|><|RY|>修复了文本模态框关闭按钮没有渲染出来的问题<|COM|><|MIT|>
+b921684a2f9c6c7a784ba85d5cc7997b880e75e9<|ENT|><|RY|>优化了对文本文件拓展名的处理<|COM|><|MIT|>
+5483a1028d82a4addd9643605490ccc165a12f47<|ENT|><|RY|>优化了文本文件大小的传递<|COM|><|MIT|>
+4adc0a71a5ee057f1945785adac93df3a006086c<|ENT|><|RY|>修复了文本模态框渲染的问题<|COM|><|MIT|>
+b5aad58e8106b712db8523e501643049e7f23298<|ENT|><|RY|>修复了附件渲染预览删除的bug和手机端渲染的bug<|COM|><|MIT|>
+f16820dba375798ed36d16151f676eed8a43af13<|ENT|><|RY|>更新了更好的文本附件上传和渲染方式，后端文本分块的优化<|COM|><|MIT|>
+4a8a442142e358142daa0df64126a690ec8e51ed<|ENT|><|RY|>修复了一个视频file api上传改变的问题<|COM|><|MIT|>
+979b9baddcb256cd2047268db348c5dcacff8ae2<|ENT|><|RY|>修复了附件，特别是文本附件的上传和渲染方式<|COM|><|MIT|>
+27948822c46eb3f5325d18ec1d1a8c796996dd26<|ENT|><|RY|>增加了文本处理的后端处理的一些逻辑部分,包括专业度分析，文本语义切割,词嵌入等功能，下一步需要修复前端的消息发送后文本附件不显示问题<|COM|><|MIT|>
+9022d6bb9ed9fc4565a563abea7262ba9ad32096<|ENT|><|RY|>修正o3mini的附件类型<|COM|><|MIT|>
+7ff754241e2f4f75d2526319a9133b203ddc579c<|ENT|><|RY|>修复了三个问题：1.手机端思考框溢出问题。2.手机端用户编辑框溢出屏幕。3.思考模型在思考中中断会删除消息，不符合使用逻辑<|COM|><|MIT|>
+526a7e2d803d81893e483a9ba53975098dd40961<|ENT|><|RY|>(bug)手机端chat-messages可横向拉动<|COM|><|MIT|>
+4ab482249d405e392a92653f5b9a53e739e88d7a<|ENT|><|RY|>（bug）添加了电脑端，头部渲染系统提示框和模型选择框宽度固定的问题<|COM|><|MIT|>
+5db26a5c64776a61214e1fae7ad05cfcbec861da<|ENT|><|RY|>（bug）修复了版号切换在页面刷新时的问题<|COM|><|MIT|>
+64eaec040044de3c2fe44d2cc319ba634efec9f9<|ENT|><|RY|>增加了长期登录；优化了登陆页面重定向<|COM|><|MIT|>
+bbd87f23e09068c71652cb930867a6e3765a2f5f<|ENT|><|RY|>修复了滑动刷新和选择框刷新的bug<|COM|><|MIT|>
+2fffb62dff0043366dd2a1a1c0e2012e2aedab09<|ENT|><|RY|>添加了pwa的支持和基本的图标加载<|COM|><|MIT|>
+8ce09a52a3e9c74b9338e0b98906dba184af85d4<|ENT|><|RY|>增加了pwa支持<|COM|><|MIT|>

@@ -1,3 +1,16 @@
+/* 消息操作按钮不可选中样式 */
+.regenerate-btn, 
+.version-btn, 
+.version-text, 
+.edit-btn,
+.message-actions button,
+.message-buttons button {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
 * {
     margin: 0;
     padding: 0;
