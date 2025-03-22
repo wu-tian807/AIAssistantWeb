@@ -759,3 +759,96 @@ def process_image_attachment_by_ocr(
                 "text": error_text
             })
     return image_ocr_tokens
+
+def process_text_attachment(
+    attachment: Dict[str, Any],
+    model_type: str,
+    processed_message: Dict[str, Any],
+    supported_type: str,
+    mime_type: str,
+    user_id: str
+) -> None:
+    """
+    处理文本类型的附件
+    
+    Args:
+        attachment: 附件信息字典
+        model_type: 模型类型 ('openai' 或 'google')
+        processed_message: 要处理的消息字典
+        supported_type: 支持的文件类型
+        mime_type: MIME类型
+        user_id: 用户ID
+    """
+    file_name = attachment.get('fileName', '未命名文件')
+    content_id = attachment.get('content_id')
+    attachment_text = f"[附件[{supported_type}]: {file_name}]"
+    
+    print("\n=== 开始处理文本附件 ===")
+    print(f"文件名: {file_name}")
+    print(f"文本ID: {content_id}")
+    print(f"模型类型: {model_type}")
+    print(f"MIME类型: {mime_type}")
+    
+    # 获取文本内容
+    text_content = None
+    
+    try:
+        # 如果有content_id，尝试从后端获取文本内容
+        if content_id:
+            from utils.attachment_handler.text_handler import TextHandler
+            try:
+                text_content, _ = TextHandler.get_text_content(content_id, user_id)
+                print(f"成功获取文本内容")
+            except Exception as e:
+                print(f"获取文本内容失败: {str(e)}")
+                text_content = None
+        
+        if text_content:
+            print(f"获取到文本内容, 长度: {len(text_content)} 字符")
+            
+            # 截取预览文本（如果内容过长）
+            preview_limit = 5000  # 预览字符数限制
+            is_long_text = len(text_content) > preview_limit
+            preview_text = text_content if len(text_content) <= preview_limit else text_content[:1000] + "...(内容已截断)"
+            if not is_long_text:
+                if model_type == 'openai':
+                    processed_message['content'].append({
+                        "type": "text",
+                        "text": f"{attachment_text}\n\n文本内容：\n{preview_text}"
+                    })
+                elif model_type == 'google':
+                    processed_message['parts'].append({
+                        "text": f"{attachment_text}\n\n文本内容：\n{preview_text}"
+                    })
+                
+            print("文本内容已添加到消息中")
+        else:
+            error_msg = "无法获取文本内容"
+            print(error_msg)
+            
+            if model_type == 'openai':
+                processed_message['content'].append({
+                    "type": "text",
+                    "text": f"{attachment_text}\n\n错误：{error_msg}"
+                })
+            elif model_type == 'google':
+                processed_message['parts'].append({
+                    "text": f"{attachment_text}\n\n错误：{error_msg}"
+                })
+    except Exception as e:
+        error_msg = f"处理文本附件失败: {str(e)}"
+        print(error_msg)
+        import traceback
+        print(f"错误详情:\n{traceback.format_exc()}")
+        
+        if model_type == 'openai':
+            processed_message['content'].append({
+                "type": "text",
+                "text": f"{attachment_text}\n\n错误：{error_msg}"
+            })
+        elif model_type == 'google':
+            processed_message['parts'].append({
+                "text": f"{attachment_text}\n\n错误：{error_msg}"
+            })
+    
+    print("=== 文本处理完成 ===\n")

@@ -108,27 +108,29 @@ class TextHandler:
             tuple: (文本内容, 元数据)
         """
         try:
-            # 构建文件路径
-            normalized_user_id = normalize_user_id(user_id)
-            base_dir = Path(app.config['UPLOAD_FOLDER']) / normalized_user_id / 'text_files'
-            
-            # 读取元数据
-            metadata_path = base_dir / f"{content_id}_meta.json"
-            if not metadata_path.exists():
-                raise FileNotFoundError(f"找不到元数据文件: {metadata_path}")
-            
-            with open(str(metadata_path), 'r', encoding='utf-8') as f:
-                metadata = json.load(f)
-            
-            # 读取文本内容
-            file_path = base_dir / f"{content_id}.txt"
-            if not file_path.exists():
-                raise FileNotFoundError(f"找不到文本文件: {file_path}")
-            
-            with open(str(file_path), 'r', encoding=metadata.get('encoding', 'utf-8')) as f:
-                content = f.read()
-            
-            return content, metadata
+            # 确保在应用上下文中运行
+            with app.app_context():
+                # 构建文件路径
+                normalized_user_id = normalize_user_id(user_id)
+                base_dir = Path(app.config['UPLOAD_FOLDER']) / normalized_user_id / 'text_files'
+                
+                # 读取元数据
+                metadata_path = base_dir / f"{content_id}_meta.json"
+                if not metadata_path.exists():
+                    raise FileNotFoundError(f"找不到元数据文件: {metadata_path}")
+                
+                with open(str(metadata_path), 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+                
+                # 读取文本内容
+                file_path = base_dir / f"{content_id}.txt"
+                if not file_path.exists():
+                    raise FileNotFoundError(f"找不到文本文件: {file_path}")
+                
+                with open(str(file_path), 'r', encoding=metadata.get('encoding', 'utf-8')) as f:
+                    content = f.read()
+                
+                return content, metadata
             
         except FileNotFoundError:
             raise

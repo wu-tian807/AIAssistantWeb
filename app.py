@@ -487,7 +487,11 @@ def chat():
                 attachment_type = attachment.get('type')
                 mime_type = attachment.get('mime_type')
                 file_path = attachment.get('file_path', '')
-                file_ext = os.path.splitext(file_path)[1].lower() if file_path else ''
+                
+                # 优先使用attachment中的extension属性，如果没有再从文件路径提取
+                file_ext = attachment.get('extension', '')
+                if not file_ext and file_path:
+                    file_ext = os.path.splitext(file_path)[1].lower()
                 
                 print(f"\n=== 附件信息 ===")
                 print(f"附件类型: {attachment_type}")
@@ -608,6 +612,31 @@ def chat():
                                 processed_message,
                                 AttachmentType.VIDEO,
                                 mime_type
+                            )
+                    # 检查是否为文本附件
+                    elif supported_type == AttachmentType.TEXT:
+                        print(f"处理文本附件: model_type={model_type}, file_ext={file_ext}, mime_type={mime_type}")
+                        # 检查文件MIME类型是否符合文本文件要求
+                        # 注意：对文本类型优先使用MIME类型判断，因为文件路径可能没有扩展名
+                        if mime_type in ATTACHMENT_TYPES[AttachmentType.TEXT]['mime_types']:
+                            print("文本MIME类型符合要求，开始处理...")
+                            # 调用文本处理函数
+                            from utils.chat.message_processor import process_text_attachment
+                            process_text_attachment(
+                                attachment,
+                                model_type,
+                                processed_message,
+                                AttachmentType.TEXT,
+                                mime_type,
+                                user_id
+                            )
+                        else:
+                            print(f"文本MIME类型不符合要求: {mime_type}")
+                            process_binary_attachment(
+                                attachment,
+                                model_type,
+                                processed_message,
+                                AttachmentType.BINARY
                             )
                     # 其他类型的附件处理
                     else:
