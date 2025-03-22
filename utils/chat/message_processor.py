@@ -153,7 +153,7 @@ def upload_large_file_to_gemini(
     file_name: str,
     file_size: int,
     mime_type: str,
-    attachment_type: AttachmentType,
+    attachment_type,
     processed_message: Dict[str, Any],
 ) -> bool:
     """
@@ -164,13 +164,17 @@ def upload_large_file_to_gemini(
         file_name: 文件名
         file_size: 文件大小（字节）
         mime_type: MIME类型
-        attachment_type: 附件类型（GEMINI_IMAGE 或 GEMINI_VIDEO）
+        attachment_type: 附件类型 (AttachmentType枚举或字符串)
         processed_message: 要处理的消息字典
         
     Returns:
         bool: 上传是否成功
     """
     try:
+        # 确保attachment_type是枚举类型
+        if isinstance(attachment_type, str):
+            attachment_type = AttachmentType.from_string(attachment_type)
+            
         # 从gemini_pool中获取genai_client实例
         genai_client = gemini_pool.get_client()
         
@@ -341,14 +345,35 @@ def process_image_attachment(
     attachment: Dict[str, Any],
     model_type: str,
     processed_message: Dict[str, Any],
-    supported_type: str,
+    supported_type:AttachmentType,
     mime_type: str,
     user_id: str
 ) -> None:
     """
     处理图片类型的附件
+    
+    Args:
+        attachment: 附件信息字典
+        model_type: 模型类型
+        processed_message: 处理的消息
+        supported_type: 支持的文件类型 (AttachmentType枚举或字符串)
+        mime_type: MIME类型
+        user_id: 用户ID
     """
-    attachment_text = f"[附件[{supported_type}]: {attachment.get('fileName', '未命名文件')}]"
+    # 确保attachment_type是枚举类型
+    if isinstance(supported_type, str):
+        supported_type = AttachmentType.from_string(supported_type)
+        
+    file_name = attachment.get('fileName', '未命名文件')
+    local_path = attachment.get('file_path')
+    attachment_text = f"[附件[{supported_type.value_str}]: {file_name}]"
+    
+    print("\n=== 开始处理图片附件 ===")
+    print(f"文件名: {file_name}")
+    print(f"本地路径: {local_path}")
+    print(f"模型类型: {model_type}")
+    print(f"支持的类型: {supported_type.value_str}")
+    print(f"MIME类型: {mime_type}")
     
     if model_type == 'openai':
         # OpenAI的图片处理
@@ -378,11 +403,6 @@ def process_image_attachment(
         
     elif model_type == 'google':
         # Google的图片处理
-        local_path = attachment.get('file_path')
-        print("\n=== 图片处理信息 ===")
-        print(f"文件名: {attachment.get('fileName', '未命名文件')}")
-        print(f"本地路径: {local_path}")
-        
         # 1. 如果有本地文件路径，优先获取实际文件大小
         actual_file_size = None
         if local_path and os.path.exists(local_path):
@@ -501,21 +521,32 @@ def process_video_attachment(
     attachment: Dict[str, Any],
     model_type: str,
     processed_message: Dict[str, Any],
-    supported_type: str,
+    supported_type:AttachmentType,
     mime_type: str
 ) -> None:
     """
     处理视频类型的附件
+    
+    Args:
+        attachment: 附件信息字典
+        model_type: 模型类型
+        processed_message: 处理的消息
+        supported_type: 支持的文件类型 (AttachmentType枚举或字符串)
+        mime_type: MIME类型
     """
+    # 确保attachment_type是枚举类型
+    if isinstance(supported_type, str):
+        supported_type = AttachmentType.from_string(supported_type)
+        
     file_name = attachment.get('fileName', '未命名文件')
     local_path = attachment.get('file_path')
-    attachment_text = f"[附件[{supported_type}]: {file_name}]"
+    attachment_text = f"[附件[{supported_type.value_str}]: {file_name}]"
     
     print("\n=== 开始处理视频附件 ===")
     print(f"文件名: {file_name}")
     print(f"本地路径: {local_path}")
     print(f"模型类型: {model_type}")
-    print(f"支持的类型: {supported_type}")
+    print(f"支持的类型: {supported_type.value_str}")
     print(f"MIME类型: {mime_type}")
     
     if model_type == 'openai':
@@ -583,7 +614,7 @@ def process_binary_attachment(
     attachment: Dict[str, Any],
     model_type: str,
     processed_message: Dict[str, Any],
-    supported_type: str
+    supported_type:AttachmentType,
 ) -> None:
     """
     处理非图片类型的附件
@@ -592,9 +623,19 @@ def process_binary_attachment(
         attachment: 附件信息字典
         model_type: 模型类型 ('openai' 或 'google')
         processed_message: 要处理的消息字典
-        supported_type: 支持的文件类型
+        supported_type: 支持的文件类型 (AttachmentType枚举或字符串)
     """
-    attachment_text = f"[附件[{supported_type}]: {attachment.get('fileName', '未命名文件')}]"
+    # 确保attachment_type是枚举类型
+    if isinstance(supported_type, str):
+        supported_type = AttachmentType.from_string(supported_type)
+        
+    file_name = attachment.get('fileName', '未命名文件')
+    attachment_text = f"[附件[{supported_type.value_str}]: {file_name}]"
+    
+    print("\n=== 开始处理二进制附件 ===")
+    print(f"文件名: {file_name}")
+    print(f"模型类型: {model_type}")
+    print(f"支持的类型: {supported_type.value_str}")
     
     if model_type == 'openai':
         processed_message['content'].append({
@@ -764,7 +805,7 @@ def process_text_attachment(
     attachment: Dict[str, Any],
     model_type: str,
     processed_message: Dict[str, Any],
-    supported_type: str,
+    supported_type:AttachmentType,
     mime_type: str,
     user_id: str
 ) -> None:
@@ -775,18 +816,23 @@ def process_text_attachment(
         attachment: 附件信息字典
         model_type: 模型类型 ('openai' 或 'google')
         processed_message: 要处理的消息字典
-        supported_type: 支持的文件类型
+        supported_type: 支持的文件类型 (AttachmentType枚举或字符串)
         mime_type: MIME类型
         user_id: 用户ID
     """
+    # 确保attachment_type是枚举类型
+    if isinstance(supported_type, str):
+        supported_type = AttachmentType.from_string(supported_type)
+        
     file_name = attachment.get('fileName', '未命名文件')
     content_id = attachment.get('content_id')
-    attachment_text = f"[附件[{supported_type}]: {file_name}]"
+    attachment_text = f"[附件[{supported_type.value_str}]: {file_name}]"
     
     print("\n=== 开始处理文本附件 ===")
     print(f"文件名: {file_name}")
     print(f"文本ID: {content_id}")
     print(f"模型类型: {model_type}")
+    print(f"支持的类型: {supported_type.value_str}")
     print(f"MIME类型: {mime_type}")
     
     # 获取文本内容
@@ -819,6 +865,16 @@ def process_text_attachment(
                 elif model_type == 'google':
                     processed_message['parts'].append({
                         "text": f"{attachment_text}\n\n文本内容：\n{preview_text}"
+                    })
+            else:
+                if model_type == 'openai':
+                    processed_message['content'].append({
+                        "type": "text",
+                        "text": f"{attachment_text}\n\n长文本截取前1000个字符：\n{preview_text}"
+                    })
+                elif model_type == 'google':
+                    processed_message['parts'].append({
+                        "text": f"{attachment_text}\n\n长文本截取前1000个字符：\n{preview_text}"
                     })
                 
             print("文本内容已添加到消息中")

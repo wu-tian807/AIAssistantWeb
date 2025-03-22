@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify
-from utils.files.file_config import ATTACHMENT_TYPES, AttachmentType
+from utils.files.file_config import ATTACHMENT_TYPES, AttachmentType, MIME_TYPE_MAPPING, MIME_TYPE_WILDCARDS
 
 # 创建蓝图
 upload_attachment_types_bp = Blueprint('upload_attachment_types', __name__)
@@ -48,7 +48,8 @@ def get_attachment_types():
         # 处理每个类型
         for category, types in type_categories.items():
             for attachment_type in types:
-                type_name = attachment_type.name.lower()
+                # 使用value_str属性获取类型字符串
+                type_name = attachment_type.value_str
                 type_config = ATTACHMENT_TYPES[attachment_type].copy()
                 type_config['icon'] = icons.get(type_name, '📁')
                 
@@ -56,9 +57,19 @@ def get_attachment_types():
                 serializable_types[category][type_name] = type_config
                 # 添加到所有类型
                 serializable_types['all'][type_name] = type_config
+        
+        # 添加MIME类型映射，使用value_str属性
+        mime_mapping = {}
+        for mime_type, attachment_type in MIME_TYPE_MAPPING.items():
+            mime_mapping[mime_type] = attachment_type.value_str
+        
+        # 添加通配符映射，使用value_str属性
+        for mime_wildcard, attachment_type in MIME_TYPE_WILDCARDS.items():
+            mime_mapping[mime_wildcard] = attachment_type.value_str
 
         return jsonify({
             'types': serializable_types,
+            'mime_mapping': mime_mapping,
             'message': '获取附件类型配置成功'
         })
 
@@ -75,9 +86,10 @@ def get_table_types():
         table_types = [AttachmentType.CSV_TABLE, AttachmentType.EXCEL_TABLE]
         
         for attachment_type in table_types:
-            type_name = attachment_type.name.lower()
+            # 使用value_str属性获取类型字符串
+            type_name = attachment_type.value_str
             serializable_types[type_name] = ATTACHMENT_TYPES[attachment_type].copy()
-            
+        
         return jsonify({
             'types': serializable_types,
             'message': '获取表格类型配置成功'

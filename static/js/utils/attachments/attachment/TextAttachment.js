@@ -85,6 +85,9 @@ export class TextAttachment {
         this.contentBase64 = params.contentBase64;
         this.lineCount = params.lineCount ? Number(params.lineCount) : 0;
         
+        // 设置类型
+        this.type = params.type || 'text';
+        
         // 确保size属性是数字类型
         let fileSize = 0;
         if (params.size !== undefined && params.size !== null) {

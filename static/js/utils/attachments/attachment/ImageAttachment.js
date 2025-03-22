@@ -6,7 +6,7 @@ import { showToast } from '../../toast.js';
  */
 export class ImageAttachment {
     constructor(options = {}) {
-        this.type = AttachmentType.IMAGE;
+        this.type = options.type || AttachmentType.IMAGE;
         this.file = options.file || null;
         this.fileName = options.fileName || '';
         this.mime_type = options.mime_type || 'image/jpeg';

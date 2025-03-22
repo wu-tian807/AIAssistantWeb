@@ -5,55 +5,7 @@ import { AttachmentType, AttachmentConfig, MimeTypeMapping, AttachmentUtils } fr
 import { FileSelector } from '../files/FileSelector.js';
 import { createImageModal } from '../modal/imageModal.js';
 import { showToast, confirmDialog } from '../../toast.js';
-
-/**
- * 文件类型检测器
- */
-class FileTypeDetector {
-    static isImage(file) {
-        return AttachmentUtils.getTypeByMimeType(file.type) === AttachmentType.IMAGE;
-    }
-
-    static isVideo(file) {
-        return AttachmentUtils.getTypeByMimeType(file.type) === AttachmentType.VIDEO;
-    }
-
-    static isDocument(file) {
-        return AttachmentUtils.getTypeByMimeType(file.type) === AttachmentType.DOCUMENT;
-    }
-
-    static isDatabase(file) {
-        return AttachmentUtils.getTypeByMimeType(file.type) === AttachmentType.DATABASE;
-    }
-
-    static isSpreadsheet(file) {
-        return AttachmentUtils.getTypeByMimeType(file.type) === AttachmentType.SPREADSHEET;
-    }
-
-    static isAudio(file) {
-        return AttachmentUtils.getTypeByMimeType(file.type) === AttachmentType.AUDIO;
-    }
-
-    static isText(file) {
-        return AttachmentUtils.getTypeByMimeType(file.type) === AttachmentType.TEXT;
-    }
-
-    static isBinary(file) {
-        return AttachmentUtils.getTypeByMimeType(file.type) === AttachmentType.BINARY;
-    }
-
-    static detectType(file) {
-        // 首先通过 MIME 类型判断
-        const typeByMime = AttachmentUtils.getTypeByMimeType(file.type);
-        if (typeByMime !== AttachmentType.BINARY) {
-            return typeByMime;
-        }
-
-        // 如果 MIME 类型无法判断，尝试通过文件扩展名判断
-        const extension = file.name.split('.').pop();
-        return AttachmentUtils.getTypeByExtension(extension);
-    }
-}
+import { FileTypeDetector } from './FileTypeDetector.js';
 
 /**
  * 统一的上传处理器
@@ -78,12 +30,42 @@ export class Uploader {
                 }
             }
         });
-        this.initializeUploaders();
+        
+        // 检查是否需要自动初始化
+        if (options.autoInitialize !== false) {
+            // 延迟初始化，确保DOM已准备好且配置已加载
+            setTimeout(async () => {
+                try {
+                    await this.initialize();
+                } catch (error) {
+                    console.error('上传器自动初始化失败:', error);
+                }
+            }, 0);
+        }
+    }
+
+    /**
+     * 初始化上传器
+     * 确保所有配置都已加载完成
+     */
+    async initialize() {
+        try {
+            // 确保配置已加载
+            await AttachmentUtils.ensureConfigLoaded();
+            this.initializeUploaders();
+            return true;
+        } catch (error) {
+            console.error('初始化上传器失败:', error);
+            // 即使配置加载失败，也尝试初始化上传器，使用默认值
+            this.initializeUploaders();
+            return false;
+        }
     }
 
     initializeUploaders() {
         // 初始化各种类型的上传器
-        this.uploaders.set(AttachmentType.IMAGE, new ImageUploader({
+        // 使用字符串键，方便后续查找
+        this.uploaders.set('image', new ImageUploader({
             ...this.options,
             onDelete: (attachment) => {
                 if (this.options.onDelete) {
@@ -93,7 +75,7 @@ export class Uploader {
         }));
         
         // 添加视频上传器
-        this.uploaders.set(AttachmentType.VIDEO, new VideoUploader({
+        this.uploaders.set('video', new VideoUploader({
             ...this.options,
             onDelete: (attachment) => {
                 if (this.options.onDelete) {
@@ -103,7 +85,7 @@ export class Uploader {
         }));
 
         // 添加文本上传器
-        this.uploaders.set(AttachmentType.TEXT, new TextUploader({
+        this.uploaders.set('text', new TextUploader({
             ...this.options,
             onDelete: (attachment) => {
                 if (this.options.onDelete) {
@@ -111,6 +93,13 @@ export class Uploader {
                 }
             }
         }));
+        
+        // 同时为了保持与旧代码的兼容性，也添加枚举类型的映射
+        this.uploaders.set(AttachmentType.IMAGE, this.uploaders.get('image'));
+        this.uploaders.set(AttachmentType.VIDEO, this.uploaders.get('video'));
+        this.uploaders.set(AttachmentType.TEXT, this.uploaders.get('text'));
+        
+        console.log('初始化完成的上传器:', [...this.uploaders.keys()]);
     }
 
     /**
@@ -143,8 +132,32 @@ export class Uploader {
      * @param {Object} attachment 已有的附件数据
      */
     async addExistingAttachment(attachment) {
-        const uploader = this.uploaders.get(attachment.type);
+        console.log('添加已有附件:', attachment);
+        
+        // 获取正确的上传器，兼容后端返回的字符串类型和枚举类型
+        let uploader;
+        if (typeof attachment.type === 'string') {
+            // 后端返回的类型是字符串，需要找到对应的上传器
+            const typeName = attachment.type.toLowerCase();
+            // 尝试找到匹配的上传器
+            for (const [key, value] of this.uploaders.entries()) {
+                if (key.toLowerCase() === typeName) {
+                    uploader = value;
+                    break;
+                }
+            }
+            
+            // 如果找不到对应的上传器，尝试直接使用类型名称
+            if (!uploader) {
+                uploader = this.uploaders.get(typeName);
+            }
+        } else {
+            // 如果类型不是字符串，直接查找
+            uploader = this.uploaders.get(attachment.type);
+        }
+
         if (!uploader) {
+            console.error(`找不到类型为 "${attachment.type}" 的上传器`);
             throw new Error(`不支持的附件类型: ${attachment.type}`);
         }
 
@@ -218,9 +231,17 @@ export class Uploader {
         console.log('开始上传文件:', file); // 调试日志
         const fileType = FileTypeDetector.detectType(file);
         console.log('检测到文件类型:', fileType);
-        const uploader = this.uploaders.get(fileType);
+        
+        // 获取对应的上传器，兼容字符串和枚举类型
+        let uploader;
+        if (typeof fileType === 'string') {
+            uploader = this.uploaders.get(fileType.toLowerCase());
+        } else {
+            uploader = this.uploaders.get(fileType);
+        }
 
         if (!uploader) {
+            console.error(`找不到类型为 "${fileType}" 的上传器，可用类型:`, [...this.uploaders.keys()]);
             showToast(`不支持的文件类型: ${fileType}`, 'error');
             throw new Error(`不支持的文件类型: ${fileType}`);
         }
@@ -407,5 +428,55 @@ export class Uploader {
     }
 }
 
-// 导出单例实例
+/**
+ * 延迟创建单例的辅助类
+ */
+class UploaderSingleton {
+    constructor() {
+        this._instance = null;
+        this._initPromise = null;
+    }
+
+    async getInstance() {
+        if (this._instance) {
+            return this._instance;
+        }
+
+        if (!this._initPromise) {
+            this._initPromise = this._initialize();
+        }
+
+        return await this._initPromise;
+    }
+
+    async _initialize() {
+        try {
+            // 创建实例并确保配置已加载
+            const instance = new Uploader({
+                autoInitialize: false // 禁止自动初始化
+            });
+            
+            // 手动初始化
+            await instance.initialize();
+            
+            this._instance = instance;
+            return this._instance;
+        } catch (error) {
+            console.error('初始化Uploader单例失败:', error);
+            // 即使配置加载失败，也返回一个实例，确保系统能继续工作
+            this._instance = new Uploader({
+                autoInitialize: false
+            });
+            // 尝试初始化
+            await this._instance.initialize();
+            return this._instance;
+        }
+    }
+}
+
+// 创建单例管理器
+export const uploaderSingleton = new UploaderSingleton();
+
+// 为了向后兼容，保留直接导出实例的方式，但这可能在配置未加载时抛出错误
+// 推荐使用 uploaderSingleton.getInstance() 方法获取实例
 export const uploader = new Uploader(); 

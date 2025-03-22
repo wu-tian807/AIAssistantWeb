@@ -9,82 +9,13 @@ export const AttachmentType = {
     EXCEL_TABLE: 'excel_table'
 };
 
-// 默认配置，作为后备和向下兼容
-const DEFAULT_CONFIG = {
-    [AttachmentType.IMAGE]: {
-        accept: 'image/*',
-        maxSize: 1 * 1024 * 1024 * 1024, // 1GB
-        description: '图片文件',
-        icon: '🖼️',
-        mime_types: ['image/*'],
-        category: 'image'
-    },
-    [AttachmentType.VIDEO]: {
-        accept: 'video/*',
-        maxSize: 2 * 1024 * 1024 * 1024, // 2GB
-        description: '视频文件',
-        icon: '🎥',
-        mime_types: ['video/*'],
-        category: 'video'
-    },
-    [AttachmentType.DOCUMENT]: {
-        accept: '.pdf,.doc,.docx,.rtf,.odt',
-        maxSize: 50 * 1024 * 1024, // 50MB
-        description: '文档文件',
-        icon: '📄',
-        mime_types: ['application/pdf', 'application/msword'],
-        category: 'document'
-    },
-    [AttachmentType.TEXT]: {
-        accept: '.txt,.md,.json,.yaml,.yml',
-        maxSize: 10 * 1024 * 1024, // 10MB
-        description: '文本文件',
-        icon: '📝',
-        mime_types: ['text/plain'],
-        category: 'text'
-    },
-    [AttachmentType.BINARY]: {
-        accept: '*/*',
-        maxSize: 10 * 1024 * 1024, // 10MB
-        description: '二进制文件',
-        icon: '📦',
-        mime_types: ['application/octet-stream'],
-        category: 'binary'
-    },
-    [AttachmentType.CSV_TABLE]: {
-        accept: '.csv,.tsv',
-        maxSize: 50 * 1024 * 1024, // 50MB
-        description: 'CSV表格文件',
-        icon: '📊',
-        mime_types: ['text/csv', 'text/tab-separated-values'],
-        category: 'table'
-    },
-    [AttachmentType.EXCEL_TABLE]: {
-        accept: '.xlsx,.xls,.ods',
-        maxSize: 50 * 1024 * 1024, // 50MB
-        description: 'Excel表格文件',
-        icon: '📈',
-        mime_types: ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-        category: 'table'
-    }
-};
+// 定义空的配置对象，将在加载时从后端填充
+const DEFAULT_CONFIG = {};
+export let AttachmentConfig = {};
 
-// 导出的配置对象，初始使用默认值
-export let AttachmentConfig = { ...DEFAULT_CONFIG };
-
-// 默认的MIME类型映射
-const DEFAULT_MIME_MAPPING = {
-    'image/*': AttachmentType.IMAGE,
-    'video/*': AttachmentType.VIDEO,
-    'text/*': AttachmentType.TEXT,
-    'application/octet-stream': AttachmentType.BINARY,
-    'text/csv': AttachmentType.CSV_TABLE,
-    'application/vnd.ms-excel': AttachmentType.EXCEL_TABLE,
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': AttachmentType.EXCEL_TABLE
-};
-
-// 导出的MIME类型映射，初始使用默认值
-export let MimeTypeMapping = { ...DEFAULT_MIME_MAPPING };
+// 定义空的MIME类型映射，将在加载时从后端填充
+const DEFAULT_MIME_MAPPING = {};
+export let MimeTypeMapping = {};
 
 // 动态配置加载器
 export class AttachmentTypeLoader {
@@ -112,16 +43,21 @@ export class AttachmentTypeLoader {
                 }
                 this.config = data.types;
                 
+                // 使用后端返回的MIME类型映射
+                if (data.mime_mapping) {
+                    MimeTypeMapping = data.mime_mapping;
+                }
+                
                 // 动态更新配置
                 this._updateConfigs(this.config);
                 
                 resolve(this.config);
             } catch (error) {
                 console.error('加载附件类型配置失败:', error);
-                console.warn('使用默认配置');
-                // 出错时使用默认配置
-                AttachmentConfig = { ...DEFAULT_CONFIG };
-                MimeTypeMapping = { ...DEFAULT_MIME_MAPPING };
+                console.warn('无法加载附件类型配置');
+                // 出错时保持空配置，需要由客户端处理错误情况
+                AttachmentConfig = {};
+                MimeTypeMapping = {};
                 reject(error);
             } finally {
                 this.loading = null;
@@ -141,61 +77,15 @@ export class AttachmentTypeLoader {
                     accept: typeConfig.extensions.join(','),
                     maxSize: typeConfig.max_size,
                     description: typeConfig.description,
-                    icon: typeConfig.icon || DEFAULT_CONFIG[typeName]?.icon || '📄',
+                    icon: typeConfig.icon || '📄',
                     mime_types: typeConfig.mime_types,
                     category: category
                 };
             }
         }
 
-        // 合并配置，保留默认值作为后备
-        AttachmentConfig = {
-            ...DEFAULT_CONFIG,  // 默认配置作为后备
-            ...newConfig       // 后端配置优先
-        };
-
-        // 更新 MimeTypeMapping
-        const newMimeMapping = {};
-        
-        // 首先处理通配符映射（最低优先级）
-        for (const [mimeType, type] of Object.entries(DEFAULT_MIME_MAPPING)) {
-            if (mimeType.includes('*')) {
-                newMimeMapping[mimeType] = type;
-            }
-        }
-
-        // 然后处理默认的具体映射（中等优先级）
-        for (const [mimeType, type] of Object.entries(DEFAULT_MIME_MAPPING)) {
-            if (!mimeType.includes('*')) {
-                newMimeMapping[mimeType] = type;
-            }
-        }
-
-        // 最后处理后端配置的映射（最高优先级）
-        for (const [category, types] of Object.entries(config)) {
-            for (const [typeName, typeConfig] of Object.entries(types)) {
-                if (typeConfig.mime_types) {
-                    for (const mimeType of typeConfig.mime_types) {
-                        // 检查是否存在冲突，忽略 gemini_video 相关的警告
-                        if (newMimeMapping[mimeType] && 
-                            newMimeMapping[mimeType] !== typeName && 
-                            !(typeName === 'gemini_video' || newMimeMapping[mimeType] === 'gemini_video')) {
-                            console.warn(`MIME类型 "${mimeType}" 存在多个映射:`, {
-                                existing: newMimeMapping[mimeType],
-                                new: typeName
-                            });
-                        }
-                        // 如果新类型是 gemini_video，保持原有映射
-                        if (typeName !== 'gemini_video') {
-                            newMimeMapping[mimeType] = typeName;
-                        }
-                    }
-                }
-            }
-        }
-
-        // 更新全局映射
-        MimeTypeMapping = newMimeMapping;
+        // 直接使用后端配置
+        AttachmentConfig = newConfig;
     }
 
     // 重新加载配置
@@ -210,6 +100,15 @@ export const attachmentTypeLoader = new AttachmentTypeLoader();
 
 // 辅助函数
 export const AttachmentUtils = {
+    // 在实际使用前确保配置已加载
+    async ensureConfigLoaded() {
+        try {
+            await attachmentTypeLoader.loadConfig();
+        } catch (error) {
+            console.error('确保配置加载失败:', error);
+        }
+    },
+
     // 原有的同步方法（向下兼容）
     getTypeByExtension(extension) {
         extension = extension.toLowerCase().replace('.', '');
@@ -284,27 +183,27 @@ export const AttachmentUtils = {
 
     // 新增的异步方法（推荐使用）
     async getTypeByExtensionAsync(extension) {
-        await attachmentTypeLoader.loadConfig();
+        await this.ensureConfigLoaded();
         return this.getTypeByExtension(extension);
     },
 
     async getTypeByMimeTypeAsync(mimeType) {
-        await attachmentTypeLoader.loadConfig();
+        await this.ensureConfigLoaded();
         return this.getTypeByMimeType(mimeType);
     },
 
     async validateFileSizeAsync(type, size) {
-        await attachmentTypeLoader.loadConfig();
+        await this.ensureConfigLoaded();
         return this.validateFileSize(type, size);
     },
 
     async validateFileExtensionAsync(type, extension) {
-        await attachmentTypeLoader.loadConfig();
+        await this.ensureConfigLoaded();
         return this.validateFileExtension(type, extension);
     },
 
     async getConfigAsync(type) {
-        await attachmentTypeLoader.loadConfig();
+        await this.ensureConfigLoaded();
         return this.getConfig(type);
     },
 
@@ -315,18 +214,18 @@ export const AttachmentUtils = {
     },
 
     async isTableType(type) {
-        const config = await attachmentTypeLoader.loadConfig();
-        return config.table && Object.keys(config.table).includes(type);
+        await this.ensureConfigLoaded();
+        return AttachmentConfig[type]?.category === 'table';
     },
 
     async isTextType(type) {
-        const config = await attachmentTypeLoader.loadConfig();
-        return config.text && Object.keys(config.text).includes(type);
+        await this.ensureConfigLoaded();
+        return AttachmentConfig[type]?.category === 'text';
     },
 
     async isBinaryType(type) {
-        const config = await attachmentTypeLoader.loadConfig();
-        return config.binary && Object.keys(config.binary).includes(type);
+        await this.ensureConfigLoaded();
+        return AttachmentConfig[type]?.category === 'binary';
     },
 
     // 同步版本的类型检查（基于 AttachmentConfig）

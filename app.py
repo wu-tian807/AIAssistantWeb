@@ -502,7 +502,8 @@ def chat():
                 # 验证MIME类型是否在支持列表中
                 if mime_type:
                     supported_type = MIME_TYPE_MAPPING.get(mime_type)
-                    print(f"MIME类型映射结果: {supported_type}")
+                    # 使用枚举的value_str属性输出更友好的字符串
+                    print(f"MIME类型映射结果: {supported_type.value_str if supported_type else '未找到映射'}")
                     
                     # 首先判断是否为图片类型
                     is_image = (supported_type == AttachmentType.IMAGE and 
@@ -539,7 +540,7 @@ def chat():
                                     attachment,
                                     model_type,
                                     processed_message,
-                                    supported_type,
+                                    AttachmentType.IMAGE,  # 使用枚举类型
                                     mime_type,
                                     user_id
                                 )
@@ -572,8 +573,11 @@ def chat():
                             print(f"模型不支持视频类型，将作为二进制文件处理")
                             supported_type = AttachmentType.BINARY
                     elif supported_type not in model_support_list:
-                        print(f"模型不支持的附件类型: {supported_type}")
-                        print(f"模型支持的类型: {model_support_list}")
+                        # 使用枚举的value_str属性输出更友好的字符串
+                        print(f"模型不支持的附件类型: {supported_type.value_str if supported_type else '未知类型'}")
+                        # 将模型支持的类型转换为更易读的格式
+                        supported_types_str = [t.value_str for t in model_support_list]
+                        print(f"模型支持的类型: {supported_types_str}")
                         supported_type = AttachmentType.BINARY
                         
                     # 处理视频附件（包括 VIDEO 和 GEMINI_VIDEO）
@@ -589,7 +593,7 @@ def chat():
                                     attachment,
                                     model_type,
                                     processed_message,
-                                    AttachmentType.GEMINI_VIDEO,
+                                    AttachmentType.GEMINI_VIDEO,  # 使用枚举类型
                                     mime_type
                                 )
                             else:
@@ -598,7 +602,7 @@ def chat():
                                     attachment,
                                     model_type,
                                     processed_message,
-                                    AttachmentType.BINARY
+                                    AttachmentType.BINARY  # 使用枚举类型
                                 )
                                 if model_type == 'google':
                                     processed_message['parts'].append({
@@ -610,7 +614,7 @@ def chat():
                                 attachment,
                                 model_type,
                                 processed_message,
-                                AttachmentType.VIDEO,
+                                AttachmentType.VIDEO,  # 使用枚举类型VIDEO
                                 mime_type
                             )
                     # 检查是否为文本附件
@@ -626,7 +630,7 @@ def chat():
                                 attachment,
                                 model_type,
                                 processed_message,
-                                AttachmentType.TEXT,
+                                AttachmentType.TEXT,  # 使用枚举类型
                                 mime_type,
                                 user_id
                             )
@@ -636,15 +640,16 @@ def chat():
                                 attachment,
                                 model_type,
                                 processed_message,
-                                AttachmentType.BINARY
+                                AttachmentType.BINARY  # 使用枚举类型
                             )
                     # 其他类型的附件处理
                     else:
+                        # 直接使用支持类型枚举值
                         process_binary_attachment(
                             attachment,
                             model_type,
                             processed_message,
-                            supported_type
+                            supported_type  # 使用枚举类型
                         )
         
         # 如果是OpenAI模型且没有任何内容，添加一个空文本

@@ -9,8 +9,15 @@ export class ImageUploader {
     constructor(options = {}) {
         this.options = options;
         this.uploadUrl = options.uploadUrl || '/upload_image';
-        this.maxSize = options.maxSize || AttachmentConfig[AttachmentType.IMAGE].maxSize;
-        this.allowedTypes = options.allowedTypes || AttachmentConfig[AttachmentType.IMAGE].allowedExtensions;
+        
+        // 添加默认值，防止AttachmentConfig未加载完成时出错
+        const defaultMaxSize = 1024 * 1024 * 1024; // 1GB
+        this.maxSize = options.maxSize || 
+            (AttachmentConfig[AttachmentType.IMAGE]?.maxSize || defaultMaxSize);
+            
+        this.allowedTypes = options.allowedTypes || 
+            (AttachmentConfig[AttachmentType.IMAGE]?.allowedExtensions || ['jpg', 'jpeg', 'png', 'gif', 'webp']);
+            
         this.onProgress = options.onProgress || (() => {});
         this.onSuccess = options.onSuccess || (() => {});
         this.onError = options.onError || (() => {});
@@ -238,7 +245,7 @@ export class ImageUploader {
                 mimeType: attachment.mime_type,
                 filePath: attachment.file_path,
                 base64_id: attachment.base64_id,
-                type: AttachmentType.IMAGE
+                type: 'image' // 使用字符串表示类型
             });
 
             // 添加到附件集合
@@ -254,6 +261,46 @@ export class ImageUploader {
     }
 }
 
-// 导出单例实例
+/**
+ * 延迟创建单例的辅助类
+ */
+class ImageUploaderSingleton {
+    constructor() {
+        this._instance = null;
+        this._initPromise = null;
+    }
+
+    async getInstance() {
+        if (this._instance) {
+            return this._instance;
+        }
+
+        if (!this._initPromise) {
+            this._initPromise = this._initialize();
+        }
+
+        return await this._initPromise;
+    }
+
+    async _initialize() {
+        try {
+            // 确保配置已加载
+            await AttachmentUtils.ensureConfigLoaded();
+            this._instance = new ImageUploader();
+            return this._instance;
+        } catch (error) {
+            console.error('初始化ImageUploader单例失败:', error);
+            // 即使配置加载失败，也返回一个实例，确保系统能继续工作
+            this._instance = new ImageUploader();
+            return this._instance;
+        }
+    }
+}
+
+// 创建单例管理器
+export const imageUploaderSingleton = new ImageUploaderSingleton();
+
+// 为了向后兼容，保留直接导出实例的方式，但这可能在配置未加载时抛出错误
+// 推荐使用 imageUploaderSingleton.getInstance() 方法获取实例
 export const imageUploader = new ImageUploader();
 

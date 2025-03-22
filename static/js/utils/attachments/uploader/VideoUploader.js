@@ -7,7 +7,17 @@ export class VideoUploader {
         this.options = options;
         this.uploadUrl = options.uploadUrl || '/upload_video';
         this.attachments = new Set();
-        this.maxSize = options.maxSize || AttachmentUtils.getConfig(AttachmentType.VIDEO).maxSize;
+        
+        // 添加默认值，防止配置未加载完成时出错
+        const defaultMaxSize = 2 * 1024 * 1024 * 1024; // 2GB
+        
+        try {
+            const config = AttachmentUtils.getConfig(AttachmentType.VIDEO);
+            this.maxSize = options.maxSize || (config?.maxSize || defaultMaxSize);
+        } catch (error) {
+            console.warn('加载视频配置失败，使用默认值:', error);
+            this.maxSize = options.maxSize || defaultMaxSize;
+        }
     }
 
     /**
@@ -54,7 +64,8 @@ export class VideoUploader {
                 mimeType: attachment.mime_type,
                 filePath: attachment.file_path,
                 thumbnail: attachment.thumbnail,
-                duration: attachment.duration
+                duration: attachment.duration,
+                type: 'video' // 使用字符串表示类型
             });
 
             this.attachments.add(videoAttachment);
@@ -131,5 +142,45 @@ export class VideoUploader {
     }
 }
 
-// 导出单例实例
+/**
+ * 延迟创建单例的辅助类
+ */
+class VideoUploaderSingleton {
+    constructor() {
+        this._instance = null;
+        this._initPromise = null;
+    }
+
+    async getInstance() {
+        if (this._instance) {
+            return this._instance;
+        }
+
+        if (!this._initPromise) {
+            this._initPromise = this._initialize();
+        }
+
+        return await this._initPromise;
+    }
+
+    async _initialize() {
+        try {
+            // 确保配置已加载
+            await AttachmentUtils.ensureConfigLoaded();
+            this._instance = new VideoUploader();
+            return this._instance;
+        } catch (error) {
+            console.error('初始化VideoUploader单例失败:', error);
+            // 即使配置加载失败，也返回一个实例，确保系统能继续工作
+            this._instance = new VideoUploader();
+            return this._instance;
+        }
+    }
+}
+
+// 创建单例管理器
+export const videoUploaderSingleton = new VideoUploaderSingleton();
+
+// 为了向后兼容，保留直接导出实例的方式，但这可能在配置未加载时抛出错误
+// 推荐使用 videoUploaderSingleton.getInstance() 方法获取实例
 export const videoUploader = new VideoUploader(); 

@@ -4,7 +4,7 @@ import { showToast } from '../../toast.js';
 
 export class VideoAttachment {
     constructor(options = {}) {
-        this.type = AttachmentType.VIDEO;
+        this.type = options.type || AttachmentType.VIDEO;
         this.file = options.file || null;
         this.fileName = options.fileName || '';
         this.mime_type = options.mime_type || 'video/mp4';

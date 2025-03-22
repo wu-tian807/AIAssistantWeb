@@ -9,6 +9,41 @@ class AttachmentType(Enum):
     GEMINI_VIDEO = auto()
     CSV_TABLE = auto()      # 新增：CSV格式表格
     EXCEL_TABLE = auto()    # 新增：Excel格式表格
+    
+    @property
+    def value_str(self):
+        """返回用于序列化和日志显示的字符串值"""
+        return self.name.lower()
+    
+    @classmethod
+    def from_string(cls, string_value):
+        """从字符串转换回枚举类型
+        
+        Args:
+            string_value (str): 字符串表示，如'text'、'image'等
+            
+        Returns:
+            AttachmentType: 对应的枚举值，如果找不到匹配项则返回BINARY
+        """
+        if not string_value:
+            return cls.BINARY
+            
+        try:
+            # 尝试直接匹配名称（不区分大小写）
+            return cls[string_value.upper()]
+        except KeyError:
+            # 尝试遍历所有枚举值进行匹配
+            for enum_type in cls:
+                if enum_type.value_str == string_value.lower():
+                    return enum_type
+            
+            # 默认返回二进制类型
+            print(f"警告: 无法识别的附件类型字符串 '{string_value}'，使用默认值 BINARY")
+            return cls.BINARY
+    
+    def __str__(self):
+        """返回字符串表示，便于日志输出"""
+        return self.value_str
 
 ATTACHMENT_TYPES = {
     AttachmentType.IMAGE: {
@@ -74,6 +109,7 @@ ATTACHMENT_TYPES = {
             # 代码文件
             'text/x-python',
             'application/javascript',
+            'text/javascript',
             'text/x-java',
             'text/x-c',
             'text/x-csharp',
@@ -143,3 +179,44 @@ for attachment_type, config in ATTACHMENT_TYPES.items():
 # 确保所有视频MIME类型都映射到VIDEO
 for mime_type in ATTACHMENT_TYPES[AttachmentType.VIDEO]['mime_types']:
     MIME_TYPE_MAPPING[mime_type] = AttachmentType.VIDEO
+
+# 添加一些未在类型配置中明确列出但常见的MIME类型映射
+ADDITIONAL_MIME_MAPPINGS = {
+    # 文本相关
+    'text/javascript': AttachmentType.TEXT,
+    'text/typescript': AttachmentType.TEXT,
+    'text/jsx': AttachmentType.TEXT,
+    'text/tsx': AttachmentType.TEXT,
+    'text/x-python': AttachmentType.TEXT,
+    'application/x-javascript': AttachmentType.TEXT,
+    'application/typescript': AttachmentType.TEXT,
+    'application/x-typescript': AttachmentType.TEXT,
+    'application/yaml': AttachmentType.TEXT,
+    'application/x-yaml': AttachmentType.TEXT,
+    'text/yaml': AttachmentType.TEXT,
+    'text/x-yaml': AttachmentType.TEXT,
+    'application/xml': AttachmentType.TEXT,
+    'text/xml': AttachmentType.TEXT,
+    
+    # 文档相关
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': AttachmentType.DOCUMENT,
+    'application/vnd.oasis.opendocument.text': AttachmentType.DOCUMENT,
+    
+    # 表格相关
+    'text/x-csv': AttachmentType.CSV_TABLE,
+    'application/csv': AttachmentType.CSV_TABLE,
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': AttachmentType.EXCEL_TABLE,
+    'application/vnd.oasis.opendocument.spreadsheet': AttachmentType.EXCEL_TABLE
+}
+
+# 添加额外的映射
+for mime_type, attachment_type in ADDITIONAL_MIME_MAPPINGS.items():
+    if mime_type not in MIME_TYPE_MAPPING:
+        MIME_TYPE_MAPPING[mime_type] = attachment_type
+
+# 添加通配符映射（用于前端展示）
+MIME_TYPE_WILDCARDS = {
+    'image/*': AttachmentType.IMAGE,
+    'video/*': AttachmentType.VIDEO,
+    'text/*': AttachmentType.TEXT
+}
