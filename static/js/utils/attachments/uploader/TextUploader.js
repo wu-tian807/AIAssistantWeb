@@ -1,5 +1,6 @@
 import { TextAttachment } from '../attachment/TextAttachment.js';
 import { showToast } from '../../toast.js';
+import { AttachmentUtils, AttachmentType } from '../types.js';
 
 /**
  * 文本文件上传器
@@ -232,28 +233,21 @@ export class TextUploader {
      * @private
      */
     validateFile(file) {
-        // 检查文件类型
-        const validTextTypes = [
-            'text/plain',
-            'text/html',
-            'text/css',
-            'text/javascript',
-            'text/markdown',
-            'text/xml',
-            'application/json',
-            'application/xml',
-            'application/javascript'
-        ];
-
         // 通过MIME类型判断
-        if (file.type && validTextTypes.includes(file.type)) {
-            return true;
+        if (file.type) {
+            const typeByMime = AttachmentUtils.getTypeByMimeType(file.type);
+            // 如果检测为文本类型，直接返回true
+            if (typeByMime === AttachmentType.TEXT) {
+                return true;
+            }
         }
-
+        
         // 通过文件扩展名判断
-        const extensions = ['.txt', '.md', '.html', '.htm', '.css', '.js', '.json', '.xml', '.log', '.csv'];
-        const fileName = file.name.toLowerCase();
-        return extensions.some(ext => fileName.endsWith(ext));
+        const extension = '.' + file.name.split('.').pop().toLowerCase();
+        const typeByExt = AttachmentUtils.getTypeByExtension(extension);
+        
+        // 如果是文本类型，返回true
+        return typeByExt === AttachmentType.TEXT;
     }
 
     /**

@@ -44,8 +44,27 @@ export class ImageUploader {
         try {
             console.log('ImageUploader 处理文件:', file);
             
-            // 验证文件类型
-            if (!file.type.startsWith('image/')) {
+            // 使用AttachmentUtils验证文件类型
+            let isValidType = false;
+            
+            // 通过MIME类型判断
+            if (file.type) {
+                const typeByMime = AttachmentUtils.getTypeByMimeType(file.type);
+                if (typeByMime === AttachmentType.IMAGE) {
+                    isValidType = true;
+                }
+            }
+            
+            // 通过文件扩展名判断
+            if (!isValidType) {
+                const extension = '.' + file.name.split('.').pop().toLowerCase();
+                const typeByExt = AttachmentUtils.getTypeByExtension(extension);
+                if (typeByExt === AttachmentType.IMAGE) {
+                    isValidType = true;
+                }
+            }
+            
+            if (!isValidType) {
                 throw new Error('不支持的图片格式');
             }
 

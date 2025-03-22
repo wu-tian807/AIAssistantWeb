@@ -27,6 +27,30 @@ export class VideoUploader {
      */
     async handleFileSelect(file) {
         try {
+            // 使用AttachmentUtils验证文件类型
+            let isValidType = false;
+            
+            // 通过MIME类型判断
+            if (file.type) {
+                const typeByMime = AttachmentUtils.getTypeByMimeType(file.type);
+                if (typeByMime === AttachmentType.VIDEO) {
+                    isValidType = true;
+                }
+            }
+            
+            // 通过文件扩展名判断
+            if (!isValidType) {
+                const extension = '.' + file.name.split('.').pop().toLowerCase();
+                const typeByExt = AttachmentUtils.getTypeByExtension(extension);
+                if (typeByExt === AttachmentType.VIDEO) {
+                    isValidType = true;
+                }
+            }
+            
+            if (!isValidType) {
+                throw new Error('不支持的视频格式');
+            }
+            
             // 验证文件大小
             if (file.size > this.maxSize) {
                 const maxSizeMB = this.maxSize / (1024 * 1024);
