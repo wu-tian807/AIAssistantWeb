@@ -643,3 +643,72 @@ body.dark-theme .copy-active {
     50% { background-color: rgba(76, 86, 106, 0.3); }
     100% { background-color: transparent; }
 }
+
+/* 添加移动端复制按钮暗色主题样式 */
+body.dark-theme .mobile-copy-button {
+    background-color: #2d3748 !important;
+    color: #e0e0e0 !important;
+    border: 1px solid #4a5568 !important;
+}
+
+body.dark-theme .mobile-copy-button:active {
+    background-color: #384050 !important;
+}
+
+body.dark-theme .mobile-copy-button.markdown-btn,
+body.dark-theme .mobile-copy-button:has(.fa-check) {
+    background-color: #2d5748 !important;
+    color: #e0e0e0 !important;
+}
+
+/* 桌面端复制按钮暗色主题样式 */
+body.dark-theme .desktop-copy-button {
+    background-color: #2d3748 !important;
+    color: #e0e0e0 !important;
+    border: 1px solid #4a5568 !important;
+}
+
+body.dark-theme .desktop-copy-button:hover {
+    background-color: #384050 !important;
+}
+
+body.dark-theme .desktop-copy-button.copy-success {
+    background-color: #38a169 !important;
+    border-color: #2f855a !important;
+    color: white !important;
+}
+
+/* iOS样式复制按钮暗色主题样式 */
+body.dark-theme .ios-copy-button {
+    background-color: #2d3748 !important;
+    color: #e0e0e0 !important;
+    border: 1px solid #4a5568 !important;
+}
+
+body.dark-theme .ios-copy-button:active {
+    background-color: #384050 !important;
+}
+
+body.dark-theme .ios-copy-button.markdown-btn {
+    background-color: #2d5748 !important;
+}
+
+/* 复制选项菜单暗色主题样式 */
+body.dark-theme .copy-options-menu,
+body.dark-theme .mobile-copy-options-menu {
+    background-color: #2d2d2d !important;
+    border-color: #404040 !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.dark-theme .copy-option {
+    color: #e0e0e0 !important;
+}
+
+body.dark-theme .copy-option:hover {
+    background-color: #383838 !important;
+}
+
+body.dark-theme .copy-option i {
+    color: #a0a0a0 !important;
+}

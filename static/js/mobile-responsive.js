@@ -170,9 +170,6 @@ function addMobileCopyButtonToMessage(messageElement) {
         return;
     }
     
-    // 检测是否为暗色模式
-    const isDarkMode = document.body.classList.contains('dark-theme');
-    
     // 创建复制按钮容器
     const copyButtonContainer = document.createElement('div');
     copyButtonContainer.className = 'mobile-copy-button-container';
@@ -184,18 +181,6 @@ function addMobileCopyButtonToMessage(messageElement) {
     const copyButton = document.createElement('button');
     copyButton.className = 'mobile-copy-button';
     copyButton.innerHTML = '<i class="fas fa-copy"></i>复制';
-    
-    // 设置按钮样式
-    copyButton.style.padding = '6px 12px';
-    copyButton.style.fontSize = '14px';
-    copyButton.style.borderRadius = '4px';
-    copyButton.style.display = 'flex';
-    copyButton.style.alignItems = 'center';
-    copyButton.style.justifyContent = 'center';
-    copyButton.style.gap = '5px';
-    copyButton.style.border = isDarkMode ? '1px solid #4a5568' : '1px solid #e2e8f0';
-    copyButton.style.backgroundColor = isDarkMode ? '#2d3748' : '#f8fafc';
-    copyButton.style.color = isDarkMode ? '#e2e8f0' : '#4a5568';
     
     // 添加点击事件 - 直接复制为Markdown
     copyButton.addEventListener('click', function() {
@@ -218,12 +203,12 @@ function addMobileCopyButtonToMessage(messageElement) {
             
             // 添加点击反馈
             copyButton.innerHTML = '<i class="fas fa-check"></i>复制成功';
-            copyButton.style.backgroundColor = isDarkMode ? '#2d5748' : '#9ae6b4';
+            copyButton.classList.add('markdown-btn');
             
             // 恢复原始状态
             setTimeout(() => {
                 copyButton.innerHTML = '<i class="fas fa-copy"></i>复制';
-                copyButton.style.backgroundColor = isDarkMode ? '#2d3748' : '#f8fafc';
+                copyButton.classList.remove('markdown-btn');
             }, 1500);
         }, 10);
     });
@@ -1232,9 +1217,6 @@ function addCopyButtonToMessage(messageElement) {
         console.error('未找到消息内容元素');
         return;
     }
-    
-    // 检测是否为暗色模式
-    const isDarkMode = document.body.classList.contains('dark-theme');
     
     // 创建复制按钮容器
     const copyButtonContainer = document.createElement('div');

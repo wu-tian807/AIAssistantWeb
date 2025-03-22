@@ -1017,3 +1017,76 @@
         }
     }
 }
+
+/* 复制按钮样式 */
+.mobile-copy-button {
+    padding: 6px 12px;
+    font-size: 14px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1px solid #e2e8f0;
+    background-color: #f8fafc;
+    color: #4a5568;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.mobile-copy-button:active {
+    transform: scale(0.95);
+    background-color: #e2e8f0;
+}
+
+.mobile-copy-button.markdown-btn {
+    background-color: #9ae6b4;
+    color: #22543d;
+}
+
+/* 桌面端复制按钮样式 */
+.desktop-copy-button-container {
+    margin-top: 10px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.desktop-copy-button {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    opacity: 0.8;
+    background-color: #f8fafc;
+    color: #4a5568;
+    border: 1px solid #e2e8f0;
+}
+
+.desktop-copy-button:hover {
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    background-color: #e2e8f0;
+}
+
+.desktop-copy-button i {
+    margin-right: 5px;
+}
+
+/* iOS样式复制按钮 */
+.ios-copy-button {
+    padding: 6px 12px;
+    font-size: 14px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1px solid #e2e8f0;
+    background-color: #f8fafc;
+    color: #4a5568;
+    cursor: pointer;
+}
