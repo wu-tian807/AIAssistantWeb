@@ -37,15 +37,12 @@ AVAILABLE_MODELS = {
     },
     'google': {
         'models': [
-            {'id': 'gemini-2.0-flash-001', 'name': 'Gemini 2.0 Flash', 'description': '新一代功能、速度和多模态生成，适用于各种各样的任务','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 16384 },
-            {'id': 'gemini-2.0-flash-lite-preview-02-05','name':'Gemini 2.0 Flash Lite Preview','description':'新一代功能、速度和多模态生成，适用于各种各样的任务','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 16384 },
-            {'id': 'gemini-2.0-pro-exp-02-05','name':'Gemini 2.0 Pro Exp','description':'质量有所提升，尤其是对于世界知识、代码和长篇幅上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 32768 },
-            {'id': 'gemini-2.0-flash-thinking-exp-01-21','name':'Gemini 2.0 Flash Thinking Exp','description':'针对复杂问题进行推理，具备新的思考能力','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 16384 ,'reasoner':True},
-            {'id': 'gemini-2.0-flash-exp', 'name': 'Gemini 2.0 Flash Exp', 'description': '新一代功能、卓越的速度、原生工具使用和多模态生成','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 15000 },
+            {'id': 'gemini-2.5-pro-exp-03-25', 'name': 'Gemini 2.5 Pro Exp', 'description': '最先进的思考模型，能够推理代码、数学和 STEM 领域的复杂问题，以及使用长上下文分析大型数据集、代码库和文档','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 131072 },
+            {'id': 'gemini-2.0-flash-lite','name':'Gemini 2.0 Flash Lite','description':'新一代功能、速度和多模态生成，适用于各种各样的任务','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 16384 },
+            {'id': 'gemini-2.0-flash', 'name': 'Gemini 2.0 Flash', 'description': '新一代功能、卓越的速度、原生工具使用和多模态生成','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens': 15000 },
             {'id': 'gemini-1.5-flash', 'name': 'Gemini 1.5 Flash', 'description': '快速、多样化的性能','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens':15000},
             {'id': 'gemini-1.5-flash-8b', 'name': 'Gemini 1.5 Flash-8B', 'description': '量大且智能程度较低的任务','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens':15000},
             {'id': 'gemini-1.5-pro', 'name': 'Gemini 1.5 Pro', 'description': '需要更多智能的复杂推理任务','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens':30000},
-            {'id': 'learnlm-1.5-pro-experimental', 'name': 'LearnLM 1.5 Pro', 'description': '支持音频、图片、视频和文本','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.GEMINI_VIDEO, AttachmentType.IMAGE],'max_output_tokens':4000}
         ],
         'api_type': 'google'
     },
@@ -65,10 +62,10 @@ AVAILABLE_MODELS = {
     'oaipro':{
         'models':[
             {'id':'gpt-4o-mini','name':'GPT4o Mini','description':'OpenAI的最快速的模型，支持128K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.IMAGE],'max_output_tokens':16000},
-            {'id':'gpt-4o','name':'GPT4o','description':'OpenAI的旗舰模型，支持128K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.IMAGE],'max_output_tokens':25000},
-            {'id':'chatgpt-4o-latest','name':'ChatGPT4o','description':'OpenAI最新的ChatGPT4o，支持128K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.IMAGE],'max_output_tokens':25000},
+            {'id':'gpt-4o','name':'GPT4o','description':'OpenAI的旗舰模型，支持128K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.IMAGE],'max_output_tokens':16384},
+            {'id':'chatgpt-4o-latest','name':'ChatGPT4o','description':'OpenAI最新的ChatGPT4o，支持128K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.IMAGE],'max_output_tokens':16384},
             {'id':'o1','name':'OpenAI o1','description':'OpenAI的高性能推理模型，支持200K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.IMAGE],'max_output_tokens':100000,'reasoner':True},
-             {'id':'o3-mini','name':'OpenAI o3-mini','description':'OpenAI新一代，支持200K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT],'max_output_tokens':100000,'reasoner':True}
+            {'id':'o3-mini','name':'OpenAI o3-mini','description':'OpenAI新一代，支持200K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT],'max_output_tokens':100000,'reasoner':True}
         ],
         'api_type':'openai'
     }
@@ -85,12 +82,12 @@ MAX_EMAILS_PER_WINDOW = 3  # 每个时间窗口内最多发送3封邮件
 #设置AliYun API用于Qwen2.5VL模型，用于增强型OCR（计价）
 # API配置
 API_KEYS = {
-    'google': ["API_KEY_1"],
-    'xai': ["API_KEY_2"],
-    'deepseek': ["API_KEY_3"],
-    'siliconcloud':["API_KEY_4"],
-    'aliyun': ["API_KEY_5"],
-    'oaipro': ["API_KEY_6"]
+    'google': ["API_KEY_FOR_GOOGLE"],
+    'xai': ["API_KEY_FOR_XAI"],
+    'deepseek': ["API_KEY_FOR_DEEPSEEK"],
+    'siliconcloud':["API_KEY_FOR_SILICONCLOUD"],
+    'aliyun': ["API_KEY_FOR_ALIYUN"],
+    'oaipro': ["API_KEY_FOR_OAIPRO"]
 }
 
 API_BASE_URLS = {
@@ -104,7 +101,7 @@ API_BASE_URLS = {
 
 #文字+latex公式图像ocr API和网址
 #感谢https://simpletex.cn
-OCR_API_KEY = "E1QcpnpmEPMNztTTy8tLkNVtKXJCB5nPOHrz1z1KQXNCDuvuMdIcshdPyN2BmJBS"
+OCR_API_KEY = "API_KEY_FOR_OCR"
 # OCR_TURBO_LATEX_API_URL = "https://server.simpletex.cn/api/latex_ocr_turbo" #轻量级图像提取公式
 # OCR_STANDARD_LATEX_API_URL = "https://server.simpletex.cn/api/latex_ocr" #标准图像提取公式
 OCR_COMMON_API_URL = "https://server.simpletex.cn/api/simpletex_ocr" #通用图像提取
