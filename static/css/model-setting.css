@@ -206,3 +206,62 @@
     opacity: 1;
     visibility: visible;
 }
+
+/* 思考力度相关样式 */
+.radio-container {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background-color: #f5f5f5;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex: 1;
+    margin: 0 5px;
+    justify-content: center;
+}
+
+.radio-label:first-child {
+    margin-left: 0;
+}
+
+.radio-label:last-child {
+    margin-right: 0;
+}
+
+.radio-label:hover {
+    background-color: #e0e0e0;
+}
+
+.radio-label input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.radio-label input[type="radio"]:checked + .radio-text {
+    font-weight: bold;
+    color: #007AFF;
+}
+
+.radio-label input[type="radio"]:checked ~ .radio-label {
+    background-color: #e6f0ff;
+    border: 1px solid #007AFF;
+    box-shadow: 0 0 5px rgba(0, 122, 255, 0.2);
+}
+
+.reasoning-preset-description {
+    padding: 12px;
+    background-color: rgba(0, 122, 255, 0.05);
+    border-radius: 6px;
+    font-size: 14px;
+    color: #555;
+    line-height: 1.4;
+}

@@ -1,3 +1,9 @@
+let modelSettingRenderer = null;
+
+export function setModelSettingRenderer(renderer) {
+    modelSettingRenderer = renderer;
+}
+
 export function getLastAssistantModel(conversation) {
     // 找到最后一条助手消息的模型信息
     let lastAssistantModel = null;
@@ -65,6 +71,11 @@ export function updateModelSelect(modelId, modelSelect) {
     // 触发 change 事件以更新图标
     const event = new Event('change');
     modelSelect.dispatchEvent(event);
+    
+    // 检查模型是否支持思考力度调整
+    if (modelSettingRenderer) {
+        modelSettingRenderer.checkReasoningEffortSupport(modelId);
+    }
 }
 
 // 获取可用模型列表

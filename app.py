@@ -410,6 +410,7 @@ def chat():
     user_id = session.get('user_id')
     temperature = data.get('temperature', 0.7)
     max_tokens = data.get('max_tokens', 4096)
+    reasoning_effort = data.get('reasoning_effort', 'high')  # 添加思考力度参数，默认为high
     
     # 从数据库获取用户设置
     user = User.query.get(user_id)
@@ -422,6 +423,7 @@ def chat():
     print(f"消息数量: {len(messages)}")
     print(f"用户ID: {user_id}")
     print(f"OCR功能: {'启用' if enable_ocr else '禁用'}")
+    print(f"思考力度: {reasoning_effort}")  # 添加日志
     
     # 验证对话归属权
     if conversation_id:
@@ -751,7 +753,7 @@ def chat():
                         messages=formatted_messages_for_deepseek if len(formatted_messages_for_deepseek) > 0 else processed_messages,
                         stream=True,
                         max_completion_tokens=max_tokens,
-                        reasoning_effort='high'
+                        reasoning_effort=reasoning_effort  # 使用参数而非硬编码
                     )
                 else:
                     stream = client.chat.completions.create(
@@ -1139,6 +1141,7 @@ def save_conversations():
     temperature = data.get('temperature')  # 移除默认值，使用数据库的默认值
     max_tokens = data.get('max_tokens')  # 移除默认值，使用数据库的默认值
     model_id = data.get('model_id')
+    reasoning_effort = data.get('reasoning_effort', 'high')  # 添加思考力度参数
     
     try:
         if operation == 'create':
@@ -1150,7 +1153,8 @@ def save_conversations():
                 system_prompt=conversation_data.get('systemPrompt'),
                 user_id=session['user_id'],
                 temperature=temperature,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
+                reasoning_effort=reasoning_effort  # 添加思考力度
             )
             db.session.add(conversation)
             
@@ -1170,6 +1174,8 @@ def save_conversations():
                     conversation.temperature = temperature
                 if max_tokens is not None:
                     conversation.max_tokens = max_tokens
+                if reasoning_effort is not None:
+                    conversation.reasoning_effort = reasoning_effort  # 更新思考力度
             
         elif operation == 'delete':
             # 删除对话

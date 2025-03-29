@@ -813,12 +813,14 @@ export async function saveConversation(conversationId, operation = 'update') {
     conversation.temperature = modelSettings.temperature;
     conversation.max_tokens = maxTokens;  // 保存 current_output_tokens
     conversation.model_id = selectedModel;  // 保存当前选中的模型
+    conversation.reasoning_effort = modelSettings.reasoning_effort; // 保存思考力度设置
 
     try {
         console.log('Saving conversation with settings:', {
             temperature: modelSettings.temperature,
             max_tokens: maxTokens,
-            model_id: selectedModel
+            model_id: selectedModel,
+            reasoning_effort: modelSettings.reasoning_effort
         });
         
         const response = await fetch('/api/conversations', {
@@ -829,7 +831,8 @@ export async function saveConversation(conversationId, operation = 'update') {
                 operation: operation,
                 temperature: modelSettings.temperature,
                 max_tokens: maxTokens,
-                model_id: selectedModel  
+                model_id: selectedModel,
+                reasoning_effort: modelSettings.reasoning_effort
             })
         });
         
@@ -877,6 +880,7 @@ async function createNewConversation() {
         const modelSettings = window.modelSettingRenderer.getSettings();
         conversation.temperature = modelSettings.temperature;
         conversation.max_tokens = modelSettings.current_output_tokens;
+        conversation.reasoning_effort = modelSettings.reasoning_effort; // 添加思考力度设置
     }
     
     conversations.unshift(conversation);
@@ -1182,11 +1186,16 @@ async function switchConversation(conversationId) {
             default_output_tokens: Math.floor(maxTokens / 2),
             default_temperature: 0.7,
             current_output_tokens: savedMaxTokens || Math.floor(maxTokens / 2),
-            temperature: conversation.temperature || 0.7
+            temperature: conversation.temperature || 0.7,
+            reasoning_effort: conversation.reasoning_effort || 'high'  // 添加思考力度设置，默认为high
         };
         
         console.log('Applying settings:', settings);
         window.modelSettingRenderer.setSettings(settings);
+        
+        // 检查当前模型是否支持思考力度调整
+        const currentModelId = modelSelect.value;
+        window.modelSettingRenderer.checkReasoningEffortSupport(currentModelId);
     }
     
     clearChatMessages();
@@ -1586,7 +1595,8 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
                         conversation_id: currentConversationId,
                         model_id: selectedModel,
                         temperature: temperature,
-                        max_tokens: max_tokens
+                        max_tokens: max_tokens,
+                        reasoning_effort: window.modelSettingRenderer.getSettings().reasoning_effort // 添加思考力度参数
                     })
                 });
 
@@ -1630,7 +1640,8 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
                             modelIcon: modelIcon,
                             modelId: selectedModel
                         }],
-                        currentVersion: 0
+                        currentVersion: 0,
+                        isInterrupted: true  // 标记为被中断的消息
                     });
                     
                     // 添加重新生成按钮和版本控制
@@ -3376,6 +3387,34 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
     let assistantMessage = '';
     let reasoningBox = null;
     
+    // 获取当前选择的模型
+    const selectedModel = document.getElementById('model-select').value;
+    console.log("当前选择的模型:", selectedModel);
+    
+    // 检查是否为高性能推理模型（如o1, o3-mini）
+    const isHighPerformanceReasoningModel = ['o1', 'o3-mini'].includes(selectedModel);
+    console.log("是否为高性能推理模型:", isHighPerformanceReasoningModel);
+    
+    // 检测设备性能
+    const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isLowPerformanceDevice = isMobileDevice || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
+    console.log("是否为移动设备:", isMobileDevice);
+    console.log("是否为低性能设备:", isLowPerformanceDevice);
+    
+    // 用于节流UI更新的变量
+    let lastUIUpdateTime = Date.now();
+    let pendingReasoningContent = '';
+    let pendingTextContent = '';
+    
+    // 根据设备和模型调整UI更新间隔
+    const REASONING_UPDATE_INTERVAL = isHighPerformanceReasoningModel ? 500 : (isLowPerformanceDevice ? 300 : 200);
+    const TEXT_UPDATE_INTERVAL = isLowPerformanceDevice ? 250 : (isHighPerformanceReasoningModel ? 200 : 150);
+    const MAX_CONTENT_BUFFER = isLowPerformanceDevice ? 1000 : 2000;  // 在低性能设备上减小缓冲区
+    
+    console.log("思考内容UI更新最小间隔:", REASONING_UPDATE_INTERVAL);
+    console.log("文本内容UI更新最小间隔:", TEXT_UPDATE_INTERVAL);
+    console.log("最大内容缓冲区大小:", MAX_CONTENT_BUFFER);
+    
     // 循环读取响应流
     console.log("准备进入读取流循环");
     let loopCounter = 0;
@@ -3395,6 +3434,12 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
                     console.log("保存reasoningBox到全局实例");
                     window.ReasoningBoxInstance = reasoningBox;
                 }
+                
+                // 处理剩余的内容
+                if (pendingTextContent) {
+                    updateTextContent(messageContent, assistantMessage, md, chatMessages, shouldScrollToBottom);
+                    pendingTextContent = '';
+                }
                 break;
             }
             
@@ -3406,6 +3451,20 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
             
             if (done) {
                 console.log("检测到流结束信号(done=true)");
+                // 如果有待处理的思考内容，最后一次更新UI
+                if (pendingReasoningContent && reasoningBox) {
+                    console.log("处理剩余的思考内容");
+                    reasoningBox.appendContent(pendingReasoningContent);
+                    pendingReasoningContent = '';
+                }
+                
+                // 如果有待处理的文本内容，最后一次更新UI
+                if (pendingTextContent) {
+                    console.log("处理剩余的文本内容");
+                    updateTextContent(messageContent, assistantMessage, md, chatMessages, shouldScrollToBottom);
+                    pendingTextContent = '';
+                }
+                
                 // 只有在存在 reasoningBox 时才标记完成
                 if (reasoningBox) {
                     console.log("标记reasoningBox完成");
@@ -3450,7 +3509,22 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
                                 // 保存到全局变量，以便stopGeneration可以访问
                                 window.ReasoningBoxInstance = reasoningBox;
                             }
-                            reasoningBox.appendContent(data.reasoning_content);
+                            
+                            // 累积思考内容并节流UI更新
+                            pendingReasoningContent += data.reasoning_content;
+                            const now = Date.now();
+                            
+                            // 如果达到更新间隔，或者内容太多，则更新UI
+                            if (now - lastUIUpdateTime >= REASONING_UPDATE_INTERVAL || 
+                                pendingReasoningContent.length > MAX_CONTENT_BUFFER) {
+                                console.log("更新思考内容UI，长度:", pendingReasoningContent.length);
+                                reasoningBox.appendContent(pendingReasoningContent);
+                                pendingReasoningContent = '';
+                                lastUIUpdateTime = now;
+                                
+                                // 给UI线程一点时间更新
+                                await new Promise(resolve => setTimeout(resolve, 0));
+                            }
                         } 
                         // 处理等待推理标志
                         else if (data.waiting_reasoning) {
@@ -3471,42 +3545,32 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
                             // 如果有 reasoningBox 且是第一次收到内容，标记思考完成
                             if (assistantMessage === '' && reasoningBox) {
                                 console.log("标记思考完成，进入生成内容阶段");
+                                
+                                // 如果有待处理的思考内容，确保在标记完成前处理完
+                                if (pendingReasoningContent) {
+                                    console.log("处理剩余的思考内容");
+                                    reasoningBox.appendContent(pendingReasoningContent);
+                                    pendingReasoningContent = '';
+                                }
+                                
                                 reasoningBox.markGenerationComplete();
                             }
+                            
+                            // 累积消息内容
                             assistantMessage += data.content;
-                            console.log("累积的消息内容长度:", assistantMessage.length);
-                            // 创建或更新普通内容的容器
-                            let textContentDiv = messageContent.querySelector('.text-content');
-                            if (!textContentDiv) {
-                                console.log("创建文本内容容器");
-                                textContentDiv = document.createElement('div');
-                                textContentDiv.className = 'text-content';
-                                messageContent.appendChild(textContentDiv);
-                            }
-                            textContentDiv.innerHTML = md.render(assistantMessage);
-                            initializeCodeBlocks(textContentDiv);
+                            pendingTextContent += data.content;
                             
-                            // 检查并处理图片加载完成后的滚动
-                            const images = textContentDiv.querySelectorAll('img');
-                            if (images.length > 0) {
-                                console.log("发现图片:", images.length);
-                                images.forEach(img => {
-                                    if (!img.complete) {
-                                        img.onload = function() {
-                                            console.log("图片加载完成，滚动到底部");
-                                            ensureScrollToBottom(chatMessages);
-                                        };
-                                    }
-                                });
-                            }   
-                            
-                            // 根据选项决定如何滚动
-                            if (shouldScrollToBottom) {
-                                console.log("强制滚动到底部");
-                                ensureScrollToBottom(chatMessages);
-                            } else if (shouldAutoScroll(chatMessages)) {
-                                console.log("自动滚动到内容可见");
-                                textContentDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                            // 节流UI更新 - 对所有模型都应用节流
+                            const now = Date.now();
+                            if (now - lastUIUpdateTime >= TEXT_UPDATE_INTERVAL || 
+                                pendingTextContent.length > MAX_CONTENT_BUFFER) {
+                                console.log("更新消息内容UI, 累积内容长度:", assistantMessage.length);
+                                updateTextContent(messageContent, assistantMessage, md, chatMessages, shouldScrollToBottom);
+                                pendingTextContent = '';
+                                lastUIUpdateTime = now;
+                                
+                                // 给UI线程一点时间更新
+                                await new Promise(resolve => setTimeout(resolve, 0));
                             }
                         }
                     } catch (error) {
@@ -3558,4 +3622,43 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
     console.log("最终返回内容长度:", assistantMessage.length);
     console.log("reasoningBox:", reasoningBox ? "已创建" : "未创建");
     return { assistantMessage, reasoningBox };
+    
+    // 辅助函数：更新文本内容
+    function updateTextContent(messageContent, text, mdRenderer, chatMessagesContainer, shouldScroll) {
+        // 创建或更新普通内容的容器
+        let textContentDiv = messageContent.querySelector('.text-content');
+        if (!textContentDiv) {
+            console.log("创建文本内容容器");
+            textContentDiv = document.createElement('div');
+            textContentDiv.className = 'text-content';
+            messageContent.appendChild(textContentDiv);
+        }
+        
+        // 渲染内容
+        textContentDiv.innerHTML = mdRenderer.render(text);
+        initializeCodeBlocks(textContentDiv);
+        
+        // 检查并处理图片加载完成后的滚动
+        const images = textContentDiv.querySelectorAll('img');
+        if (images.length > 0) {
+            console.log("发现图片:", images.length);
+            images.forEach(img => {
+                if (!img.complete) {
+                    img.onload = function() {
+                        console.log("图片加载完成，滚动到底部");
+                        ensureScrollToBottom(chatMessagesContainer);
+                    };
+                }
+            });
+        }   
+        
+        // 根据选项决定如何滚动
+        if (shouldScroll) {
+            console.log("强制滚动到底部");
+            ensureScrollToBottom(chatMessagesContainer);
+        } else if (shouldAutoScroll(chatMessagesContainer)) {
+            console.log("自动滚动到内容可见");
+            textContentDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+    }
 }

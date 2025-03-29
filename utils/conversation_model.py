@@ -11,6 +11,7 @@ class Conversation(db.Model):
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     temperature = db.Column(db.Float, default=0.7)
     max_tokens = db.Column(db.Integer, default=4096)
+    reasoning_effort = db.Column(db.String(20), default='high')  # 添加思考力度字段，默认为high
 
 
     def to_dict(self):
@@ -22,5 +23,6 @@ class Conversation(db.Model):
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
             'temperature': self.temperature,
-            'max_tokens': self.max_tokens
+            'max_tokens': self.max_tokens,
+            'reasoning_effort': self.reasoning_effort  # 添加思考力度到返回的字典中
         }
