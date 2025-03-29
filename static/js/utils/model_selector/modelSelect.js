@@ -98,389 +98,81 @@ export async function fetchModels() {
             }
         }
         
-        // 添加xAI模型组
-        if (models.xai && models.xai.models.length > 0) {
-            const xaiGroup = document.createElement('optgroup');
-            xaiGroup.label = 'xAI Models';
-            
-            // 如果存在自定义选择器，创建组
-            if (customSelect) {
-                const group = document.createElement('div');
-                group.className = 'option-group';
-                
-                const label = document.createElement('div');
-                label.className = 'group-label';
-                label.textContent = 'xAI Models';
-                group.appendChild(label);
-                
-                models.xai.models.forEach(model => {
-                    // 创建原始option
-                    const option = document.createElement('option');
-                    option.setAttribute('data-model-icon', 'xai');
-                    option.setAttribute('data-max-output-tokens', model.max_output_tokens);
-                    // 添加reasoner属性，如果存在
-                    if (model.reasoner !== undefined) {
-                        option.setAttribute('data-reasoner', model.reasoner);
-                    }
-                    option.value = model.id;
-                    option.textContent = `${model.name} - ${model.description}`;
-                    xaiGroup.appendChild(option);
-                    
-                    // 创建自定义选项
-                    const item = document.createElement('div');
-                    item.className = 'option-item';
-                    item.textContent = `${model.name} - ${model.description}`;
-                    item.setAttribute('data-value', model.id);
-                    item.setAttribute('data-model-icon', 'xai');
-                    item.setAttribute('data-max-output-tokens', model.max_output_tokens);
-                    // 添加reasoner属性，如果存在
-                    if (model.reasoner !== undefined) {
-                        item.setAttribute('data-reasoner', model.reasoner);
-                    }
-                    
-                    item.addEventListener('click', () => {
-                        const allItems = customSelect.querySelectorAll('.option-item');
-                        allItems.forEach(i => i.classList.remove('selected'));
-                        item.classList.add('selected');
-                        
-                        const selectedText = customSelect.querySelector('.selected-text');
-                        selectedText.textContent = item.textContent;
-                        
-                        select.value = model.id;
-                        const event = new Event('change');
-                        select.dispatchEvent(event);
-                        
-                        customSelect.classList.remove('open');
-                    });
-                    
-                    group.appendChild(item);
-                });
-                
-                customSelect.querySelector('.select-options').appendChild(group);
-            }
-            
-            select.appendChild(xaiGroup);
-        }
+        // 动态添加所有模型组
+        const modelGroups = Object.keys(models);
+        const modelGroupLabels = {
+            'xai': 'xAI Models',
+            'google': 'Google Models',
+            'deepseek': 'DeepSeek Models',
+            'siliconcloud': 'SiliconCloud Models',
+            'oaipro': 'OpenAI and Anthropic Models'
+        };
         
-        // 添加Google模型组
-        if (models.google && models.google.models.length > 0) {
-            const googleGroup = document.createElement('optgroup');
-            googleGroup.label = 'Google Models';
-            
-            // 如果存在自定义选择器，创建组
-            if (customSelect) {
-                const group = document.createElement('div');
-                group.className = 'option-group';
+        modelGroups.forEach(groupKey => {
+            const groupData = models[groupKey];
+            if (groupData && groupData.models.length > 0) {
+                const group = document.createElement('optgroup');
+                group.label = modelGroupLabels[groupKey] || `${groupKey} Models`;
                 
-                const label = document.createElement('div');
-                label.className = 'group-label';
-                label.textContent = 'Google Models';
-                group.appendChild(label);
-                
-                models.google.models.forEach(model => {
-                    // 创建原始option
-                    const option = document.createElement('option');
-                    option.setAttribute('data-model-icon', 'google');
-                    option.setAttribute('data-max-output-tokens', model.max_output_tokens);
-                    // 添加reasoner属性，如果存在
-                    if (model.reasoner !== undefined) {
-                        option.setAttribute('data-reasoner', model.reasoner);
-                    }
-                    option.value = model.id;
-                    option.textContent = `${model.name} - ${model.description}`;
-                    googleGroup.appendChild(option);
+                // 如果存在自定义选择器，创建组
+                if (customSelect) {
+                    const customGroup = document.createElement('div');
+                    customGroup.className = 'option-group';
                     
-                    // 创建自定义选项
-                    const item = document.createElement('div');
-                    item.className = 'option-item';
-                    item.textContent = `${model.name} - ${model.description}`;
-                    item.setAttribute('data-value', model.id);
-                    item.setAttribute('data-model-icon', 'google');
-                    item.setAttribute('data-max-output-tokens', model.max_output_tokens);
-                    // 添加reasoner属性，如果存在
-                    if (model.reasoner !== undefined) {
-                        item.setAttribute('data-reasoner', model.reasoner);
-                    }
+                    const label = document.createElement('div');
+                    label.className = 'group-label';
+                    label.textContent = modelGroupLabels[groupKey] || `${groupKey} Models`;
+                    customGroup.appendChild(label);
                     
-                    item.addEventListener('click', () => {
-                        const allItems = customSelect.querySelectorAll('.option-item');
-                        allItems.forEach(i => i.classList.remove('selected'));
-                        item.classList.add('selected');
+                    groupData.models.forEach(model => {
+                        // 创建原始option
+                        const option = document.createElement('option');
+                        option.setAttribute('data-model-icon', groupKey);
+                        option.setAttribute('data-max-output-tokens', model.max_output_tokens);
+                        // 添加reasoner属性，如果存在
+                        if (model.reasoner !== undefined) {
+                            option.setAttribute('data-reasoner', model.reasoner);
+                        }
+                        option.value = model.id;
+                        option.textContent = `${model.name} - ${model.description}`;
+                        group.appendChild(option);
                         
-                        const selectedText = customSelect.querySelector('.selected-text');
-                        selectedText.textContent = item.textContent;
+                        // 创建自定义选项
+                        const item = document.createElement('div');
+                        item.className = 'option-item';
+                        item.textContent = `${model.name} - ${model.description}`;
+                        item.setAttribute('data-value', model.id);
+                        item.setAttribute('data-model-icon', groupKey);
+                        item.setAttribute('data-max-output-tokens', model.max_output_tokens);
+                        // 添加reasoner属性，如果存在
+                        if (model.reasoner !== undefined) {
+                            item.setAttribute('data-reasoner', model.reasoner);
+                        }
                         
-                        select.value = model.id;
-                        const event = new Event('change');
-                        select.dispatchEvent(event);
+                        item.addEventListener('click', () => {
+                            const allItems = customSelect.querySelectorAll('.option-item');
+                            allItems.forEach(i => i.classList.remove('selected'));
+                            item.classList.add('selected');
+                            
+                            const selectedText = customSelect.querySelector('.selected-text');
+                            selectedText.textContent = item.textContent;
+                            
+                            select.value = model.id;
+                            const event = new Event('change');
+                            select.dispatchEvent(event);
+                            
+                            customSelect.classList.remove('open');
+                        });
                         
-                        customSelect.classList.remove('open');
+                        customGroup.appendChild(item);
                     });
                     
-                    group.appendChild(item);
-                });
+                    customSelect.querySelector('.select-options').appendChild(customGroup);
+                }
                 
-                customSelect.querySelector('.select-options').appendChild(group);
+                select.appendChild(group);
             }
-            
-            select.appendChild(googleGroup);
-        }
-
-        // 添加DeepSeek模型组
-        if (models.deepseek && models.deepseek.models.length > 0) {
-            const deepseekGroup = document.createElement('optgroup');
-            deepseekGroup.label = 'DeepSeek Models';
-            
-            // 如果存在自定义选择器，创建组
-            if (customSelect) {
-                const group = document.createElement('div');
-                group.className = 'option-group';
-                
-                const label = document.createElement('div');
-                label.className = 'group-label';
-                label.textContent = 'DeepSeek Models';
-                group.appendChild(label);
-                
-                models.deepseek.models.forEach(model => {
-                    // 创建原始option
-                    const option = document.createElement('option');
-                    option.setAttribute('data-model-icon', 'deepseek');
-                    option.setAttribute('data-max-output-tokens', model.max_output_tokens);
-                    // 添加reasoner属性，如果存在
-                    if (model.reasoner !== undefined) {
-                        option.setAttribute('data-reasoner', model.reasoner);
-                    }
-                    option.value = model.id;
-                    option.textContent = `${model.name} - ${model.description}`;
-                    deepseekGroup.appendChild(option);
-                    
-                    // 创建自定义选项
-                    const item = document.createElement('div');
-                    item.className = 'option-item';
-                    item.textContent = `${model.name} - ${model.description}`;
-                    item.setAttribute('data-value', model.id);
-                    item.setAttribute('data-model-icon', 'deepseek');
-                    item.setAttribute('data-max-output-tokens', model.max_output_tokens);
-                    // 添加reasoner属性，如果存在
-                    if (model.reasoner !== undefined) {
-                        item.setAttribute('data-reasoner', model.reasoner);
-                    }
-                    
-                    item.addEventListener('click', () => {
-                        const allItems = customSelect.querySelectorAll('.option-item');
-                        allItems.forEach(i => i.classList.remove('selected'));
-                        item.classList.add('selected');
-                        
-                        const selectedText = customSelect.querySelector('.selected-text');
-                        selectedText.textContent = item.textContent;
-                        
-                        select.value = model.id;
-                        const event = new Event('change');
-                        select.dispatchEvent(event);
-                        
-                        customSelect.classList.remove('open');
-                    });
-                    
-                    group.appendChild(item);
-                });
-                
-                customSelect.querySelector('.select-options').appendChild(group);
-            }
-            
-            select.appendChild(deepseekGroup);
-        }
-        
-        // 添加DeepSeek模型组后，添加SiliconCloud模型组
-        if (models.siliconcloud && models.siliconcloud.models.length > 0) {
-            const siliconcloudGroup = document.createElement('optgroup');
-            siliconcloudGroup.label = 'SiliconCloud Models';
-            
-            // 如果存在自定义选择器，创建组
-            if (customSelect) {
-                const group = document.createElement('div');
-                group.className = 'option-group';
-                
-                const label = document.createElement('div');
-                label.className = 'group-label';
-                label.textContent = 'SiliconCloud Models';
-                group.appendChild(label);
-                
-                models.siliconcloud.models.forEach(model => {
-                    // 创建原始option
-                    const option = document.createElement('option');
-                    option.setAttribute('data-model-icon', 'siliconcloud');
-                    option.setAttribute('data-max-output-tokens', model.max_output_tokens);
-                    // 添加reasoner属性，如果存在
-                    if (model.reasoner !== undefined) {
-                        option.setAttribute('data-reasoner', model.reasoner);
-                    }
-                    option.value = model.id;
-                    option.textContent = `${model.name} - ${model.description}`;
-                    siliconcloudGroup.appendChild(option);
-                    
-                    // 创建自定义选项
-                    const item = document.createElement('div');
-                    item.className = 'option-item';
-                    item.textContent = `${model.name} - ${model.description}`;
-                    item.setAttribute('data-value', model.id);
-                    item.setAttribute('data-model-icon', 'siliconcloud');
-                    item.setAttribute('data-max-output-tokens', model.max_output_tokens);
-                    // 添加reasoner属性，如果存在
-                    if (model.reasoner !== undefined) {
-                        item.setAttribute('data-reasoner', model.reasoner);
-                    }
-                    
-                    item.addEventListener('click', () => {
-                        const allItems = customSelect.querySelectorAll('.option-item');
-                        allItems.forEach(i => i.classList.remove('selected'));
-                        item.classList.add('selected');
-                        
-                        const selectedText = customSelect.querySelector('.selected-text');
-                        selectedText.textContent = item.textContent;
-                        
-                        select.value = model.id;
-                        const event = new Event('change');
-                        select.dispatchEvent(event);
-                        
-                        customSelect.classList.remove('open');
-                    });
-                    
-                    group.appendChild(item);
-                });
-                
-                customSelect.querySelector('.select-options').appendChild(group);
-            }
-            
-            select.appendChild(siliconcloudGroup);
-        }
-        //添加oaipro模型组
-        if (models.oaipro && models.oaipro.models.length > 0) {
-            const oaiproGroup = document.createElement('optgroup');
-            oaiproGroup.label = 'OAIPro Models';
-            
-            // 如果存在自定义选择器，创建组
-            if (customSelect) {
-                const group = document.createElement('div');
-                group.className = 'option-group';
-                
-                const label = document.createElement('div');
-                label.className = 'group-label';
-                label.textContent = 'OpenAI and Anthropic Models';
-                group.appendChild(label);
-                
-                models.oaipro.models.forEach(model => {
-                    // 创建原始option
-                    const option = document.createElement('option');
-                    option.setAttribute('data-model-icon', 'oaipro');
-                    option.setAttribute('data-max-output-tokens', model.max_output_tokens);
-                    // 添加reasoner属性，如果存在
-                    if (model.reasoner !== undefined) {
-                        option.setAttribute('data-reasoner', model.reasoner);
-                    }
-                    option.value = model.id;
-                    option.textContent = `${model.name} - ${model.description}`;
-                    oaiproGroup.appendChild(option);
-                    
-                    // 创建自定义选项
-                    const item = document.createElement('div');
-                    item.className = 'option-item';
-                    item.textContent = `${model.name} - ${model.description}`;
-                    item.setAttribute('data-value', model.id);
-                    item.setAttribute('data-model-icon', 'oaipro');
-                    item.setAttribute('data-max-output-tokens', model.max_output_tokens);
-                    // 添加reasoner属性，如果存在
-                    if (model.reasoner !== undefined) {
-                        item.setAttribute('data-reasoner', model.reasoner);
-                    }
-                    
-                    item.addEventListener('click', () => {
-                        const allItems = customSelect.querySelectorAll('.option-item');
-                        allItems.forEach(i => i.classList.remove('selected'));
-                        item.classList.add('selected');
-                        
-                        const selectedText = customSelect.querySelector('.selected-text');
-                        selectedText.textContent = item.textContent;
-                        
-                        select.value = model.id;
-                        const event = new Event('change');
-                        select.dispatchEvent(event);
-                        
-                        customSelect.classList.remove('open');
-                    });
-                    
-                    group.appendChild(item);
-                });
-                
-                customSelect.querySelector('.select-options').appendChild(group);
-            }
-            
-            select.appendChild(oaiproGroup);
-        }
-        //添加yunwu模型组
-        if (models.yunwu && models.yunwu.models.length > 0) {
-            const yunwuGroup = document.createElement('optgroup');
-            yunwuGroup.label = 'Yunwu Models';
-            
-            // 如果存在自定义选择器，创建组
-            if (customSelect) {
-                const group = document.createElement('div');
-                group.className = 'option-group';
-                
-                const label = document.createElement('div');
-                label.className = 'group-label';
-                label.textContent = 'OpenAI and Anthropic Models';
-                group.appendChild(label);
-                
-                models.yunwu.models.forEach(model => {
-                    // 创建原始option
-                    const option = document.createElement('option');
-                    option.setAttribute('data-model-icon', 'yunwu');
-                    option.setAttribute('data-max-output-tokens', model.max_output_tokens);
-                    // 添加reasoner属性，如果存在
-                    if (model.reasoner !== undefined) {
-                        option.setAttribute('data-reasoner', model.reasoner);
-                    }
-                    option.value = model.id;
-                    option.textContent = `${model.name} - ${model.description}`;
-                    yunwuGroup.appendChild(option);
-                    
-                    // 创建自定义选项
-                    const item = document.createElement('div');
-                    item.className = 'option-item';
-                    item.textContent = `${model.name} - ${model.description}`;
-                    item.setAttribute('data-value', model.id);
-                    item.setAttribute('data-model-icon', 'yunwu');
-                    item.setAttribute('data-max-output-tokens', model.max_output_tokens);
-                    // 添加reasoner属性，如果存在
-                    if (model.reasoner !== undefined) {
-                        item.setAttribute('data-reasoner', model.reasoner);
-                    }
-                    
-                    item.addEventListener('click', () => {
-                        const allItems = customSelect.querySelectorAll('.option-item');
-                        allItems.forEach(i => i.classList.remove('selected'));
-                        item.classList.add('selected');
-                        
-                        const selectedText = customSelect.querySelector('.selected-text');
-                        selectedText.textContent = item.textContent;
-                        
-                        select.value = model.id;
-                        const event = new Event('change');
-                        select.dispatchEvent(event);
-                        
-                        customSelect.classList.remove('open');
-                    });
-                    
-                    group.appendChild(item);
-                });
-                
-                customSelect.querySelector('.select-options').appendChild(group);
-            }
-            
-            select.appendChild(yunwuGroup);
-        }
-        
-                    
+        });
         
         // 设置默认选中的模型
         select.value = 'gemini-2.5-pro-exp-03-25';

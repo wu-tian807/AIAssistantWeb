@@ -16,6 +16,7 @@ from utils.files.file_config import ATTACHMENT_TYPES, AttachmentType
 from initialization import app, db, mail, xai_client, deepseek_client,gemini_pool,siliconcloud_client,oaipro_client,yunwu_client
 
 from config import THINKING_MODELS_WITHOUT_CONTENT
+from config import MODELS_WITHOUT_TOOL_SUPPORT
 from utils.user_model import User, DEFAULT_USER_SETTINGS
 from utils.conversation_model import Conversation
 
@@ -24,6 +25,11 @@ from utils.email_vailder import check_rate_limit, generate_verification_code, se
 
 from utils.files.file_config import MIME_TYPE_MAPPING, AttachmentType
 from utils.chat.message_processor import process_image_attachment, process_binary_attachment,process_video_attachment,process_image_attachment_by_ocr
+
+# 导入工具相关模块
+from utils.tool_wrapper import get_registered_tools, execute_tool
+from tools.base_tools import get_current_time, get_date_info
+from tools.tool_processor import get_tools, handle_tool_calls
 
 from routes.user import user_profile
 from routes.upload_status import upload_status_bp
@@ -35,7 +41,7 @@ from utils.attachment_handler.image_handler import delete_base64_file, save_base
 from routes.upload_attachment_types import upload_attachment_types_bp
 from routes.text.text_routes import text_bp  # 添加这行
 from routes.generate_text import summary_bp  # 导入摘要生成蓝图
-from routes.models_get import models_get_bp  # 导入模型蓝图
+from routes.models_get import models_get_bp, model_icons_bp  # 导入模型相关蓝图
 # 注册蓝图
 app.register_blueprint(user_profile)
 app.register_blueprint(user_settings)  # 注册用户设置蓝图
@@ -45,6 +51,7 @@ app.register_blueprint(upload_attachment_types_bp)  # 注册附件类型蓝图
 app.register_blueprint(text_bp, url_prefix='/api/text')  # 添加这行
 app.register_blueprint(summary_bp, url_prefix='/api/summary')  # 注册摘要生成蓝图
 app.register_blueprint(models_get_bp, url_prefix='/api/models')  # 注册模型蓝图
+app.register_blueprint(model_icons_bp, url_prefix='/api/models')  # 注册模型图标蓝图
 
 # 在每个请求之前生成CSRF Token
 @app.before_request
@@ -412,6 +419,10 @@ def chat():
     max_tokens = data.get('max_tokens', 4096)
     reasoning_effort = data.get('reasoning_effort', 'high')  # 添加思考力度参数，默认为high
     
+    # 添加工具调用参数
+    enable_tools = data.get('enable_tools', True)  # 占位符，默认开启工具
+    selected_tools = data.get('selected_tools', None)  # 用户选择的工具，默认为None表示使用所有工具
+    
     # 从数据库获取用户设置
     user = User.query.get(user_id)
     enable_ocr = user.get_setting('enable_ocr', DEFAULT_USER_SETTINGS['enable_ocr']) if user else DEFAULT_USER_SETTINGS['enable_ocr']
@@ -423,8 +434,8 @@ def chat():
     print(f"消息数量: {len(messages)}")
     print(f"用户ID: {user_id}")
     print(f"OCR功能: {'启用' if enable_ocr else '禁用'}")
-    print(f"思考力度: {reasoning_effort}")  # 添加日志
-    
+    print(f"思考力度: {reasoning_effort}")
+    print(f"工具调用: {'启用' if enable_tools else '禁用'}")  # 添加日志
     # 验证对话归属权
     if conversation_id:
         conversation = Conversation.query.filter_by(id=conversation_id, user_id=session['user_id']).first()
@@ -450,6 +461,26 @@ def chat():
     if not model_type:
         return jsonify({'error': '不支持的模型'}), 400
 
+    # 检查模型是否支持工具调用
+    supports_tools = model_id not in MODELS_WITHOUT_TOOL_SUPPORT
+    if enable_tools and not supports_tools:
+        print(f"警告: 模型 {model_id} 不支持工具调用，已禁用工具功能")
+        enable_tools = False
+        
+    # 获取可用工具
+    available_tools = []
+    if enable_tools and supports_tools:
+        available_tools = get_tools(enable_tools, selected_tools)
+        print(f"可用工具数量: {len(available_tools)}")
+        for tool in available_tools:
+            if 'function' in tool and 'name' in tool['function']:
+                print(f"  - {tool['function']['name']}")
+            else:
+                print(f"  - {tool}")  # 工具格式可能不标准，直接打印
+    # 测试代码：假设获取了预设的两个工具
+    available_tools = get_tools()
+    print(f"可用工具数量: {len(available_tools)}")
+    #测试结束
     def process_message_with_attachments(message, model_type, model_support_list, user_id,enable_ocr,enhanced_visual):
         # 从配置中获取支持的图片类型
         from utils.files.file_config import MIME_TYPE_MAPPING, ATTACHMENT_TYPES, AttachmentType
@@ -741,28 +772,45 @@ def chat():
                         client = xai_client
                     elif provider == 'oaipro':
                         client = oaipro_client
-                    elif provider == 'yunwu':
-                        client = yunwu_client
                 stream = None
                 if model_id in THINKING_MODELS_WITHOUT_CONTENT:
                     print(f"发送 waiting_reasoning 数据，模型: {model_id}")
                     yield f"data: {json.dumps({'waiting_reasoning':True})}\n\n"
                     print("waiting_reasoning 数据已发送")
-                    stream = client.chat.completions.create(
-                        model=model_id,
-                        messages=formatted_messages_for_deepseek if len(formatted_messages_for_deepseek) > 0 else processed_messages,
-                        stream=True,
-                        max_completion_tokens=max_tokens,
-                        reasoning_effort=reasoning_effort  # 使用参数而非硬编码
-                    )
+                    
+                    # 创建基本参数
+                    params = {
+                        "model": model_id,
+                        "messages": formatted_messages_for_deepseek if len(formatted_messages_for_deepseek) > 0 else processed_messages,
+                        "stream": True,
+                        "max_completion_tokens": max_tokens,
+                        "reasoning_effort": reasoning_effort
+                    }
+                    
+                    # 如果支持工具且已启用工具，添加tools参数
+                    if enable_tools and supports_tools and available_tools:
+                        print(f"为推理模型 {model_id} 添加工具参数，工具数量: {len(available_tools)}")
+                        params["tools"] = available_tools
+                    
+                    # 调用模型API
+                    stream = client.chat.completions.create(**params)
                 else:
-                    stream = client.chat.completions.create(
-                        model=model_id,
-                        messages=formatted_messages_for_deepseek if len(formatted_messages_for_deepseek) > 0 else processed_messages,
-                        stream=True,
-                        temperature=temperature,
-                        max_tokens=max_tokens
-                    )
+                    # 创建基本参数
+                    params = {
+                        "model": model_id,
+                        "messages": formatted_messages_for_deepseek if len(formatted_messages_for_deepseek) > 0 else processed_messages,
+                        "stream": True,
+                        "temperature": temperature,
+                        "max_tokens": max_tokens
+                    }
+                    
+                    # 如果支持工具且已启用工具，添加tools参数
+                    if enable_tools and supports_tools and available_tools:
+                        print(f"为模型 {model_id} 添加工具参数，工具数量: {len(available_tools)}")
+                        params["tools"] = available_tools
+                    
+                    # 调用模型API
+                    stream = client.chat.completions.create(**params)
                 chunk = None
                 if is_reasoner:
                     print("使用reasoner模式")
@@ -807,8 +855,60 @@ def chat():
                             continue
                 else:        
                     # 处理流式响应
+                    tool_calls_data = []  # 收集工具调用数据
+                    current_tool_call = None  # 当前正在处理的工具调用
+                    
                     for chunk in stream:
                         try:
+                            # 调试信息：打印整个chunk
+                            print("\n--- 调试: Stream Chunk ---")
+                            print(f"Chunk类型: {type(chunk)}")
+                            print(f"Chunk内容: {chunk}")
+                            
+                            # 检查是否有工具调用
+                            if hasattr(chunk.choices[0].delta, 'tool_calls') and chunk.choices[0].delta.tool_calls:
+                                print("\n!!! 发现工具调用 !!!")
+                                print(f"tool_calls: {chunk.choices[0].delta.tool_calls}")
+                                
+                                # 处理工具调用（仅记录，暂不执行）
+                                for tc in chunk.choices[0].delta.tool_calls:
+                                    tool_id = tc.id if hasattr(tc, 'id') else None
+                                    tool_index = tc.index if hasattr(tc, 'index') else 0
+                                    print(f"  工具ID: {tool_id}, 索引: {tool_index}")
+                                    
+                                    if hasattr(tc, 'function'):
+                                        func_name = tc.function.name if hasattr(tc.function, 'name') else None
+                                        func_args = tc.function.arguments if hasattr(tc.function, 'arguments') else None
+                                        print(f"  函数名: {func_name}")
+                                        print(f"  函数参数: {func_args}")
+                                    
+                                    # 工具调用数据收集
+                                    if tool_id:
+                                        # 查找现有工具调用记录
+                                        existing_call = next((t for t in tool_calls_data if t.get('id') == tool_id), None)
+                                        
+                                        if not existing_call:
+                                            # 新建工具调用记录
+                                            tool_call_data = {
+                                                'id': tool_id,
+                                                'index': tool_index,
+                                                'function': {
+                                                    'name': func_name,
+                                                    'arguments': ''
+                                                }
+                                            }
+                                            tool_calls_data.append(tool_call_data)
+                                            current_tool_call = tool_call_data
+                                            print(f"创建新工具调用记录: {tool_call_data}")
+                                        else:
+                                            current_tool_call = existing_call
+                                        
+                                        # 累积函数参数
+                                        if func_args and current_tool_call:
+                                            current_tool_call['function']['arguments'] += func_args
+                                            print(f"累积参数: {current_tool_call['function']['arguments']}")
+                            
+                            # 检查是否有内容
                             if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
                                 content = chunk.choices[0].delta.content
                                 accumulated_output.append(content)
@@ -827,8 +927,15 @@ def chat():
                                         yield response
                                     except:
                                         print("无法序列化内容，跳过")
+                            
+                            # 检查是否工具调用结束
+                            if hasattr(chunk.choices[0], 'finish_reason') and chunk.choices[0].finish_reason == 'tool_calls':
+                                print("\n*** 工具调用结束，finish_reason=tool_calls ***")
+                                # 将来在这里处理工具调用并继续对话
+                                
                         except Exception as e:
                             print(f"处理流式响应chunk时出错: {str(e)}")
+                            print(f"错误详情:\n{traceback.format_exc()}")
                             continue
                 last_response = chunk
                 if last_response and hasattr(last_response, 'usage') and last_response.usage is not None:

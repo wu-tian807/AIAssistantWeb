@@ -68,12 +68,6 @@ AVAILABLE_MODELS = {
             {'id':'o3-mini','name':'OpenAI o3-mini','description':'OpenAI新一代，支持200K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT],'max_output_tokens':100000,'reasoner':True}
         ],
         'api_type':'openai'
-    },
-    'yunwu':{
-        'models':[
-            {'id':'gpt-4o-image','name':'GPT4O IMAGE','description':'GPT4O IMAGE，支持128K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.IMAGE],'max_output_tokens':16384}
-        ],
-        'api_type':'openai'
     }
 }
 #思考模型但是不会返回思考内容的模型
