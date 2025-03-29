@@ -68,6 +68,12 @@ AVAILABLE_MODELS = {
             {'id':'o3-mini','name':'OpenAI o3-mini','description':'OpenAI新一代，支持200K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT],'max_output_tokens':100000,'reasoner':True}
         ],
         'api_type':'openai'
+    },
+    'yunwu':{
+        'models':[
+            {'id':'gpt-4o-image','name':'GPT4O IMAGE','description':'GPT4O IMAGE，支持128K上下文','available_attachments':[AttachmentType.DOCUMENT, AttachmentType.TEXT, AttachmentType.IMAGE],'max_output_tokens':16384}
+        ],
+        'api_type':'openai'
     }
 }
 #思考模型但是不会返回思考内容的模型
@@ -87,7 +93,8 @@ API_KEYS = {
     'deepseek': ["API_KEY_FOR_DEEPSEEK"],
     'siliconcloud':["API_KEY_FOR_SILICONCLOUD"],
     'aliyun': ["API_KEY_FOR_ALIYUN"],
-    'oaipro': ["API_KEY_FOR_OAIPRO"]
+    'oaipro': ["API_KEY_FOR_OAIPRO"],
+    'yunwu': ["API_KEY_FOR_YUNWU"]
 }
 
 API_BASE_URLS = {
@@ -96,7 +103,8 @@ API_BASE_URLS = {
     'deepseek': "https://api.deepseek.com/v1",
     'siliconcloud': "https://api.siliconflow.cn/v1",
     'aliyun': "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    'oaipro': 'https://api.oaipro.com/v1'
+    'oaipro': 'https://api.oaipro.com/v1',
+    'yunwu': 'https://yunwu.ai/v1'
 }
 
 #文字+latex公式图像ocr API和网址

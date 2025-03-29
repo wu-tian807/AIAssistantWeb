@@ -13,7 +13,7 @@ from config import AVAILABLE_MODELS
 from config import RATE_LIMIT_WINDOW
 from utils.files.file_config import ATTACHMENT_TYPES, AttachmentType
 
-from initialization import app, db, mail, xai_client, deepseek_client,gemini_pool,siliconcloud_client,oaipro_client
+from initialization import app, db, mail, xai_client, deepseek_client,gemini_pool,siliconcloud_client,oaipro_client,yunwu_client
 
 from config import THINKING_MODELS_WITHOUT_CONTENT
 from utils.user_model import User, DEFAULT_USER_SETTINGS
@@ -739,6 +739,8 @@ def chat():
                         client = xai_client
                     elif provider == 'oaipro':
                         client = oaipro_client
+                    elif provider == 'yunwu':
+                        client = yunwu_client
                 stream = None
                 if model_id in THINKING_MODELS_WITHOUT_CONTENT:
                     print(f"发送 waiting_reasoning 数据，模型: {model_id}")
@@ -846,6 +848,12 @@ def chat():
             elif model_type == 'google':
                 # Google 模型调用
                 genai_client = gemini_pool.get_client()
+                
+                # 检查是否是思考模型，如果是则发送waiting_reasoning信号
+                if model_id in THINKING_MODELS_WITHOUT_CONTENT:
+                    print(f"发送 waiting_reasoning 数据，模型: {model_id}")
+                    yield f"data: {json.dumps({'waiting_reasoning':True})}\n\n"
+                    print("waiting_reasoning 数据已发送")
                 
                 # 将消息转换为 Google SDK 格式，采用新的格式标准
                 formatted_history = []

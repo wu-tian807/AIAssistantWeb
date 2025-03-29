@@ -82,6 +82,7 @@ deepseek_client = OpenAI(api_key=API_KEYS['deepseek'][0], base_url=API_BASE_URLS
 siliconcloud_client = OpenAI(api_key=API_KEYS['siliconcloud'][0], base_url=API_BASE_URLS['siliconcloud'])
 aliyun_client = OpenAI(api_key=API_KEYS['aliyun'][0], base_url=API_BASE_URLS['aliyun'])
 oaipro_client = OpenAI(api_key=API_KEYS['oaipro'][0], base_url=API_BASE_URLS['oaipro'])
+yunwu_client = OpenAI(api_key=API_KEYS['yunwu'][0], base_url=API_BASE_URLS['yunwu'])
 
 # 初始化数据库迁移
 migrate = Migrate(app, db)
