@@ -1295,28 +1295,10 @@ function monitorVersionSwitching() {
             const messageElement = messageActions.closest('.message-wrapper');
             if (!messageElement) return;
             
-            // 等待版本切换完成后再更新复制按钮
-            setTimeout(() => {
-                // 移除现有的复制按钮
-                const mobileCopyContainer = messageElement.querySelector('.mobile-copy-button-container');
-                if (mobileCopyContainer) {
-                    mobileCopyContainer.remove();
-                }
-                
-                const desktopCopyContainer = messageElement.querySelector('.desktop-copy-button-container');
-                if (desktopCopyContainer) {
-                    desktopCopyContainer.remove();
-                }
-                
-                // 重新添加复制按钮
-                if (window.isMobile) {
-                    addMobileCopyButtonToMessage(messageElement);
-                } else {
-                    addCopyButtonToMessage(messageElement);
-                }
-                
-                console.log('版本切换后更新了复制按钮');
-            }, 500); // 等待500ms确保版本已切换完成
+            // 不再移除和添加复制按钮，这些操作在switchVersion函数中处理
+            console.log('检测到版本切换按钮点击');
+            
+            // 如果需要，在这里可以添加其他代码来处理版本切换按钮点击事件
         }
     });
 }

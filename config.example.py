@@ -74,6 +74,8 @@ AVAILABLE_MODELS = {
 THINKING_MODELS_WITHOUT_CONTENT = ['o1','gemini-2.0-flash-thinking-exp-01-21','o3-mini']
 #思考模型可以调整思考力度的模型
 THINKING_MODELS_WITH_THINKING_DEGREE = ['o1','o3-mini']
+# 不支持工具调用的模型列表
+MODELS_WITHOUT_TOOL_SUPPORT = ['deepseek-reasoner', 'deepseek-ai/DeepSeek-R1']
 
 #速率限制
 RATE_LIMIT_WINDOW = 60  # 60秒时间窗口

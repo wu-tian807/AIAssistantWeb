@@ -1,5 +1,5 @@
 from google.genai.types import HarmCategory, HarmBlockThreshold
-from google.genai.types import Part,GenerateContentConfigDict
+from google.genai.types import Part,GenerateContentConfigDict,Content
 import base64
 import os
 from flask import render_template, request, jsonify, Response, session, redirect, url_for, send_file
@@ -17,6 +17,7 @@ from initialization import app, db, mail, xai_client, deepseek_client,gemini_poo
 
 from config import THINKING_MODELS_WITHOUT_CONTENT
 from config import MODELS_WITHOUT_TOOL_SUPPORT
+from config import THINKING_MODELS_WITH_THINKING_DEGREE
 from utils.user_model import User, DEFAULT_USER_SETTINGS
 from utils.conversation_model import Conversation
 
@@ -470,17 +471,18 @@ def chat():
     # 获取可用工具
     available_tools = []
     if enable_tools and supports_tools:
-        available_tools = get_tools(enable_tools, selected_tools)
+        # 不使用selected_tools参数，始终获取所有工具
+        available_tools = get_tools(enable_tools)
         print(f"可用工具数量: {len(available_tools)}")
         for tool in available_tools:
             if 'function' in tool and 'name' in tool['function']:
                 print(f"  - {tool['function']['name']}")
             else:
                 print(f"  - {tool}")  # 工具格式可能不标准，直接打印
-    # 测试代码：假设获取了预设的两个工具
-    available_tools = get_tools()
-    print(f"可用工具数量: {len(available_tools)}")
-    #测试结束
+    
+    # 移除消息历史转换逻辑，保持消息格式统一
+    # 格式转换只在API调用前进行
+
     def process_message_with_attachments(message, model_type, model_support_list, user_id,enable_ocr,enhanced_visual):
         # 从配置中获取支持的图片类型
         from utils.files.file_config import MIME_TYPE_MAPPING, ATTACHMENT_TYPES, AttachmentType
@@ -772,181 +774,91 @@ def chat():
                         client = xai_client
                     elif provider == 'oaipro':
                         client = oaipro_client
-                stream = None
+                
+                # 初始化token计数
+                input_tokens_total = 0
+                output_tokens_total = 0
+                cached_input_tokens_total = 0
+                
+                # 移除工具调用自循环逻辑，一次只处理一轮对话
+                print("\n=== 开始处理模型请求 ===")
+                
+                # 如果是思考模型但不返回思考内容，发送等待信号
                 if model_id in THINKING_MODELS_WITHOUT_CONTENT:
                     print(f"发送 waiting_reasoning 数据，模型: {model_id}")
                     yield f"data: {json.dumps({'waiting_reasoning':True})}\n\n"
                     print("waiting_reasoning 数据已发送")
+                
+                # 创建基本参数
+                params = {
+                    "model": model_id,
+                    "messages": formatted_messages_for_deepseek if len(formatted_messages_for_deepseek) > 0 else processed_messages,
+                    "stream": True
+                }
+                
+                # API调用前转换格式
+                if enable_tools and supports_tools and available_tools:
+                    # 导入转换函数
+                    from tools.tool_processor import convert_tools_for_openai
+                    # 一次性转换工具定义和消息
+                    openai_config = convert_tools_for_openai(
+                        tools=available_tools,
+                        messages=params["messages"]
+                    )
                     
-                    # 创建基本参数
-                    params = {
-                        "model": model_id,
-                        "messages": formatted_messages_for_deepseek if len(formatted_messages_for_deepseek) > 0 else processed_messages,
-                        "stream": True,
-                        "max_completion_tokens": max_tokens,
-                        "reasoning_effort": reasoning_effort
-                    }
+                    # 更新工具配置
+                    if "tool_config" in openai_config:
+                        print(f"为OpenAI添加工具配置: {openai_config['tool_config']}")
+                        params.update(openai_config["tool_config"])
                     
-                    # 如果支持工具且已启用工具，添加tools参数
-                    if enable_tools and supports_tools and available_tools:
-                        print(f"为推理模型 {model_id} 添加工具参数，工具数量: {len(available_tools)}")
-                        params["tools"] = available_tools
-                    
-                    # 调用模型API
-                    stream = client.chat.completions.create(**params)
+                    # 更新转换后的消息
+                    if "converted_messages" in openai_config:
+                        params["messages"] = openai_config["converted_messages"]
+                
+                # 根据模型类型添加不同的参数
+                if model_id in THINKING_MODELS_WITHOUT_CONTENT:
+                    # 推理模型使用max_completion_tokens
+                    params["max_completion_tokens"] = max_tokens
                 else:
-                    # 创建基本参数
-                    params = {
-                        "model": model_id,
-                        "messages": formatted_messages_for_deepseek if len(formatted_messages_for_deepseek) > 0 else processed_messages,
-                        "stream": True,
-                        "temperature": temperature,
-                        "max_tokens": max_tokens
-                    }
-                    
-                    # 如果支持工具且已启用工具，添加tools参数
-                    if enable_tools and supports_tools and available_tools:
-                        print(f"为模型 {model_id} 添加工具参数，工具数量: {len(available_tools)}")
-                        params["tools"] = available_tools
-                    
-                    # 调用模型API
-                    stream = client.chat.completions.create(**params)
-                chunk = None
-                if is_reasoner:
-                    print("使用reasoner模式")
-                    for chunk in stream:
-                        try:
-                            reasoning_content = None
-                            content = None
-                            if hasattr(chunk.choices[0].delta, 'reasoning_content') and chunk.choices[0].delta.reasoning_content is not None:
-                                reasoning_content = chunk.choices[0].delta.reasoning_content
-                                accumulated_output.append(reasoning_content)
-                                # 立即发送推理内容
-                                response = f"data: {json.dumps({'reasoning_content': reasoning_content})}\n\n"
-                                yield response
-                                # 强制刷新
-                                if hasattr(response, 'flush'):
-                                    response.flush()
-                            elif hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
-                                content = chunk.choices[0].delta.content
-                                accumulated_output.append(content)
-                                # 立即发送内容
-                                try:
-                                    response = f"data: {json.dumps({'content': content})}\n\n"
-                                    yield response
-                                    # 强制刷新
-                                    if hasattr(response, 'flush'):
-                                        response.flush()
-                                except Exception as e:
-                                    print(f"JSON序列化错误: {str(e)}, 内容: {content}")
-                                    # 尝试使用安全的JSON序列化
-                                    try:
-                                        response = f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
-                                        yield response
-                                    except:
-                                        print("无法序列化内容，跳过")
-                            # 安全地记录日志，避免空值
-                            if reasoning_content is not None:
-                                print(f"reasoning_content: {reasoning_content}")
-                            if content is not None:
-                                print(f"content: {content}")
-                        except Exception as e:
-                            print(f"处理流式响应chunk时出错: {str(e)}")
-                            continue
-                else:        
-                    # 处理流式响应
-                    tool_calls_data = []  # 收集工具调用数据
-                    current_tool_call = None  # 当前正在处理的工具调用
-                    
-                    for chunk in stream:
-                        try:
-                            # 调试信息：打印整个chunk
-                            print("\n--- 调试: Stream Chunk ---")
-                            print(f"Chunk类型: {type(chunk)}")
-                            print(f"Chunk内容: {chunk}")
-                            
-                            # 检查是否有工具调用
-                            if hasattr(chunk.choices[0].delta, 'tool_calls') and chunk.choices[0].delta.tool_calls:
-                                print("\n!!! 发现工具调用 !!!")
-                                print(f"tool_calls: {chunk.choices[0].delta.tool_calls}")
-                                
-                                # 处理工具调用（仅记录，暂不执行）
-                                for tc in chunk.choices[0].delta.tool_calls:
-                                    tool_id = tc.id if hasattr(tc, 'id') else None
-                                    tool_index = tc.index if hasattr(tc, 'index') else 0
-                                    print(f"  工具ID: {tool_id}, 索引: {tool_index}")
-                                    
-                                    if hasattr(tc, 'function'):
-                                        func_name = tc.function.name if hasattr(tc.function, 'name') else None
-                                        func_args = tc.function.arguments if hasattr(tc.function, 'arguments') else None
-                                        print(f"  函数名: {func_name}")
-                                        print(f"  函数参数: {func_args}")
-                                    
-                                    # 工具调用数据收集
-                                    if tool_id:
-                                        # 查找现有工具调用记录
-                                        existing_call = next((t for t in tool_calls_data if t.get('id') == tool_id), None)
-                                        
-                                        if not existing_call:
-                                            # 新建工具调用记录
-                                            tool_call_data = {
-                                                'id': tool_id,
-                                                'index': tool_index,
-                                                'function': {
-                                                    'name': func_name,
-                                                    'arguments': ''
-                                                }
-                                            }
-                                            tool_calls_data.append(tool_call_data)
-                                            current_tool_call = tool_call_data
-                                            print(f"创建新工具调用记录: {tool_call_data}")
-                                        else:
-                                            current_tool_call = existing_call
-                                        
-                                        # 累积函数参数
-                                        if func_args and current_tool_call:
-                                            current_tool_call['function']['arguments'] += func_args
-                                            print(f"累积参数: {current_tool_call['function']['arguments']}")
-                            
-                            # 检查是否有内容
-                            if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
-                                content = chunk.choices[0].delta.content
-                                accumulated_output.append(content)
-                                # 立即发送内容
-                                try:
-                                    response = f"data: {json.dumps({'content': content})}\n\n"
-                                    yield response
-                                    # 强制刷新
-                                    if hasattr(response, 'flush'):
-                                        response.flush()
-                                except Exception as e:
-                                    print(f"JSON序列化错误: {str(e)}, 内容: {content}")
-                                    # 尝试使用安全的JSON序列化
-                                    try:
-                                        response = f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
-                                        yield response
-                                    except:
-                                        print("无法序列化内容，跳过")
-                            
-                            # 检查是否工具调用结束
-                            if hasattr(chunk.choices[0], 'finish_reason') and chunk.choices[0].finish_reason == 'tool_calls':
-                                print("\n*** 工具调用结束，finish_reason=tool_calls ***")
-                                # 将来在这里处理工具调用并继续对话
-                                
-                        except Exception as e:
-                            print(f"处理流式响应chunk时出错: {str(e)}")
-                            print(f"错误详情:\n{traceback.format_exc()}")
-                            continue
-                last_response = chunk
+                    # 普通模型使用max_tokens和temperature
+                    params["max_tokens"] = max_tokens
+                    params["temperature"] = temperature
+                
+                # 仅为支持思考力度的模型添加reasoning_effort参数
+                if model_id in THINKING_MODELS_WITH_THINKING_DEGREE:
+                    print(f"为模型 {model_id} 添加思考力度参数: {reasoning_effort}")
+                    params["reasoning_effort"] = reasoning_effort
+                
+                # 调用模型API
+                print(f"调用模型API，参数: {params}")
+                stream = client.chat.completions.create(**params)
+
+                # 使用新的流处理函数
+                from utils.chat.stream_processor import process_stream_response
+                # 处理流式响应并获取最后一个chunk
+                generator, get_last_chunk = process_stream_response(stream, is_reasoner, accumulated_output)
+                
+                # 提供响应
+                for response_chunk in generator:
+                    # 发送响应到前端
+                    yield response_chunk
+                
+                # 获取最后一个响应chunk用于token统计
+                last_response = get_last_chunk()
                 if last_response and hasattr(last_response, 'usage') and last_response.usage is not None:
                     try:
                         usage_dict = last_response.usage
                         if usage_dict and hasattr(usage_dict, 'prompt_tokens'):
-                            input_tokens = usage_dict.prompt_tokens - (usage_dict.prompt_tokens_details.cached_tokens if hasattr(usage_dict, 'prompt_tokens_details') and usage_dict.prompt_tokens_details else 0)
-                            output_tokens = usage_dict.completion_tokens if hasattr(usage_dict, 'completion_tokens') else 0
-                            cached_input_tokens = usage_dict.prompt_tokens_details.cached_tokens if hasattr(usage_dict, 'prompt_tokens_details') and usage_dict.prompt_tokens_details else 0
+                            current_input_tokens = usage_dict.prompt_tokens - (usage_dict.prompt_tokens_details.cached_tokens if hasattr(usage_dict, 'prompt_tokens_details') and usage_dict.prompt_tokens_details else 0)
+                            current_output_tokens = usage_dict.completion_tokens if hasattr(usage_dict, 'completion_tokens') else 0
+                            current_cached_input_tokens = usage_dict.prompt_tokens_details.cached_tokens if hasattr(usage_dict, 'prompt_tokens_details') and usage_dict.prompt_tokens_details else 0
+                            
+                            input_tokens_total += current_input_tokens
+                            output_tokens_total += current_output_tokens
+                            cached_input_tokens_total += current_cached_input_tokens
+                            
                             use_estimated = False
-                            print(f"从OpenAI响应获取到token数 - 输入: {input_tokens}, 输出: {output_tokens}, 缓存输入: {cached_input_tokens}")
+                            print(f"从OpenAI响应获取到token数 - 输入: {current_input_tokens}, 输出: {current_output_tokens}, 缓存输入: {current_cached_input_tokens}")
                     except Exception as e:
                         print(f"从OpenAI响应获取token数时出错: {e}")
                         print(f"完整的usage信息: {last_response.usage if hasattr(last_response, 'usage') else 'None'}")
@@ -954,6 +866,45 @@ def chat():
                 else:
                     print("无法从OpenAI响应获取token数，使用tiktoken估算")
                     use_estimated = True
+                
+                # 设置最终的token计数
+                input_tokens = input_tokens_total
+                output_tokens = output_tokens_total
+                cached_input_tokens = cached_input_tokens_total
+                
+                if use_estimated:
+                    # 使用tiktoken计算token数量
+                    print(f"使用tiktoken计算{model_id}的token数")
+                    
+                    # 针对OpenAI模型格式进行预处理
+                    formatted_messages_for_token = []
+                    for msg in processed_messages:
+                        formatted_msg = {'role': msg.get('role', 'user')}
+                        
+                        # 处理内容为列表的情况
+                        if 'content' in msg and isinstance(msg['content'], list):
+                            text_content = []
+                            for item in msg['content']:
+                                if isinstance(item, dict) and item.get('type') == 'text':
+                                    text_content.append(item.get('text', ''))
+                            formatted_msg['content'] = ' '.join(text_content)
+                        elif 'content' in msg:
+                            formatted_msg['content'] = msg['content']
+                        else:
+                            formatted_msg['content'] = ''
+                            
+                        formatted_messages_for_token.append(formatted_msg)
+                    
+                    print(f"格式化后的消息数量: {len(formatted_messages_for_token)}")
+                    # 估算输入token
+                    input_tokens = token_counter.estimate_message_tokens(formatted_messages_for_token, model_id)[0]
+                    
+                    print(f"输入token数: {input_tokens}")
+                    # 估算输出token
+                    output_text = ''.join(accumulated_output)
+                    output_tokens = token_counter.estimate_completion_tokens(output_text, model_id)
+                    print(f"Token计算结果 - 输入: {input_tokens}, 输出: {output_tokens}")
+            
             elif model_type == 'google':
                 # Google 模型调用
                 genai_client = gemini_pool.get_client()
@@ -983,8 +934,8 @@ def chat():
                         for part in msg['parts']:  # 修复：将part的定义移到这里
                             if isinstance(part, dict):
                                 if 'text' in part:
-                                    # 添加文本内容，保持原有的role格式
-                                    message_parts.append(f"{msg['role']}:{part['text']}")
+                                    # 添加文本内容，保持原有的role格式 f"{msg['role']}:{part['text']}
+                                    message_parts.append(Content(role=msg['role'],parts=[Part(text=part['text'])]))
                                 elif 'inline_data' in part:
                                     # 添加附件内容，附件为字典结构
                                     message_parts.append(Part.from_bytes(data=part['inline_data']['data'], mime_type=part['inline_data']['mime_type']))
@@ -1021,24 +972,53 @@ def chat():
                     for setting in safety_settings_list:
                         print(f"类别: {setting['category'].name}, 阈值: {setting['threshold'].name}")
                     
+                    # 创建配置对象
+                    config = GenerateContentConfigDict(
+                        system_instruction=system_instruction,
+                        max_output_tokens=max_tokens,
+                        temperature=temperature,
+                        safety_settings=safety_settings_list
+                    )
+                    
+                    # 如果支持工具且已启用工具，添加工具参数
+                    if enable_tools and supports_tools and available_tools:
+                        # 导入转换函数
+                        from tools.tool_processor import convert_tools_for_google
+                        # 一次性转换工具定义和消息
+                        google_config = convert_tools_for_google(
+                            tools=available_tools,
+                            messages=formatted_history
+                        )
+                        
+                        # 更新工具配置
+                        if "tool_config" in google_config:
+                            print(f"为Google/Gemini添加工具配置: {google_config['tool_config']}")
+                            config.update(google_config["tool_config"])
+                        
+                        # 使用转换后的历史记录创建聊天实例
+                        if "converted_messages" in google_config:
+                            chat = genai_client.chats.create(model=model_id, history=google_config["converted_messages"])
+                        else:
+                            chat = genai_client.chats.create(model=model_id, history=formatted_history)
+
                     response = chat.send_message_stream(
                         message=last_message_parts,
-                        config=GenerateContentConfigDict(
-                            system_instruction=system_instruction,
-                            max_output_tokens=max_tokens,
-                            temperature=temperature,
-                            safety_settings=safety_settings_list
-                        )
+                        config=config
                     )
                     print("成功获取响应流")
                     
-                    # 处理响应并获取token信息
-                    last_response = None
-                    for chunk in response:
-                        if hasattr(chunk, 'text') and chunk.text:
-                            accumulated_output.append(chunk.text)
-                            yield f"data: {json.dumps({'content': chunk.text})}\n\n"
-                        last_response = chunk
+                    # 使用新的流处理函数
+                    from utils.chat.stream_processor import process_google_stream_response
+                    # 处理流式响应并获取最后一个chunk
+                    generator, get_last_chunk = process_google_stream_response(response, accumulated_output)
+
+                    # 提供响应
+                    for response_chunk in generator:
+                        # 发送响应到前端
+                        yield response_chunk
+
+                    # 获取最后一个响应chunk用于token统计
+                    last_response = get_last_chunk()
 
                     # 从最后一个响应中获取token使用情况
                     if last_response and hasattr(last_response, 'usage_metadata'):
@@ -1068,111 +1048,53 @@ def chat():
                         'status_code': 500
                     }
                     yield f"data: {json.dumps(error_response)}\n\n"
-                    return  # 确保在错误发生时立即返回
-
-            # 记录使用情况
-            try:
-                if use_estimated:
-                    # 使用tiktoken计算token数量
-                    print(f"使用tiktoken计算{model_id}的token数")
-                    
-                    # # 输出消息处理前的结构以便调试
-                    # print(f"消息数量: {len(processed_messages)}")
-                    # for i, msg in enumerate(processed_messages):
-                    #     print(f"消息 {i+1} 结构: {msg.keys()}")
-                    #     if 'content' in msg:
-                    #         if isinstance(msg['content'], list):
-                    #             print(f"消息 {i+1} content类型: 列表，长度: {len(msg['content'])}")
-                    #         else:
-                    #             print(f"消息 {i+1} content类型: {type(msg['content'])}")
-                    
-                    # 针对OpenAI模型格式进行预处理
-                    if model_type == 'openai':
-                        formatted_messages_for_deepseek = []
-                        for msg in processed_messages:
-                            formatted_msg = {'role': msg.get('role', 'user')}
-                            
-                            # 处理内容为列表的情况
-                            if 'content' in msg and isinstance(msg['content'], list):
-                                text_content = []
-                                for item in msg['content']:
-                                    if isinstance(item, dict) and item.get('type') == 'text':
-                                        text_content.append(item.get('text', ''))
-                                formatted_msg['content'] = ' '.join(text_content)
-                            elif 'content' in msg:
-                                formatted_msg['content'] = msg['content']
-                            else:
-                                formatted_msg['content'] = ''
-                                
-                            formatted_messages_for_deepseek.append(formatted_msg)
-                        
-                        print(f"格式化后的消息数量: {len(formatted_messages_for_deepseek)}")
-                        # 估算输入token
-                        input_tokens = token_counter.estimate_message_tokens(formatted_messages_for_deepseek, model_id)[0]
-                    else:
-                        # 估算输入token
-                        input_tokens = token_counter.estimate_message_tokens(processed_messages, model_id)[0]
-                    
-                    print(f"输入token数: {input_tokens}")
-                    # 估算输出token
-                    output_text = ''.join(accumulated_output)
-                    output_tokens = token_counter.estimate_completion_tokens(output_text, model_id)
-                    print(f"Token计算结果 - 输入: {input_tokens}, 输出: {output_tokens}")
-                with app.app_context():
-                    usage = Usage(
-                        user_id=user_id,
-                        model_name=model_id,
-                        tokens_in=input_tokens,
-                        cached_input_tokens=cached_input_tokens,
-                        tokens_out=output_tokens,
-                        image_ocr_input_tokens=total_image_ocr_tokens[0],
-                        image_ocr_output_tokens=total_image_ocr_tokens[1]
-                    )
-                    usage.calculate_cost()
-                    db.session.add(usage)
-                    db.session.commit()
-                    
-                    print("\n=== 使用统计 ===")
-                    print(f"Token计数方式: {'tiktoken预估' if use_estimated else '模型实际值'}")
-                    print(f"输入token数: {input_tokens}, 命中缓存token数: {cached_input_tokens}, 成本: ${usage.input_cost:.6f}")
-                    print(f"输出token数: {output_tokens}, 成本: ${usage.output_cost:.6f}")
-                    print(f"图片OCR输入token数: {total_image_ocr_tokens[0]}, 图片OCR输出token数: {total_image_ocr_tokens[1]}, 成本: ${usage.image_ocr_cost:.6f}")
-                    print(f"总成本: ${usage.total_cost:.6f}")
-                    
-                    usage_info = {
-                        'type': 'usage_info',
-                        'input_tokens': input_tokens,
-                        'output_tokens': output_tokens,
-                        'total_tokens': input_tokens + output_tokens,
-                        'image_ocr_cost': usage.image_ocr_cost,
-                        'input_cost': usage.input_cost,
-                        'output_cost': usage.output_cost,
-                        'total_cost': usage.total_cost,
-                        'is_estimated': use_estimated,
-                        'status_code': 200
-                    }
-                    yield f"data: {json.dumps(usage_info)}\n\n"
-            except Exception as e:
-                error_msg = f"记录使用情况时出错: {str(e)}"
-                print(error_msg)
-                db.session.rollback()
-                error_response = {
-                    'error': error_msg,
-                    'error_type': 'DatabaseError',
-                    'status_code': 500
-                }
-                yield f"data: {json.dumps(error_response)}\n\n"
-                return
-
+            
         except Exception as e:
-            print(f"Error in generate(): {str(e)}")
+            error_msg = f"记录使用情况时出错: {str(e)}"
+            print(error_msg)
+            print(f"错误详情:\n{traceback.format_exc()}")
+            db.session.rollback()
             error_response = {
-                'error': str(e),
-                'error_type': 'GeneralError',
+                'error': error_msg,
+                'error_type': 'DatabaseError',
                 'status_code': 500
             }
             yield f"data: {json.dumps(error_response)}\n\n"
-            return
+
+        with app.app_context():
+            usage = Usage(
+                user_id=user_id,
+                model_name=model_id,
+                tokens_in=input_tokens,
+                cached_input_tokens=cached_input_tokens,
+                tokens_out=output_tokens,
+                image_ocr_input_tokens=total_image_ocr_tokens[0],
+                image_ocr_output_tokens=total_image_ocr_tokens[1]
+            )
+            usage.calculate_cost()
+            db.session.add(usage)
+            db.session.commit()
+            
+            print("\n=== 使用统计 ===")
+            print(f"Token计数方式: {'tiktoken预估' if use_estimated else '模型实际值'}")
+            print(f"输入token数: {input_tokens}, 命中缓存token数: {cached_input_tokens}, 成本: ${usage.input_cost:.6f}")
+            print(f"输出token数: {output_tokens}, 成本: ${usage.output_cost:.6f}")
+            print(f"图片OCR输入token数: {total_image_ocr_tokens[0]}, 图片OCR输出token数: {total_image_ocr_tokens[1]}, 成本: ${usage.image_ocr_cost:.6f}")
+            print(f"总成本: ${usage.total_cost:.6f}")
+            
+            usage_info = {
+                'type': 'usage_info',
+                'input_tokens': input_tokens,
+                'output_tokens': output_tokens,
+                'total_tokens': input_tokens + output_tokens,
+                'image_ocr_cost': usage.image_ocr_cost,
+                'input_cost': usage.input_cost,
+                'output_cost': usage.output_cost,
+                'total_cost': usage.total_cost,
+                'is_estimated': use_estimated,
+                'status_code': 200
+            }
+            yield f"data: {json.dumps(usage_info)}\n\n"
 
     return Response(generate(), mimetype='text/event-stream')
 

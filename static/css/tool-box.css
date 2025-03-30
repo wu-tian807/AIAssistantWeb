@@ -1,0 +1,251 @@
+/* 工具框样式 */
+.tool-box {
+    background-color: #f0f8ff; /* 浅蓝色背景 */
+    border-left: 4px solid #4a90e2; /* 蓝色边框 */
+    margin: 10px 0;
+    padding: 15px;
+    border-radius: 4px;
+    color: #333;
+    position: relative;
+    order: -0.5; /* 在思考框之后，但在普通内容之前 */
+    margin-bottom: 10px;
+    align-self: stretch;
+    transition: all 0.3s ease;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    will-change: transform, box-shadow;
+}
+
+.tool-box-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 12px;
+    position: relative;
+    z-index: 2;
+}
+
+.tool-box-title {
+    font-weight: bold;
+    color: #2c5282; /* 蓝色标题 */
+    font-style: normal;
+}
+
+.tool-box-name {
+    font-weight: normal;
+    color: #4a5568;
+    margin-left: 5px;
+    font-style: italic;
+}
+
+.tool-box-toggle {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    padding: 4px 8px;
+    background-color: transparent;
+    border: 1px solid #4a90e2;
+    border-radius: 4px;
+    color: #2c5282;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.3s ease;
+    z-index: 3;
+}
+
+.tool-box-toggle:hover {
+    background-color: #4a90e2;
+    color: white;
+}
+
+.tool-box-content {
+    transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+                opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                margin 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto;
+    overflow-x: hidden;
+    opacity: 1;
+    max-height: 2000px;
+    transform: translateZ(0);
+    will-change: max-height, opacity;
+    padding-right: 8px;
+}
+
+/* 滚动条样式 */
+.tool-box-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.tool-box-content::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+}
+
+.tool-box-content::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+
+.tool-box-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.tool-box-content.collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    visibility: hidden;
+}
+
+.tool-box-result {
+    padding: 10px;
+    background-color: rgba(74, 144, 226, 0.1);
+    border-radius: 3px;
+    margin-top: 8px;
+    font-weight: normal;
+    color: #333;
+    border-left: 3px solid #4a90e2;
+}
+
+.tool-box-step {
+    margin-bottom: 8px;
+    padding-left: 10px;
+    border-left: 2px solid #e2e8f0;
+}
+
+.tool-box-step:last-child {
+    margin-bottom: 0;
+}
+
+.tool-box p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* 鼠标悬停效果 */
+.tool-box:hover {
+    box-shadow: 0 8px 16px rgba(0,0,0,0.1), 0 8px 16px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
+}
+
+/* 工具进度条 */
+.tool-box-progress {
+    height: 4px;
+    background-color: #e2e8f0;
+    border-radius: 2px;
+    margin-top: 8px;
+    overflow: hidden;
+}
+
+.tool-box-progress-bar {
+    height: 100%;
+    background-color: #4a90e2;
+    width: 0;
+    transition: width 0.3s ease;
+}
+
+/* 工具状态标签 */
+.tool-box-status {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    margin-left: 8px;
+}
+
+.tool-box-status.running {
+    background-color: #ebf8ff;
+    color: #2b6cb0;
+    border: 1px solid #bee3f8;
+}
+
+.tool-box-status.success {
+    background-color: #f0fff4;
+    color: #2f855a;
+    border: 1px solid #c6f6d5;
+}
+
+.tool-box-status.error {
+    background-color: #fff5f5;
+    color: #c53030;
+    border: 1px solid #fed7d7;
+}
+
+/* 暗色主题支持 */
+.dark-theme .tool-box {
+    background-color: #1a365d;
+    border-left-color: #2b6cb0;
+    color: #e2e8f0;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.3), 0 3px 6px rgba(0,0,0,0.4);
+}
+
+.dark-theme .tool-box-title {
+    color: #63b3ed;
+}
+
+.dark-theme .tool-box-name {
+    color: #a0aec0;
+}
+
+.dark-theme .tool-box-toggle {
+    border-color: #2b6cb0;
+    color: #63b3ed;
+}
+
+.dark-theme .tool-box-toggle:hover {
+    background-color: #2b6cb0;
+    color: #e2e8f0;
+}
+
+.dark-theme .tool-box-content::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.dark-theme .tool-box-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.dark-theme .tool-box-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.dark-theme .tool-box-result {
+    background-color: rgba(44, 82, 130, 0.3);
+    color: #e2e8f0;
+    border-left-color: #4299e1;
+}
+
+.dark-theme .tool-box-step {
+    border-left-color: #4a5568;
+}
+
+.dark-theme .tool-box-progress {
+    background-color: #2d3748;
+}
+
+.dark-theme .tool-box-progress-bar {
+    background-color: #4299e1;
+}
+
+.dark-theme .tool-box-status.running {
+    background-color: #1a365d;
+    color: #63b3ed;
+    border-color: #2b6cb0;
+}
+
+.dark-theme .tool-box-status.success {
+    background-color: #1c4532;
+    color: #68d391;
+    border-color: #276749;
+}
+
+.dark-theme .tool-box-status.error {
+    background-color: #742a2a;
+    color: #fc8181;
+    border-color: #9b2c2c;
+} 

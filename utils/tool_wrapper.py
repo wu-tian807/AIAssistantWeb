@@ -35,8 +35,31 @@ def tool_decorator(name: Optional[str] = None,
                 if param_name == 'self' or param_name == 'cls':
                     continue
                     
+                # 改进类型推断
+                param_type = "string"  # 默认类型
+                
+                # 检查参数的类型注解
+                if param.annotation != inspect.Parameter.empty:
+                    # 处理基本类型
+                    if param.annotation == bool:
+                        param_type = "boolean"
+                    elif param.annotation in (int, float):
+                        param_type = "number"
+                    elif param.annotation == list or str(param.annotation).startswith("typing.List"):
+                        param_type = "array"
+                    # 可以根据需要添加更多类型
+                
+                # 检查参数的默认值类型
+                if param.default != inspect.Parameter.empty:
+                    if isinstance(param.default, bool):
+                        param_type = "boolean"
+                    elif isinstance(param.default, (int, float)):
+                        param_type = "number"
+                    elif isinstance(param.default, list):
+                        param_type = "array"
+                    
                 param_properties[param_name] = {
-                    "type": "string",  # 默认类型
+                    "type": param_type,  # 使用推断的类型
                     "description": f"参数 {param_name}"  # 默认描述
                 }
                 
