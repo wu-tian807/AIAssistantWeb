@@ -153,7 +153,8 @@ def process_stream_response(
                                         
                                         # 格式化工具响应，以便添加到历史记录
                                         formatted_results = format_tool_results([response_data])
-                                        tool_response_messages.extend(formatted_results.get('openai', []))
+                                        # 添加统一格式的消息到历史记录
+                                        tool_response_messages.extend(formatted_results.get('unified', []))
                                     except Exception as e:
                                         print(f"最终响应序列化错误: {str(e)}")
                                         
@@ -287,7 +288,8 @@ def process_stream_response(
                                         
                                         # 格式化工具响应，以便添加到历史记录
                                         formatted_results = format_tool_results([response_data])
-                                        tool_response_messages.extend(formatted_results.get('openai', []))
+                                        # 添加统一格式的消息到历史记录
+                                        tool_response_messages.extend(formatted_results.get('unified', []))
                                     except Exception as e:
                                         print(f"最终响应序列化错误: {str(e)}")
                         
@@ -300,7 +302,6 @@ def process_stream_response(
         if tool_response_messages:
             try:
                 # 使用统一的格式返回工具消息
-                # 注意：此处返回的消息格式为 OpenAI 的格式，前端将保存这种格式
                 tool_messages_response = f"data: {json.dumps({'tool_messages': tool_response_messages})}\n\n"
                 yield tool_messages_response
             except Exception as e:
@@ -319,7 +320,7 @@ def process_stream_response(
     gen = capturing_generator()
     
     # 返回生成器和获取最后一个chunk的函数
-    return gen, lambda: last_chunk_ref[0] 
+    return gen, lambda: last_chunk_ref[0]
 
 def process_google_stream_response(
     stream: Any, 
@@ -459,7 +460,8 @@ def process_google_stream_response(
                                     
                                     # 格式化工具响应，以便添加到历史记录
                                     formatted_results = format_tool_results([response_data])
-                                    tool_response_messages.extend(formatted_results.get('google', []))
+                                    # 添加统一格式的消息到历史记录
+                                    tool_response_messages.extend(formatted_results.get('unified', []))
                                 except Exception as e:
                                     print(f"最终响应序列化错误: {str(e)}")
                     
@@ -475,7 +477,6 @@ def process_google_stream_response(
         if tool_response_messages:
             try:
                 # 使用统一的格式返回工具消息
-                # 注意：此处返回的是Google格式，前端将保存这种格式
                 tool_messages_response = f"data: {json.dumps({'tool_messages': tool_response_messages})}\n\n"
                 yield tool_messages_response
             except Exception as e:

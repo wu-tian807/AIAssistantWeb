@@ -45,6 +45,18 @@ def convert_tools_for_google(tools=None, messages=None) -> Dict:
     """
     将统一格式的工具定义和消息转换为Google/Gemini支持的格式
     
+    重要：此函数假设输入的tools和messages已经是统一格式。
+    统一格式的工具消息应该符合以下结构：
+    {
+        'type': 'function',
+        'function': {
+            'name': '工具名称',
+            'response': {...}  // 工具响应数据
+        },
+        'status': 'success',   // 或 'error'
+        'tool_call_id': '...'  // 原始工具调用ID
+    }
+    
     Args:
         tools: 统一格式的工具列表，可以为None
         messages: 统一格式的消息列表，可以为None
@@ -180,6 +192,18 @@ def convert_tools_for_google(tools=None, messages=None) -> Dict:
 def convert_tools_for_openai(tools=None, messages=None) -> Dict:
     """
     将统一格式的工具定义和消息转换为OpenAI支持的格式
+    
+    重要：此函数假设输入的tools和messages已经是统一格式。
+    统一格式的工具消息应该符合以下结构：
+    {
+        'type': 'function',
+        'function': {
+            'name': '工具名称',
+            'response': {...}  // 工具响应数据
+        },
+        'status': 'success',   // 或 'error'
+        'tool_call_id': '...'  // 原始工具调用ID
+    }
     
     Args:
         tools: 统一格式的工具列表，可以为None
@@ -361,7 +385,7 @@ def handle_tool_calls(tool_calls: List[Dict]) -> List[Dict]:
 
 def format_tool_results(tool_results: List[Dict]) -> Dict:
     """
-    将工具结果格式化为统一格式，使用与工具定义一致的格式
+    将工具结果格式化为统一格式，方便后续使用convert函数进行转换
     
     统一格式说明:
     {
@@ -382,8 +406,6 @@ def format_tool_results(tool_results: List[Dict]) -> Dict:
     """
     unified_messages = []
     display_texts = []
-    openai_messages = []  # OpenAI格式的工具消息
-    google_messages = []  # Google格式的工具消息
     
     for result in tool_results:
         tool_call_id = result.get('tool_call_id')
@@ -413,29 +435,10 @@ def format_tool_results(tool_results: List[Dict]) -> Dict:
             'tool_call_id': tool_call_id
         }
         unified_messages.append(unified_message)
-        
-        # OpenAI格式 (role: tool)
-        openai_message = {
-            'role': 'tool',
-            'name': tool_name,
-            'tool_call_id': tool_call_id,
-            'content': json.dumps(result_data)
-        }
-        openai_messages.append(openai_message)
-        
-        # Google/Gemini格式，使用对应的function_response格式
-        try:
-            # 直接使用统一格式，前端负责转换
-            google_messages.append(unified_message)
-        except Exception as e:
-            print(f"创建Google格式工具消息失败: {str(e)}")
     
     return {
-        'unified': unified_messages,  # 统一格式
-        'openai': openai_messages,    # OpenAI 格式
-        'google': google_messages,    # Google 格式
-        'display_texts': display_texts,
-        'raw': tool_results
+        'unified': unified_messages,  # 只返回统一格式
+        'display_texts': display_texts
     }
 
 def format_step_response(step_response: Dict, tool_call_id: str, tool_name: str) -> Dict:
