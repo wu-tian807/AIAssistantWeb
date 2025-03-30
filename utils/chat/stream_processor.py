@@ -220,6 +220,40 @@ def process_stream_response(
                                 if func_args and current_tool_call:
                                     current_tool_call['function']['arguments'] += func_args
                                     print(f"累积参数: {current_tool_call['function']['arguments']}")
+                            elif tool_index is not None and func_args is not None:
+                                # 没有ID但有索引和参数 - 这是DeepSeek和GPT模型的第二个chunk
+                                # 查找匹配索引的工具调用
+                                existing_call = next((t for t in tool_calls_data if t.get('index') == tool_index), None)
+                                
+                                if existing_call:
+                                    # 找到匹配索引的调用，将参数关联到它
+                                    current_tool_call = existing_call
+                                    print(f"根据索引{tool_index}找到现有工具调用: {current_tool_call}")
+                                    
+                                    # 累积函数参数
+                                    current_tool_call['function']['arguments'] += func_args
+                                    print(f"累积参数: {current_tool_call['function']['arguments']}")
+                                else:
+                                    # 如果没有任何工具调用记录，创建一个新的
+                                    if not tool_calls_data:
+                                        new_id = f"auto_generated_id_{tool_index}"
+                                        tool_call_data = {
+                                            'id': new_id,
+                                            'index': tool_index,
+                                            'function': {
+                                                'name': func_name or 'unknown_function',
+                                                'arguments': func_args or ''
+                                            }
+                                        }
+                                        tool_calls_data.append(tool_call_data)
+                                        current_tool_call = tool_call_data
+                                        print(f"创建没有ID的工具调用记录: {tool_call_data}")
+                                    else:
+                                        # 如果有其他工具调用但索引不匹配，使用最后一个
+                                        current_tool_call = tool_calls_data[-1]
+                                        print(f"没有匹配索引，使用最后一个工具调用: {current_tool_call}")
+                                        current_tool_call['function']['arguments'] += func_args
+                                        print(f"累积参数: {current_tool_call['function']['arguments']}")
                     
                     # 检查是否有内容
                     if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
@@ -251,48 +285,75 @@ def process_stream_response(
                             tool_name = tool_call.get('function', {}).get('name')
                             tool_args_str = tool_call.get('function', {}).get('arguments', '{}')
                             
+                            print(f"处理工具调用: ID={tool_id}, 名称={tool_name}, 原始参数={tool_args_str}")
+                            
+                            # 处理空参数情况
+                            if not tool_args_str or tool_args_str.strip() == '':
+                                tool_args_str = '{}'
+                                print(f"参数为空，设置为空对象: {tool_args_str}")
+                            
                             try:
+                                # 尝试修复可能的JSON格式问题
+                                if not tool_args_str.startswith('{'):
+                                    tool_args_str = '{' + tool_args_str
+                                    print(f"修复参数开始: {tool_args_str}")
+                                
+                                if not tool_args_str.endswith('}'):
+                                    tool_args_str = tool_args_str + '}'
+                                    print(f"修复参数结束: {tool_args_str}")
+                                
+                                # 解析参数
                                 tool_args = json.loads(tool_args_str) if isinstance(tool_args_str, str) else tool_args_str
-                            except json.JSONDecodeError:
-                                error_msg = f"工具参数解析错误: {tool_args_str}"
+                                print(f"解析后的参数: {tool_args}")
+                                
+                                # 检查工具名称是否有效
+                                if not tool_name:
+                                    print(f"警告: 工具名称为空，跳过执行")
+                                    continue
+                                
+                                # 执行工具并处理流式响应
+                                for tool_response in process_streaming_tool_call(tool_name, tool_args, tool_id):
+                                    response_type = tool_response.get('type')
+                                    response_data = tool_response.get('data', {})
+                                    
+                                    if response_type == 'tool_step_response':
+                                        # 处理中间步骤响应
+                                        try:
+                                            step_response = f"data: {json.dumps({'step_response': response_data})}\n\n"
+                                            yield step_response
+                                        except Exception as e:
+                                            print(f"步骤响应序列化错误: {str(e)}")
+                                    
+                                    elif response_type == 'tool_final_response':
+                                        # 处理最终响应
+                                        try:
+                                            final_response = f"data: {json.dumps({'final_response': response_data})}\n\n"
+                                            yield final_response
+                                            
+                                            # 打印工具执行结果
+                                            print(f"\n===== 工具执行结果 =====")
+                                            print(f"工具: {tool_name}")
+                                            print(f"参数: {tool_args}")
+                                            print(f"状态: {response_data.get('status', 'unknown')}")
+                                            print(f"显示文本: {response_data.get('display_text', '')}")
+                                            print(f"结果数据: {response_data.get('result', {})}")
+                                            print("======================\n")
+                                            
+                                            # 格式化工具响应，以便添加到历史记录
+                                            formatted_results = format_tool_results([response_data])
+                                            # 添加统一格式的消息到历史记录
+                                            tool_response_messages.extend(formatted_results.get('unified', []))
+                                        except Exception as e:
+                                            print(f"最终响应序列化错误: {str(e)}")
+                            except json.JSONDecodeError as e:
+                                error_msg = f"工具参数解析错误: {tool_args_str}, 错误: {str(e)}"
                                 print(error_msg)
                                 continue
-                            
-                            # 执行工具并处理流式响应
-                            for tool_response in process_streaming_tool_call(tool_name, tool_args, tool_id):
-                                response_type = tool_response.get('type')
-                                response_data = tool_response.get('data', {})
-                                
-                                if response_type == 'tool_step_response':
-                                    # 处理中间步骤响应
-                                    try:
-                                        step_response = f"data: {json.dumps({'step_response': response_data})}\n\n"
-                                        yield step_response
-                                    except Exception as e:
-                                        print(f"步骤响应序列化错误: {str(e)}")
-                                
-                                elif response_type == 'tool_final_response':
-                                    # 处理最终响应
-                                    try:
-                                        final_response = f"data: {json.dumps({'final_response': response_data})}\n\n"
-                                        yield final_response
-                                        
-                                        # 打印工具执行结果
-                                        print(f"\n===== 工具执行结果 =====")
-                                        print(f"工具: {tool_name}")
-                                        print(f"参数: {tool_args}")
-                                        print(f"状态: {response_data.get('status', 'unknown')}")
-                                        print(f"显示文本: {response_data.get('display_text', '')}")
-                                        print(f"结果数据: {response_data.get('result', {})}")
-                                        print("======================\n")
-                                        
-                                        # 格式化工具响应，以便添加到历史记录
-                                        formatted_results = format_tool_results([response_data])
-                                        # 添加统一格式的消息到历史记录
-                                        tool_response_messages.extend(formatted_results.get('unified', []))
-                                    except Exception as e:
-                                        print(f"最终响应序列化错误: {str(e)}")
-                        
+                            except Exception as e:
+                                print(f"执行工具时发生未知错误: {str(e)}")
+                                print(f"错误详情:\n{traceback.format_exc()}")
+                                continue
+                    
                 except Exception as e:
                     print(f"处理流式响应chunk时出错: {str(e)}")
                     print(f"错误详情:\n{traceback.format_exc()}")

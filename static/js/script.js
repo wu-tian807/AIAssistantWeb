@@ -250,7 +250,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (scrollPosition < 50) {
                 userScrolling = false;
             }
-        }, 100); // 减少检测延迟，从300ms改为100ms，使检测更灵敏
+        }, 100); //警告：不要修改成100ms，而是100，因为参数不支持100后面紧邻单位
     });
 });
 
@@ -1546,7 +1546,7 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
                 }
 
                 // 使用公共函数处理流响应
-                const { assistantMessage, reasoningBox, toolBoxMap } = await processStreamResponse(
+                const { assistantMessage, reasoningBox, toolBoxMap, is_valid } = await processStreamResponse(
                     response, 
                     messageDiv, 
                     messageContent, 
@@ -1559,7 +1559,7 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
                 );
 
                 // 成功接收到内容，保存到消息历史
-                if (assistantMessage.trim()) {
+                if (is_valid) {
                     const thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : 0;
                     const reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null;
                     
@@ -2174,7 +2174,7 @@ async function regenerateMessage(messageIndex) {
             }
 
             // 使用公共函数处理流响应
-            const { assistantMessage, reasoningBox, toolBoxMap } = await processStreamResponse(
+            const { assistantMessage, reasoningBox, toolBoxMap, is_valid } = await processStreamResponse(
                 response, 
                 messageDiv, 
                 messageContent, 
@@ -2186,7 +2186,7 @@ async function regenerateMessage(messageIndex) {
                 }
             );
             
-            if (assistantMessage.trim()) {
+            if (is_valid) {
                 // 获取当前消息对象，如果不存在则创建一个新的
                 let message = currentConversation.messages[messageIndex];
                 if (!message) {
@@ -3068,7 +3068,7 @@ async function regenerateErrorMessage(messageIndex) {
             }
 
             // 使用公共函数处理流响应
-            const { assistantMessage, reasoningBox, toolBoxMap } = await processStreamResponse(
+            const { assistantMessage, reasoningBox, toolBoxMap, is_valid } = await processStreamResponse(
                 response, 
                 messageDiv, 
                 messageContent, 
@@ -3080,7 +3080,7 @@ async function regenerateErrorMessage(messageIndex) {
                 }
             );
             
-            if (assistantMessage.trim()) {
+            if (is_valid) {
                 // 获取当前消息对象，如果不存在则创建一个新的
                 let message = currentConversation.messages[messageIndex];
                 if (!message) {
@@ -3645,7 +3645,8 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
     console.log("最终返回内容长度:", assistantMessage.length);
     console.log("reasoningBox:", reasoningBox ? "已创建" : "未创建");
     console.log("工具框数量:", toolBoxMap.size);
-    return { assistantMessage, reasoningBox, toolBoxMap };
+    let is_valid = assistantMessage.trim() || (toolBoxMap && toolBoxMap.size > 0)
+    return { assistantMessage, reasoningBox, toolBoxMap, is_valid };
     
     // 辅助函数：更新文本内容
     function updateTextContent(messageContent, text, mdRenderer, chatMessagesContainer, shouldScroll) {
