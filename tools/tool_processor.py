@@ -55,6 +55,8 @@ def convert_tools_for_google(tools=None, messages=None) -> Dict:
         },
         'status': 'success',   // 或 'error'
         'tool_call_id': '...'  // 原始工具调用ID
+        'display_text': '...'  // 用于前端显示的文本
+        'result': {...}        // 原始结果数据
     }
     
     Args:
@@ -149,13 +151,38 @@ def convert_tools_for_google(tools=None, messages=None) -> Dict:
             elif isinstance(msg, dict):
                 # 检查是否为统一格式的工具消息
                 if msg.get('type') == 'function' and 'function' in msg:
+                    # 获取函数名称和响应内容
+                    function_name = msg['function'].get('name', '')
+                    response_data = msg['result'] if 'result' in msg else msg['function'].get('response', {})
+                    
                     # 创建符合Google格式的function响应
+                    function_response_part = Part.from_function_response(
+                        name=function_name,
+                        response={"result": response_data}
+                    )
+                    
+                    # 添加函数响应消息
                     function_msg = Content(
-                        role='function',
-                        parts=[Part(function_response={
-                            'name': msg['function'].get('name', ''),
-                            'response': msg['function'].get('response', {})
-                        })]
+                        role='user',  # Google使用user角色传递工具结果
+                        parts=[function_response_part]
+                    )
+                    converted_messages.append(function_msg)
+                # 处理前端保存的工具消息格式 (role: 'tool')
+                elif msg.get('role') == 'tool' and (msg.get('function') or msg.get('result')):
+                    # 获取函数名称和响应内容
+                    function_name = msg.get('function', {}).get('name', '') or msg.get('name', '')
+                    response_data = msg.get('result', {}) or msg.get('function', {}).get('response', {})
+                    
+                    # 创建符合Google格式的function响应
+                    function_response_part = Part.from_function_response(
+                        name=function_name,
+                        response={"result": response_data}
+                    )
+                    
+                    # 添加函数响应消息
+                    function_msg = Content(
+                        role='user',  # Google使用user角色传递工具结果
+                        parts=[function_response_part]
                     )
                     converted_messages.append(function_msg)
                 # 处理普通消息
@@ -203,6 +230,8 @@ def convert_tools_for_openai(tools=None, messages=None) -> Dict:
         },
         'status': 'success',   // 或 'error'
         'tool_call_id': '...'  // 原始工具调用ID
+        'display_text': '...'  // 用于前端显示的文本
+        'result': {...}        // 原始结果数据
     }
     
     Args:
@@ -258,21 +287,30 @@ def convert_tools_for_openai(tools=None, messages=None) -> Dict:
             # 检查是否为统一格式的工具消息
             if api_msg.get('type') == 'function' and 'function' in api_msg:
                 # 转换为OpenAI的工具消息格式
-                api_msg['role'] = 'tool'  # OpenAI使用role=tool
-                api_msg['content'] = json.dumps(api_msg['function'].get('response', {}))
-                api_msg['name'] = api_msg['function'].get('name', '')
+                tool_response = {
+                    'role': 'tool',  # OpenAI官方推荐使用'tool'角色，不再使用'function'
+                    'tool_call_id': api_msg.get('tool_call_id', ''),
+                    'name': api_msg['function'].get('name', ''),
+                }
                 
-                # 移除统一格式特有的字段
-                if 'function' in api_msg:
-                    del api_msg['function']
-                if 'type' in api_msg:
-                    del api_msg['type']
-                if 'status' in api_msg:
-                    del api_msg['status']
-                if 'tool_call_id' in api_msg:
-                    del api_msg['tool_call_id']
-            
-            converted_messages.append(api_msg)
+                # 使用result作为content
+                if 'result' in api_msg:
+                    # 将结果转换为字符串
+                    if isinstance(api_msg['result'], dict):
+                        tool_response['content'] = json.dumps(api_msg['result'])
+                    else:
+                        tool_response['content'] = str(api_msg['result'])
+                # 如果没有result，则使用display_text
+                elif 'display_text' in api_msg and api_msg['display_text']:
+                    tool_response['content'] = api_msg['display_text']
+                # 最后才考虑使用function.response
+                else:
+                    tool_response['content'] = json.dumps(api_msg['function'].get('response', {}))
+                
+                converted_messages.append(tool_response)
+            else:
+                # 保留其他类型的消息
+                converted_messages.append(api_msg)
         
         result["converted_messages"] = converted_messages
     
@@ -383,9 +421,9 @@ def handle_tool_calls(tool_calls: List[Dict]) -> List[Dict]:
     
     return results
 
-def format_tool_results(tool_results: List[Dict]) -> Dict:
+def format_tool_results(tool_results: List[Dict]) -> List[Dict]:
     """
-    将工具结果格式化为统一格式，方便后续使用convert函数进行转换
+    将工具结果格式化为统一格式的消息列表
     
     统一格式说明:
     {
@@ -396,23 +434,23 @@ def format_tool_results(tool_results: List[Dict]) -> Dict:
         },
         'status': 'success',   // 或 'error'
         'tool_call_id': '...'  // 原始工具调用ID
+        'display_text': '...'  // 用于前端显示的文本
+        'result': {...}        // 原始结果数据，用于历史记录
     }
     
     Args:
         tool_results: 工具调用结果列表
         
     Returns:
-        Dict: 包含统一格式的工具结果
+        List[Dict]: 统一格式的工具消息列表
     """
     unified_messages = []
-    display_texts = []
     
     for result in tool_results:
         tool_call_id = result.get('tool_call_id')
         tool_name = result.get('tool_name')
         status = result.get('status', 'success')
         display_text = result.get('display_text', '')
-        display_texts.append(display_text)
         
         # 提取结果内容
         if status == 'success':
@@ -432,14 +470,13 @@ def format_tool_results(tool_results: List[Dict]) -> Dict:
                 'response': result_data
             },
             'status': status,
-            'tool_call_id': tool_call_id
+            'tool_call_id': tool_call_id,
+            'display_text': display_text,  # 保留display_text
+            'result': result_data          # 保留原始结果数据
         }
         unified_messages.append(unified_message)
     
-    return {
-        'unified': unified_messages,  # 只返回统一格式
-        'display_texts': display_texts
-    }
+    return unified_messages
 
 def format_step_response(step_response: Dict, tool_call_id: str, tool_name: str) -> Dict:
     """

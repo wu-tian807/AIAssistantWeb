@@ -3594,7 +3594,40 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
                         // 处理工具消息（添加到历史记录）
                         if (data.tool_messages && Array.isArray(data.tool_messages)) {
                             console.log("处理工具消息:", data.tool_messages.length);
-                            // 这些消息会由后端添加到历史记录中，前端无需特别处理
+                            
+                            // 获取当前对话
+                            const currentConversation = conversations.find(c => c.id === currentConversationId);
+                            if (currentConversation) {
+                                // 将工具消息添加到对话历史记录中
+                                data.tool_messages.forEach(toolMessage => {
+                                    console.log("添加工具消息到历史:", toolMessage);
+                                    
+                                    // 确保工具消息结构完整
+                                    if (toolMessage.type === 'function' && toolMessage.function) {
+                                        // 添加工具消息到当前对话
+                                        currentConversation.messages.push({
+                                            role: 'tool',
+                                            type: toolMessage.type, 
+                                            function: toolMessage.function,
+                                            tool_call_id: toolMessage.tool_call_id,
+                                            status: toolMessage.status,
+                                            display_text: toolMessage.display_text,
+                                            result: toolMessage.result,
+                                            content: typeof toolMessage.display_text === 'string' ? toolMessage.display_text : 
+                                                     (typeof toolMessage.result === 'object' ? JSON.stringify(toolMessage.result) : String(toolMessage.result))
+                                        });
+                                    }
+                                });
+                                
+                                // 保存更新后的对话到数据库
+                                saveConversation(currentConversation.id, 'update').then(() => {
+                                    console.log("工具消息已添加到历史并保存到数据库");
+                                }).catch(error => {
+                                    console.error("保存工具消息时出错:", error);
+                                });
+                            } else {
+                                console.error("处理工具消息失败: 未找到当前对话");
+                            }
                         }
                     } catch (error) {
                         console.error('解析SSE数据出错:', error, '原始数据:', line);

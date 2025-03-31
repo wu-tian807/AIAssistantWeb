@@ -154,7 +154,7 @@ def process_stream_response(
                                         # 格式化工具响应，以便添加到历史记录
                                         formatted_results = format_tool_results([response_data])
                                         # 添加统一格式的消息到历史记录
-                                        tool_response_messages.extend(formatted_results.get('unified', []))
+                                        tool_response_messages.extend(formatted_results)
                                     except Exception as e:
                                         print(f"最终响应序列化错误: {str(e)}")
                                         
@@ -166,6 +166,7 @@ def process_stream_response(
                         print(f"content: {content}")
                 except Exception as e:
                     print(f"处理流式响应chunk时出错: {str(e)}")
+                    print(f"错误详情:\n{traceback.format_exc()}")
                     continue
         else:        
             # 处理常规模式
@@ -342,7 +343,7 @@ def process_stream_response(
                                             # 格式化工具响应，以便添加到历史记录
                                             formatted_results = format_tool_results([response_data])
                                             # 添加统一格式的消息到历史记录
-                                            tool_response_messages.extend(formatted_results.get('unified', []))
+                                            tool_response_messages.extend(formatted_results)
                                         except Exception as e:
                                             print(f"最终响应序列化错误: {str(e)}")
                             except json.JSONDecodeError as e:
@@ -358,15 +359,29 @@ def process_stream_response(
                     print(f"处理流式响应chunk时出错: {str(e)}")
                     print(f"错误详情:\n{traceback.format_exc()}")
                     continue
-        
-        # 如果有工具响应消息，则作为特殊类型发送，以便客户端知道需要添加到历史记录
+                    
+        # 在常规模式下，添加工具消息调试信息
         if tool_response_messages:
             try:
+                # 打印工具消息调试信息
+                print("\n===== 发送工具消息到前端 =====")
+                print(f"工具消息数量: {len(tool_response_messages)}")
+                for idx, msg in enumerate(tool_response_messages):
+                    print(f"消息 {idx+1}:")
+                    print(f"  类型: {msg.get('type', 'unknown')}")
+                    print(f"  工具名称: {msg.get('function', {}).get('name', 'unknown')}")
+                    print(f"  显示文本: {msg.get('display_text', 'none')}")
+                    print(f"  状态: {msg.get('status', 'unknown')}")
+                    if 'result' in msg:
+                        print(f"  结果: {msg['result']}")
+                print("===========================\n")
+                
                 # 使用统一的格式返回工具消息
                 tool_messages_response = f"data: {json.dumps({'tool_messages': tool_response_messages})}\n\n"
                 yield tool_messages_response
             except Exception as e:
                 print(f"工具响应消息序列化错误: {str(e)}")
+                print(f"错误详情:\n{traceback.format_exc()}")
         
         # 在处理完所有流后，返回最后一个chunk
         return last_chunk_container["value"]
@@ -522,7 +537,7 @@ def process_google_stream_response(
                                     # 格式化工具响应，以便添加到历史记录
                                     formatted_results = format_tool_results([response_data])
                                     # 添加统一格式的消息到历史记录
-                                    tool_response_messages.extend(formatted_results.get('unified', []))
+                                    tool_response_messages.extend(formatted_results)
                                 except Exception as e:
                                     print(f"最终响应序列化错误: {str(e)}")
                     
@@ -534,14 +549,29 @@ def process_google_stream_response(
                 print(f"错误详情:\n{traceback.format_exc()}")
                 continue
         
+        # 在Google模式中，在发送工具消息前添加调试信息
         # 如果有工具响应消息，则作为特殊类型发送
         if tool_response_messages:
             try:
+                # 打印工具消息调试信息
+                print("\n===== 发送工具消息到前端 =====")
+                print(f"工具消息数量: {len(tool_response_messages)}")
+                for idx, msg in enumerate(tool_response_messages):
+                    print(f"消息 {idx+1}:")
+                    print(f"  类型: {msg.get('type', 'unknown')}")
+                    print(f"  工具名称: {msg.get('function', {}).get('name', 'unknown')}")
+                    print(f"  显示文本: {msg.get('display_text', 'none')}")
+                    print(f"  状态: {msg.get('status', 'unknown')}")
+                    if 'result' in msg:
+                        print(f"  结果: {msg['result']}")
+                print("===========================\n")
+                
                 # 使用统一的格式返回工具消息
                 tool_messages_response = f"data: {json.dumps({'tool_messages': tool_response_messages})}\n\n"
                 yield tool_messages_response
             except Exception as e:
                 print(f"工具响应消息序列化错误: {str(e)}")
+                print(f"错误详情:\n{traceback.format_exc()}")
         
         return last_chunk_container["value"]
     
