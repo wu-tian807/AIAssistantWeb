@@ -57,6 +57,10 @@ export class InputToolbar {
             return false;
         }
         
+        // 设置一个不可见的初始状态（用opacity代替display:none避免布局闪烁）
+        this.toolbar.style.opacity = '0';
+        this.toolbar.style.transition = 'opacity 0.2s ease-in-out';
+        
         // 将工具栏添加到输入容器中
         inputContainer.appendChild(this.toolbar);
         
@@ -66,11 +70,21 @@ export class InputToolbar {
         // 监听DOM变化，确保工具栏始终存在
         this.listenForDomChanges();
         
-        // 默认隐藏工具栏，直到有激活的按钮
-        this.toolbar.style.display = 'none';
-        
         this.initialized = true;
         console.log('输入工具栏创建完成');
+        
+        // 默认隐藏工具栏，直到有激活的按钮
+        // 延迟设置最终状态，避免闪烁
+        setTimeout(() => {
+            if (this.activeButtons.size > 0) {
+                this.toolbar.style.display = 'flex';
+                this.toolbar.style.opacity = '1';
+            } else {
+                this.toolbar.style.display = 'none';
+                this.toolbar.style.opacity = '1';
+            }
+        }, 50);
+        
         return true;
     }
     
@@ -165,7 +179,14 @@ export class InputToolbar {
      */
     showToolbar() {
         if (this.toolbar && this.buttons.size > 0) {
+            // 先设置display属性
             this.toolbar.style.display = 'flex';
+            
+            // 确保工具栏动画平滑显示
+            setTimeout(() => {
+                this.toolbar.style.opacity = '1';
+            }, 10);
+            
             console.log('显示输入工具栏，激活的按钮数:', this.activeButtons.size);
         }
     }
@@ -175,7 +196,16 @@ export class InputToolbar {
      */
     hideToolbar() {
         if (this.toolbar) {
-            this.toolbar.style.display = 'none';
+            // 平滑过渡到隐藏状态
+            this.toolbar.style.opacity = '0';
+            
+            // 等待过渡完成后再设置display:none
+            setTimeout(() => {
+                if (this.toolbar.style.opacity === '0') {
+                    this.toolbar.style.display = 'none';
+                }
+            }, 200);
+            
             console.log('隐藏输入工具栏');
         }
     }
@@ -319,14 +349,24 @@ export class EnhancedVisualToggle {
             // 获取初始设置
             await this.fetchSettings();
             
+            // 先确保工具栏已初始化
+            if (!this.toolbar.initialized) {
+                this.toolbar.initialize();
+            }
+            
             // 创建按钮并添加到工具栏
             this.createButton();
             
             // 监听OCR设置变化
             this.listenForOcrSettingChanges();
             
-            // 确保状态正确同步到UI
+            // 确保状态正确同步到UI（同步）
             this.syncUIState();
+            
+            // 立即显示工具栏（如果OCR开启）
+            if (this.ocrEnabled) {
+                this.toolbar.showToolbar();
+            }
             
             console.log('增强视觉分析设置初始化完成, OCR状态:', this.ocrEnabled, '增强视觉状态:', this.enhancedVisualEnabled);
             this.initialized = true;
@@ -343,15 +383,18 @@ export class EnhancedVisualToggle {
             const initFunction = async () => {
                 console.log('开始初始化增强视觉分析设置');
                 
+                // 先预加载设置
+                await this.fetchSettings();
+                
                 // 等待一小段时间确保DOM完全就绪
-                await new Promise(resolve => setTimeout(resolve, 200));
+                await new Promise(resolve => setTimeout(resolve, 100));
                 
                 // 确保输入框容器存在
                 const checkContainer = () => {
                     const inputContainer = document.querySelector('.message-input-container');
                     if (!inputContainer) {
                         console.log('未找到消息输入容器，稍后重试...');
-                        setTimeout(checkContainer, 300);
+                        setTimeout(checkContainer, 200);
                         return;
                     }
                     
@@ -459,6 +502,11 @@ export class EnhancedVisualToggle {
         
         // 根据OCR总开关状态显示/隐藏按钮
         this.toggleVisibility(this.ocrEnabled);
+        
+        // 确保OCR开启时工具栏显示
+        if (this.ocrEnabled) {
+            this.toolbar.showToolbar();
+        }
     }
     
     /**
@@ -512,7 +560,10 @@ export class EnhancedVisualToggle {
             // 确保工具栏根据增强视觉状态正确显示
             if (this.enhancedVisualEnabled) {
                 this.toolbar.setButtonActive(this.buttonId, true);
-            } 
+            } else {
+                // 即使增强视觉未激活，但OCR开启时仍应显示工具栏
+                this.toolbar.showToolbar();
+            }
         } else {
             // OCR总开关关闭时，不应该直接移除按钮，而是将其设置为非激活状态
             // this.toolbar.removeButton(this.buttonId); // 这会导致按钮被完全移除
@@ -538,6 +589,10 @@ export class EnhancedVisualToggle {
                 this.toolbar.setButtonActive(this.buttonId, true);
             } else {
                 this.buttonElement.classList.remove('active');
+                // 确保OCR开启时即使增强视觉关闭也保持工具栏显示
+                if (this.ocrEnabled) {
+                    this.toolbar.showToolbar();
+                }
             }
             
             // 获取CSRF令牌
@@ -664,14 +719,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // 首先初始化一次工具栏
         const toolbar = InputToolbar.getInstance();
         if (!toolbar.initialized) {
-            setTimeout(() => toolbar.initialize(), 300);
+            toolbar.initialize();
         }
         
         // 初始化增强视觉分析按钮
         const enhancedVisualToggle = new EnhancedVisualToggle();
         enhancedVisualToggle.init();
         
-        // 额外的初始化保障，确保在DOM完全就绪后，工具栏和按钮都存在并正确显示
+        // 使用单一延迟检查确保组件完全初始化
         setTimeout(() => {
             try {
                 // 确保工具栏已初始化
@@ -679,34 +734,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     toolbar.initialize();
                 }
                 
-                // // 如果当前是移动端，则先隐藏工具栏
-                // if(window.isMobile){
-                //     InputToolbar.getInstance().hideToolbar();
-                // }
                 // 如果OCR已启用但按钮未显示，重新添加按钮
-                else if (enhancedVisualToggle.ocrEnabled && 
-                    (!enhancedVisualToggle.buttonElement || 
-                     !document.contains(enhancedVisualToggle.buttonElement))) {
-                    console.log('增强视觉分析按钮未正确显示，尝试重新初始化');
+                if (enhancedVisualToggle.ocrEnabled && 
+                   (!enhancedVisualToggle.buttonElement || 
+                    !document.contains(enhancedVisualToggle.buttonElement))) {
+                    console.log('增强视觉分析按钮未正确显示，重新初始化');
                     enhancedVisualToggle.createButton();
                     enhancedVisualToggle.syncUIState();
-                }else if(enhancedVisualToggle.ocrEnabled){
-                    InputToolbar.getInstance().showToolbar();
+                    if (enhancedVisualToggle.ocrEnabled) {
+                        toolbar.showToolbar();
+                    }
                 }
             } catch (e) {
                 console.error('延迟初始化时出错:', e);
             }
-        }, 1000);
-        
-        // 额外的备份检查，5秒后检查组件状态
-        setTimeout(() => {
-            if (enhancedVisualToggle.ocrEnabled && 
-                (!enhancedVisualToggle.buttonElement || 
-                 !document.contains(enhancedVisualToggle.buttonElement))) {
-                console.log('增强视觉分析按钮未正确显示，进行最后一次初始化尝试');
-                enhancedVisualToggle.init();
-            }
-        }, 5000);
+        }, 500);
     } catch (error) {
         console.error('初始化输入工具栏组件时出错:', error);
     }

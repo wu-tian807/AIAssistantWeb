@@ -3226,29 +3226,29 @@ async function regenerateErrorMessage(messageIndex) {
     }
 }
 
-// 添加检测是否支持推理功能的工具函数
-function isReasonerModel(modelId) {
-    // 首先尝试从DOM中查找，速度更快
-    const modelOption = document.querySelector(`option[value="${modelId}"]`);
-    if (modelOption) {
-        const reasonerAttr = modelOption.getAttribute('data-reasoner');
-        if (reasonerAttr !== null) {
-            return reasonerAttr === 'true';
-        }
-    }
+// // 添加检测是否支持推理功能的工具函数
+// function isReasonerModel(modelId) {
+//     // 首先尝试从DOM中查找，速度更快
+//     const modelOption = document.querySelector(`option[value="${modelId}"]`);
+//     if (modelOption) {
+//         const reasonerAttr = modelOption.getAttribute('data-reasoner');
+//         if (reasonerAttr !== null) {
+//             return reasonerAttr === 'true';
+//         }
+//     }
     
-    // 尝试从选择器中查找所有option元素
-    const allOptions = document.querySelectorAll('#model-select option');
-    for (const option of allOptions) {
-        if (option.value === modelId) {
-            const reasonerAttr = option.getAttribute('data-reasoner');
-            return reasonerAttr === 'true';
-        }
-    }
+//     // 尝试从选择器中查找所有option元素
+//     const allOptions = document.querySelectorAll('#model-select option');
+//     for (const option of allOptions) {
+//         if (option.value === modelId) {
+//             const reasonerAttr = option.getAttribute('data-reasoner');
+//             return reasonerAttr === 'true';
+//         }
+//     }
     
-    // 如果无法获取模型信息，默认返回false
-    return false;
-}
+//     // 如果无法获取模型信息，默认返回false
+//     return false;
+// }
 
 // 添加一个确保滚动到底部的函数
 function ensureScrollToBottom(container) {
