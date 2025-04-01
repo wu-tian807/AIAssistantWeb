@@ -1145,8 +1145,14 @@ async function switchConversation(conversationId) {
         ...conversation.messages
     ];
 
-    // 渲染消息
+    // 渲染消息 - 过滤掉type为'function'的消息，这些消息不应该独立显示
     conversation.messages.forEach((msg, index) => {
+        // 跳过工具消息，根据type字段判断(标准格式)，或role字段判断(兼容旧格式)
+        if (msg.type === 'function' || msg.role === 'tool') {
+            console.log(`跳过工具消息: ${index}`, msg);
+            return;
+        }
+        
         if (msg.role === 'assistant' && msg.versions && msg.versions[msg.currentVersion]) {
             const currentVersion = msg.versions[msg.currentVersion];
             appendMessage(msg.content, false, index, msg.attachments, currentVersion.modelIcon);
