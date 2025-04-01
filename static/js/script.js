@@ -3628,9 +3628,9 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
                             // 获取当前对话
                             const currentConversation = conversations.find(c => c.id === currentConversationId);
                             if (currentConversation) {
-                                // 将工具消息添加到对话历史记录中
+                                // 将工具消息添加到对话历史记录中（只在内存中添加，不立即保存）
                                 data.tool_messages.forEach(toolMessage => {
-                                    console.log("添加工具消息到历史:", toolMessage);
+                                    console.log("添加工具消息到内存中:", toolMessage);
                                     
                                     // 确保工具消息结构完整
                                     if (toolMessage.type === 'function' && toolMessage.function) {
@@ -3649,12 +3649,8 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
                                     }
                                 });
                                 
-                                // 保存更新后的对话到数据库
-                                saveConversation(currentConversation.id, 'update').then(() => {
-                                    console.log("工具消息已添加到历史并保存到数据库");
-                                }).catch(error => {
-                                    console.error("保存工具消息时出错:", error);
-                                });
+                                // 不再在这里保存对话，而是等流程结束后与assistant消息一起保存
+                                console.log("工具消息已添加到内存中，待流程结束后与assistant消息一起保存");
                             } else {
                                 console.error("处理工具消息失败: 未找到当前对话");
                             }
