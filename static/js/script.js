@@ -381,6 +381,27 @@ function createRegenerateButton(messageIndex, messageActions, isError = false) {
     regenerateBtn.className = 'regenerate-btn';
     regenerateBtn.innerHTML = '🔄 重新生成';
     
+    // 控制重新生成按钮显示状态的函数
+    const updateVisibility = () => {
+        const isGenerating = window.isGenerating || currentReader || sendButton.classList.contains('stop');
+        if (isGenerating) {
+            regenerateBtn.style.display = 'none';
+        } else {
+            regenerateBtn.style.display = 'block';
+        }
+    };
+    
+    // 初始状态设置
+    updateVisibility();
+    
+    // 定期检查状态
+    const visibilityInterval = setInterval(() => {
+        updateVisibility();
+        if (!regenerateBtn.isConnected) {
+            clearInterval(visibilityInterval);
+        }
+    }, 100);
+    
     regenerateBtn.onclick = () => {
         const messageDiv = document.querySelector(`[data-message-index="${messageIndex}"]`);
         if (!messageDiv) return;
@@ -400,8 +421,8 @@ function createRegenerateButton(messageIndex, messageActions, isError = false) {
         // 添加regenerating标记
         messageDiv.classList.add('regenerating');
         
-        // 隐藏重新生成按钮
-        regenerateBtn.style.display = 'none';
+        // 不再需要手动隐藏按钮，由updateVisibility处理
+        // regenerateBtn.style.display = 'none';
         
         // 如果是错误消息，获取实际需要使用的消息索引
         let targetIndex = messageIndex;
@@ -422,7 +443,8 @@ function createRegenerateButton(messageIndex, messageActions, isError = false) {
                 console.error('重新生成消息失败:', err);
                 // 恢复按钮状态
                 regenerateBtn.disabled = false;
-                regenerateBtn.style.display = 'block';
+                // 不再需要手动显示按钮，由updateVisibility处理
+                // regenerateBtn.style.display = 'block';
                 messageDiv.classList.remove('regenerating');
                 messageDiv.classList.add('error-message');
                 messageContent.innerHTML = `<p>重新生成失败: ${err.message}</p>`;
@@ -2051,10 +2073,10 @@ async function regenerateMessage(messageIndex) {
         messageDiv.classList.add('regenerating');
         
         // 找到重新生成按钮并隐藏
-        const regenerateBtn = messageDiv.querySelector('.regenerate-btn');
-        if (regenerateBtn) {
-            regenerateBtn.style.display = 'none';
-        }
+        // const regenerateBtn = messageDiv.querySelector('.regenerate-btn');
+        // if (regenerateBtn) {
+        //     regenerateBtn.style.display = 'none';
+        // }
         
         const messageContent = messageDiv.querySelector('.message-content');
         if (!messageContent) {
@@ -2096,10 +2118,10 @@ async function regenerateMessage(messageIndex) {
             // 移除regenerating标记
             messageDiv.classList.remove('regenerating');
             // 恢复重新生成按钮
-            if (regenerateBtn) {
-                regenerateBtn.disabled = false;
-                regenerateBtn.style.display = 'block';
-            }
+            // if (regenerateBtn) {
+            //     regenerateBtn.disabled = false;
+            //     regenerateBtn.style.display = 'block';
+            // }
             return;
         }
         
@@ -2110,10 +2132,10 @@ async function regenerateMessage(messageIndex) {
             // 移除regenerating标记
             messageDiv.classList.remove('regenerating');
             // 恢复重新生成按钮
-            if (regenerateBtn) {
-                regenerateBtn.disabled = false;
-                regenerateBtn.style.display = 'block';
-            }
+            // if (regenerateBtn) {
+            //     regenerateBtn.disabled = false;
+            //     regenerateBtn.style.display = 'block';
+            // }
             return;
         }
         
@@ -3090,9 +3112,9 @@ async function regenerateErrorMessage(messageIndex) {
         
         // 找到重新生成按钮并隐藏
         const regenerateBtn = messageDiv.querySelector('.regenerate-btn');
-        if (regenerateBtn) {
-            regenerateBtn.style.display = 'none';
-        }
+        // if (regenerateBtn) {
+        //     regenerateBtn.style.display = 'none';
+        // }
         
         const messageContent = messageDiv.querySelector('.message-content');
         if (!messageContent) {
