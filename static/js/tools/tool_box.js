@@ -11,12 +11,20 @@ export class ToolBox {
         this.toolName = '';
         this.toolCallId = '';
         this.status = 'running'; // running, success, error
-        this.isCollapsed = false;
+        this.isCollapsed = true; // 默认为收起状态
         this.insertPosition = null; // 用于记录工具框的插入位置
+        this.resultShown = false; // 添加结果已显示标记
         
         // 创建头部容器
         this.headerContainer = document.createElement('div');
         this.headerContainer.className = 'tool-box-header';
+        // 添加点击事件，点击标题栏展开/收起
+        this.headerContainer.onclick = (e) => {
+            // 阻止事件冒泡，避免点击展开/收起按钮时触发此事件
+            if (e.target !== this.toggleButton) {
+                this.toggle();
+            }
+        };
         
         // 创建标题
         this.titleSpan = document.createElement('span');
@@ -35,9 +43,11 @@ export class ToolBox {
         // 创建收起/展开按钮
         this.toggleButton = document.createElement('button');
         this.toggleButton.className = 'tool-box-toggle';
-        this.toggleButton.innerHTML = '收起';
-        this.toggleButton.style.display = 'none'; // 初始隐藏按钮
-        this.toggleButton.onclick = () => this.toggle();
+        this.toggleButton.innerHTML = '展开';
+        this.toggleButton.onclick = (e) => {
+            e.stopPropagation(); // 阻止事件冒泡
+            this.toggle();
+        };
         
         // 将标题和名称添加到头部容器
         this.headerContainer.appendChild(this.titleSpan);
@@ -45,9 +55,22 @@ export class ToolBox {
         this.headerContainer.appendChild(this.statusSpan);
         this.headerContainer.appendChild(this.toggleButton);
         
+        // 创建可折叠区域包装器
+        this.collapsibleContainer = document.createElement('div');
+        this.collapsibleContainer.className = 'tool-box-collapsible collapsed'; // 默认为收起状态
+        
         // 创建内容容器
         this.contentContainer = document.createElement('div');
         this.contentContainer.className = 'tool-box-content';
+        
+        // 创建结果容器
+        this.resultContainer = document.createElement('div');
+        this.resultContainer.className = 'tool-box-result';
+        this.resultContainer.style.display = 'none';
+        
+        // 将内容和结果容器添加到可折叠区域
+        this.collapsibleContainer.appendChild(this.contentContainer);
+        this.collapsibleContainer.appendChild(this.resultContainer);
         
         // 创建进度条
         this.progressContainer = document.createElement('div');
@@ -57,16 +80,10 @@ export class ToolBox {
         this.progressBar.style.width = '0%';
         this.progressContainer.appendChild(this.progressBar);
         
-        // 创建结果容器
-        this.resultContainer = document.createElement('div');
-        this.resultContainer.className = 'tool-box-result';
-        this.resultContainer.style.display = 'none';
-        
-        // 将头部、内容和结果容器添加到主容器
+        // 将头部容器和可折叠区域添加到主容器
         this.container.appendChild(this.headerContainer);
         this.container.appendChild(this.progressContainer);
-        this.container.appendChild(this.contentContainer);
-        this.container.appendChild(this.resultContainer);
+        this.container.appendChild(this.collapsibleContainer);
         
         // 记录创建时间，用于排序
         this.creationTime = Date.now();
@@ -210,6 +227,9 @@ export class ToolBox {
         // 渲染内容
         this.render();
         
+        // 确保收起状态
+        this.collapse();
+        
         // 滚动到可见区域
         this.scrollIntoViewIfNeeded();
     }
@@ -241,8 +261,8 @@ export class ToolBox {
         // 完成进度条
         this.progressBar.style.width = '100%';
         
-        // 显示收起/展开按钮
-        this.toggleButton.style.display = 'inline-block';
+        // 移除进行中的类
+        this.container.classList.remove('in-progress');
         
         // 检查工具框是否在DOM中，如果不在则重新插入
         if (!this.container.parentNode) {
@@ -252,6 +272,10 @@ export class ToolBox {
         
         // 渲染内容
         this.render();
+        
+        // 设置为收起状态，但更新结果摘要
+        this.resultShown = true; // 标记结果已显示
+        this.collapse(); // 确保默认收起状态
         
         // 滚动到可见区域
         this.scrollIntoViewIfNeeded();
@@ -278,6 +302,8 @@ export class ToolBox {
     
     // 更新进度条
     updateProgress() {
+        // 添加进行中的类
+        this.container.classList.add('in-progress');
         // 简单实现：步骤越多，进度条越长
         const progress = Math.min(90, this.steps.length * 15); // 最多到90%，留下最后10%给结果
         this.progressBar.style.width = `${progress}%`;
@@ -290,31 +316,37 @@ export class ToolBox {
         
         // 清空内容容器
         this.contentContainer.innerHTML = '';
+        this.resultContainer.style.display = 'none'; // 默认隐藏结果容器
         
         // 渲染步骤
-        this.steps.forEach((step, index) => {
-            const stepDiv = document.createElement('div');
-            stepDiv.className = 'tool-box-step';
+        if (this.steps.length > 0) {
+            this.steps.forEach((step, index) => {
+                const stepDiv = document.createElement('div');
+                stepDiv.className = 'tool-box-step';
+                
+                // 提取步骤内容
+                let stepContent = '';
+                if (step.display_text) {
+                    stepContent = step.display_text;
+                } else if (step.content) {
+                    stepContent = step.content;
+                } else if (typeof step === 'string') {
+                    stepContent = step;
+                } else {
+                    // 如果没有明确的内容，尝试格式化整个对象
+                    stepContent = `步骤 ${index + 1}: ${JSON.stringify(step, null, 2)}`;
+                }
+                
+                // 渲染内容
+                stepDiv.innerHTML = this.md.render(stepContent);
+                
+                // 添加到容器
+                this.contentContainer.appendChild(stepDiv);
+            });
             
-            // 提取步骤内容
-            let stepContent = '';
-            if (step.display_text) {
-                stepContent = step.display_text;
-            } else if (step.content) {
-                stepContent = step.content;
-            } else if (typeof step === 'string') {
-                stepContent = step;
-            } else {
-                // 如果没有明确的内容，尝试格式化整个对象
-                stepContent = `步骤 ${index + 1}: ${JSON.stringify(step, null, 2)}`;
-            }
-            
-            // 渲染内容
-            stepDiv.innerHTML = this.md.render(stepContent);
-            
-            // 添加到容器
-            this.contentContainer.appendChild(stepDiv);
-        });
+            // 应用代码高亮
+            this.applyCodeHighlight(this.contentContainer);
+        }
         
         // 渲染结果
         if (this.result) {
@@ -339,14 +371,76 @@ export class ToolBox {
                 resultContent = `结果: ${JSON.stringify(this.result, null, 2)}`;
             }
             
+            // 如果没有步骤但有结果，添加一个结果概要到工具名称后面
+            if (this.steps.length === 0) {
+                let summaryText = '';
+                if (this.result.display_text) {
+                    // 从显示文本中提取简短摘要
+                    summaryText = this.result.display_text.substring(0, 20);
+                    if (this.result.display_text.length > 20) {
+                        summaryText += '...';
+                    }
+                } else if (typeof this.result.result === 'string') {
+                    summaryText = this.result.result.substring(0, 20);
+                    if (this.result.result.length > 20) {
+                        summaryText += '...';
+                    }
+                } else if (this.result.result) {
+                    // 如果结果是对象，尝试获取有意义的属性
+                    try {
+                        const resultObj = typeof this.result.result === 'object' ? 
+                            this.result.result : JSON.parse(this.result.result);
+                        // 尝试从常见属性中获取摘要
+                        if (resultObj.content) {
+                            summaryText = String(resultObj.content).substring(0, 20);
+                        } else if (resultObj.message) {
+                            summaryText = String(resultObj.message).substring(0, 20);
+                        } else if (resultObj.data) {
+                            summaryText = typeof resultObj.data === 'object' ? 
+                                JSON.stringify(resultObj.data).substring(0, 20) : 
+                                String(resultObj.data).substring(0, 20);
+                        } else {
+                            // 转换为字符串并截取
+                            summaryText = JSON.stringify(resultObj).substring(0, 20);
+                        }
+                        
+                        if (summaryText.length > 20) {
+                            summaryText += '...';
+                        }
+                    } catch (e) {
+                        // 如果解析失败，使用简单字符串
+                        summaryText = "查看结果";
+                    }
+                }
+                
+                if (summaryText) {
+                    // 检测是否为移动设备
+                    const isMobile = window.innerWidth <= 768;
+                    const truncateLength = isMobile ? 15 : 20;
+                    
+                    // 移动设备上使用更短的摘要
+                    if (isMobile && summaryText.length > truncateLength) {
+                        summaryText = summaryText.substring(0, truncateLength) + '...';
+                    }
+                    
+                    // 更新工具名称，添加结果摘要
+                    const originalName = this.nameSpan.textContent;
+                    this.nameSpan.innerHTML = `${originalName} <span style="opacity: 0.8; font-size: 0.9em;">(${summaryText})</span>`;
+                }
+            }
+            
             this.resultContainer.innerHTML = this.md.render(resultContent);
             this.applyCodeHighlight(this.resultContainer);
-        } else {
-            this.resultContainer.style.display = 'none';
         }
         
-        // 应用代码高亮
-        this.applyCodeHighlight(this.contentContainer);
+        // 如果没有步骤且结果已经设置，确保展开按钮可见
+        if (this.steps.length === 0 && this.result) {
+            // 结果已经完成，确保按钮可见
+            this.toggleButton.style.display = 'inline-block';
+        }
+        
+        // 确保始终为收起状态
+        this.collapse();
     }
     
     // 应用代码高亮
@@ -479,14 +573,14 @@ export class ToolBox {
     collapse() {
         this.isCollapsed = true;
         this.toggleButton.innerHTML = '展开';
-        this.contentContainer.classList.add('collapsed');
+        this.collapsibleContainer.classList.add('collapsed');
     }
     
     // 展开内容
     expand() {
         this.isCollapsed = false;
         this.toggleButton.innerHTML = '收起';
-        this.contentContainer.classList.remove('collapsed');
+        this.collapsibleContainer.classList.remove('collapsed');
     }
     
     // 判断是否应该自动滚动
@@ -608,6 +702,7 @@ export class ToolBox {
         if (data.result) {
             this.result = data.result;
             this.resultContainer.style.display = 'block';
+            this.resultShown = true;
         }
         
         // 设置插入位置
@@ -615,18 +710,11 @@ export class ToolBox {
             this.setInsertPositionMark(data.insert_position);
         }
         
-        // 设置收起/展开状态
-        if (data.is_collapsed) {
-            this.collapse();
-        } else {
-            this.expand();
-        }
+        // 始终设置为收起状态，忽略存储的状态
+        this.collapse();
         
         // 设置进度条为完成状态
         this.progressBar.style.width = '100%';
-        
-        // 显示收起/展开按钮
-        this.toggleButton.style.display = 'inline-block';
         
         // 渲染内容
         this.render();

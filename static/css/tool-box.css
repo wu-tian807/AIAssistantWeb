@@ -1,34 +1,31 @@
 /* 工具框样式 */
 .tool-box {
-    background-color: #f0f8ff; /* 浅蓝色背景 */
-    border-left: 4px solid #4a90e2; /* 蓝色边框 */
-    margin: 10px 0;
-    padding: 15px;
-    border-radius: 4px;
+    margin: 8px 0;
     color: #333;
     position: relative;
-    order: -0.5; /* 在思考框之后，但在普通内容之前 */
-    margin-bottom: 10px;
+    order: -0.5;
     align-self: stretch;
     transition: all 0.3s ease;
-    box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
-    transform: translateZ(0);
-    backface-visibility: hidden;
-    will-change: transform, box-shadow;
+    border-radius: 4px;
+    cursor: pointer;
 }
 
 .tool-box-header {
     display: flex;
     align-items: center;
-    margin-bottom: 12px;
+    padding: 8px 12px;
     gap: 12px;
     position: relative;
     z-index: 2;
+    background-color: rgba(74, 144, 226, 0.1);
+    border-left: 4px solid #4a90e2;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .tool-box-title {
     font-weight: bold;
-    color: #2c5282; /* 蓝色标题 */
+    color: #2c5282;
     font-style: normal;
 }
 
@@ -40,9 +37,7 @@
 }
 
 .tool-box-toggle {
-    position: absolute;
-    top: 12px;
-    right: 12px;
+    margin-left: auto;
     padding: 4px 8px;
     background-color: transparent;
     border: 1px solid #4a90e2;
@@ -59,57 +54,70 @@
     color: white;
 }
 
-.tool-box-content {
+/* 创建折叠区域包装器 */
+.tool-box-collapsible {
     transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
                 opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
-                margin 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
-                padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    overflow-y: auto;
-    overflow-x: hidden;
+                margin 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
     opacity: 1;
     max-height: 2000px;
-    transform: translateZ(0);
     will-change: max-height, opacity;
-    padding-right: 8px;
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
 }
 
-/* 滚动条样式 */
-.tool-box-content::-webkit-scrollbar {
-    width: 8px;
-}
-
-.tool-box-content::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.05);
-    border-radius: 4px;
-}
-
-.tool-box-content::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 4px;
-}
-
-.tool-box-content::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.3);
-}
-
-.tool-box-content.collapsed {
+.tool-box-collapsible.collapsed {
     max-height: 0;
     opacity: 0;
     margin-top: 0;
     margin-bottom: 0;
-    padding-top: 0;
-    padding-bottom: 0;
     visibility: hidden;
 }
 
+.tool-box-content {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    overflow-y: visible;
+    overflow-x: visible;
+}
+
+/* 当内容为空时隐藏内容容器 */
+.tool-box-content:empty {
+    display: none;
+}
+
+/* 滚动条样式 */
+.tool-box-collapsible::-webkit-scrollbar {
+    width: 8px;
+}
+
+.tool-box-collapsible::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+}
+
+.tool-box-collapsible::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+
+.tool-box-collapsible::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
+}
+
 .tool-box-result {
-    padding: 10px;
-    background-color: rgba(74, 144, 226, 0.1);
-    border-radius: 3px;
-    margin-top: 8px;
+    padding: 12px;
+    background-color: #f8fafc;
+    border-left: 4px solid #e2e8f0;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin-top: 0;
     font-weight: normal;
     color: #333;
-    border-left: 3px solid #4a90e2;
 }
 
 .tool-box-step {
@@ -119,7 +127,7 @@
 }
 
 .tool-box-step:last-child {
-    margin-bottom: 0;
+    margin-bottom: 8px;
 }
 
 .tool-box p {
@@ -127,19 +135,18 @@
     line-height: 1.5;
 }
 
-/* 鼠标悬停效果 */
-.tool-box:hover {
-    box-shadow: 0 8px 16px rgba(0,0,0,0.1), 0 8px 16px rgba(0,0,0,0.15);
-    transform: translateY(-2px);
-}
-
 /* 工具进度条 */
 .tool-box-progress {
-    height: 4px;
+    height: 3px;
     background-color: #e2e8f0;
     border-radius: 2px;
-    margin-top: 8px;
+    margin-top: 6px;
     overflow: hidden;
+    display: none; /* 默认隐藏进度条 */
+}
+
+.tool-box.in-progress .tool-box-progress {
+    display: block; /* 仅在工具运行时显示进度条 */
 }
 
 .tool-box-progress-bar {
@@ -178,10 +185,12 @@
 
 /* 暗色主题支持 */
 .dark-theme .tool-box {
-    background-color: #1a365d;
-    border-left-color: #2b6cb0;
     color: #e2e8f0;
-    box-shadow: 0 3px 6px rgba(0,0,0,0.3), 0 3px 6px rgba(0,0,0,0.4);
+}
+
+.dark-theme .tool-box-header {
+    background-color: rgba(44, 82, 130, 0.2);
+    border-left-color: #2b6cb0;
 }
 
 .dark-theme .tool-box-title {
@@ -202,6 +211,17 @@
     color: #e2e8f0;
 }
 
+.dark-theme .tool-box-content {
+    background-color: transparent;
+    border: none;
+}
+
+.dark-theme .tool-box-result {
+    background-color: #1a202c;
+    border-left-color: #4a5568;
+    color: #e2e8f0;
+}
+
 .dark-theme .tool-box-content::-webkit-scrollbar-track {
     background: rgba(255, 255, 255, 0.05);
 }
@@ -212,12 +232,6 @@
 
 .dark-theme .tool-box-content::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.3);
-}
-
-.dark-theme .tool-box-result {
-    background-color: rgba(44, 82, 130, 0.3);
-    color: #e2e8f0;
-    border-left-color: #4299e1;
 }
 
 .dark-theme .tool-box-step {

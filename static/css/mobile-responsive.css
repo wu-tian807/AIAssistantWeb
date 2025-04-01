@@ -1016,6 +1016,90 @@
             top: 5px;
         }
     }
+
+    /* 工具框移动端样式 */
+    .tool-box {
+        margin: 6px 0;
+        width: 95%;
+        max-width: 95%;
+        position: relative;
+    }
+    
+    .tool-box-header {
+        padding: 6px 10px;
+        gap: 6px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    
+    .tool-box-title {
+        font-size: 0.85rem;
+        white-space: nowrap;
+    }
+    
+    .tool-box-name {
+        font-size: 0.85rem;
+        white-space: normal;
+        word-break: break-all;
+        overflow-wrap: break-word;
+        flex: 1;
+        min-width: 0;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        margin-right: 4px;
+        display: -webkit-box;
+        line-clamp: 1;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+    }
+    
+    .tool-box-status {
+        font-size: 0.7rem;
+        padding: 2px 6px;
+        white-space: nowrap;
+        margin-left: auto;
+    }
+    
+    .tool-box-toggle {
+        padding: 2px 6px;
+        font-size: 0.7rem;
+        margin-left: 4px;
+    }
+    
+    .tool-box-collapsible {
+        margin-top: 6px;
+    }
+    
+    .tool-box-result {
+        padding: 8px;
+        font-size: 0.85rem;
+    }
+    
+    .tool-box-step {
+        margin-bottom: 6px;
+        padding-left: 8px;
+        font-size: 0.85rem;
+    }
+    
+    /* 确保代码块可以横向滚动 */
+    .tool-box-result pre,
+    .tool-box-content pre {
+        max-width: 100%;
+        overflow-x: auto !important;
+        white-space: pre;
+        font-size: 0.8rem;
+    }
+    
+    /* 确保表格可以横向滚动 */
+    .tool-box-result table,
+    .tool-box-content table {
+        display: block;
+        width: 100%;
+        overflow-x: auto !important;
+        white-space: nowrap;
+        font-size: 0.8rem;
+    }
 }
 
 /* 复制按钮样式 */

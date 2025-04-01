@@ -1148,7 +1148,9 @@ async function switchConversation(conversationId) {
     // 渲染消息 - 过滤掉type为'function'的消息，这些消息不应该独立显示
     conversation.messages.forEach((msg, index) => {
         // 跳过工具消息，根据type字段判断(标准格式)，或role字段判断(兼容旧格式)
-        if (msg.type === 'function' || msg.role === 'tool') {
+        // 但保留带有step和result内容的工具消息，这些需要显示在UI中
+        if ((msg.type === 'function' || msg.role === 'tool') && 
+            !msg.display_text && !msg.result && !msg.function) {
             console.log(`跳过工具消息: ${index}`, msg);
             return;
         }
@@ -1156,6 +1158,11 @@ async function switchConversation(conversationId) {
         if (msg.role === 'assistant' && msg.versions && msg.versions[msg.currentVersion]) {
             const currentVersion = msg.versions[msg.currentVersion];
             appendMessage(msg.content, false, index, msg.attachments, currentVersion.modelIcon);
+        } else if (msg.role === 'tool' || msg.type === 'function') {
+            // 处理工具消息的渲染
+            console.log(`渲染工具消息: ${index}`, msg);
+            // 工具消息不直接渲染，而是通过assistant消息的工具框来显示
+            // 这里不做额外处理，由assistant消息的工具框处理
         } else {
             appendMessage(msg.content, msg.role === 'user', index, msg.attachments);
         }
@@ -2080,9 +2087,25 @@ async function regenerateMessage(messageIndex) {
             return;
         }
         
+        // 验证要重新生成的消息是否存在且为助手消息
         const message = currentConversation.messages[messageIndex];
-        if (!message || message.role !== 'assistant') {
-            showError('无法重新生成非助手消息');
+        console.log("重新生成消息检查:", message);
+        if (!message) {
+            showError('无法找到要重新生成的消息');
+            // 移除regenerating标记
+            messageDiv.classList.remove('regenerating');
+            // 恢复重新生成按钮
+            if (regenerateBtn) {
+                regenerateBtn.disabled = false;
+                regenerateBtn.style.display = 'block';
+            }
+            return;
+        }
+        
+        // 检查是否是助手消息或带有工具UI的工具消息
+        if (message.role !== 'assistant' && 
+            !(message.role === 'tool' && (message.display_text || message.result || message.function))) {
+            showError('无法重新生成此消息');
             // 移除regenerating标记
             messageDiv.classList.remove('regenerating');
             // 恢复重新生成按钮
@@ -2123,6 +2146,7 @@ async function regenerateMessage(messageIndex) {
         console.log('Messages until index:', messagesUntilIndex); // 调试日志
         
         // 设置messages数组用于API请求
+        // 保留工具消息，这样AI可以看到之前的工具调用
         messages = [
             {"role": "system", "content": currentConversation.systemPrompt || default_system_prompt},
             ...messagesUntilIndex

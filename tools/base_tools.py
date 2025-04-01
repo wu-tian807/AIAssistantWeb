@@ -1,41 +1,85 @@
 import datetime
 import json
+import time
 from typing import Dict, Any, Union, Generator
 from utils.tool_wrapper import tool_decorator
 
 @tool_decorator()
-def get_current_time(format: str = "%Y-%m-%d %H:%M:%S", timezone: str = "UTC") -> Dict[str, Any]:
+def get_current_time(format: str = "%Y-%m-%d %H:%M:%S", timezone: str = "UTC") -> Generator[Dict[str, Any], None, None]:
     """
     获取当前服务器时间并按指定格式返回。
     
     Args:
         format: 返回的时间格式，默认为"%Y-%m-%d %H:%M:%S"
-        timezone: 时区，默认为"UTC"。未来可支持更多时区。
+        timezone: 时区，默认为"UTC"。支持"UTC"、"Asia/Shanghai"等。
     
     Returns:
         包含格式化时间信息的字典
     """
-    # 目前仅支持UTC和本地时间
+    # 第一步：开始获取时间
+    yield {
+        "step_response": {
+            "step": 1,
+            "content": "正在获取系统时间...",
+            "progress": 25
+        }
+    }
+    
+    # 获取当前时间
     current_time = datetime.datetime.now()
-    if timezone.lower() == "local":
-        pass  # 已经是本地时间了
-    elif timezone.lower() == "utc":
+    
+    # 短暂暂停，模拟处理时间
+    time.sleep(0.5)
+    
+    # 第二步：处理时区
+    yield {
+        "step_response": {
+            "step": 2,
+            "content": f"正在转换到{timezone}时区...",
+            "progress": 50
+        }
+    }
+    
+    # 时区处理
+    if timezone.lower() == "utc":
         current_time = datetime.datetime.utcnow()
+        timezone_display = "UTC"
+    elif timezone == "Asia/Shanghai":
+        # 这里简化处理，实际应使用pytz库进行准确的时区转换
+        # 假设当前时间是UTC+0，上海是UTC+8
+        current_time = datetime.datetime.now() + datetime.timedelta(hours=8)
+        timezone_display = "Asia/Shanghai"
     else:
-        # 未来可以添加更多时区支持
-        pass
+        # 默认使用本地时间
+        timezone_display = timezone
+    
+    # 短暂暂停，模拟处理时间
+    time.sleep(0.5)
+    
+    # 第三步：格式化时间
+    yield {
+        "step_response": {
+            "step": 3,
+            "content": f"正在使用格式'{format}'格式化时间...",
+            "progress": 75
+        }
+    }
+    
+    # 短暂暂停，模拟处理时间
+    time.sleep(0.5)
     
     # 格式化时间并返回
+    formatted_time = current_time.strftime(format)
     time_result = {
-        "current_time": current_time.strftime(format),
-        "timezone": timezone
+        "current_time": formatted_time,
+        "timezone": timezone_display
     }
     
     # 构建统一的响应格式
-    return {
+    yield {
         "final_response": {
             "result": time_result,
-            "display_text": f"当前{timezone}时间是: {current_time.strftime(format)}",
+            "display_text": f"当前{timezone_display}时间是: {formatted_time}",
             "status": "success"
         }
     }
