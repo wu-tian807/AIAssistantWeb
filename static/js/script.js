@@ -2036,11 +2036,12 @@ async function regenerateMessage(messageIndex) {
     window.generationStopped = false;
     
     try {
-        console.log("进入重新生成消息的主体");
-        // 获取当前消息元素
-        const messageDiv = chatMessages.children[messageIndex];
+        console.log("进入重新生成消息的主体, 消息索引:", messageIndex);
+        
+        // 使用data-message-index属性获取消息元素，而不是直接用索引
+        const messageDiv = document.querySelector(`[data-message-index="${messageIndex}"]`);
         if (!messageDiv) {
-            console.error('找不到消息元素');
+            console.error('找不到消息元素，索引:', messageIndex);
             return;
         }
         
@@ -2087,7 +2088,7 @@ async function regenerateMessage(messageIndex) {
             return;
         }
         
-        // 验证要重新生成的消息是否存在且为助手消息
+        // 验证要重新生成的消息是否存在且为助手消息或工具消息
         const message = currentConversation.messages[messageIndex];
         console.log("重新生成消息检查:", message);
         if (!message) {
@@ -2118,35 +2119,39 @@ async function regenerateMessage(messageIndex) {
         
         // 保存后续消息
         const subsequentMessages = currentConversation.messages.slice(messageIndex + 1);
+        console.log("保存的后续消息数量:", subsequentMessages.length);
         
-        // 初始化versions数组(如果不存在)，现在包含完整的消息对象
-        if (!message.versions) {
-            message.versions = [{
-                content: message.content,
-                attachments: message.attachments || [],
-                subsequentMessages: subsequentMessages,  // 保存后续消息
-                modelIcon: message.modelIcon,  // 保存原始版本的模型信息
-                modelId: message.modelId
-            }];
-            message.currentVersion = 0;
-        } else {
-            // 确保当前版本保存了后续消息
-            if (message.versions[message.currentVersion]) {
-                message.versions[message.currentVersion].subsequentMessages = subsequentMessages;
+        // 从DOM中删除后续消息
+        for (let i = messageIndex + 1; i < currentConversation.messages.length; i++) {
+            const subsequentElem = document.querySelector(`.message[data-message-index="${i}"]`);
+            if (subsequentElem) {
+                console.log("删除后续消息DOM元素，索引:", i);
+                subsequentElem.remove();
             }
         }
         
-        // 先清除UI中的后续消息
-        while (chatMessages.children.length > messageIndex + 1) {
-            chatMessages.removeChild(chatMessages.lastChild);
+        // 获取到该消息位置的所有先前消息，包括用户和工具消息
+        let messagesUntilIndex = [];
+        let lastUserMessage = null;
+        
+        // 找到最近的用户消息和最近的用户消息之前的所有消息
+        for (let i = messageIndex - 1; i >= 0; i--) {
+            if (currentConversation.messages[i].role === 'user') {
+                lastUserMessage = currentConversation.messages[i];
+                // 收集所有直到这个用户消息（包括这个消息）的消息
+                messagesUntilIndex = currentConversation.messages.slice(0, i + 1);
+                break;
+            }
         }
         
-        // 获取到指定消息之前的所有消息，包括附件
-        const messagesUntilIndex = currentConversation.messages.slice(0, messageIndex);
-        console.log('Messages until index:', messagesUntilIndex); // 调试日志
+        // 如果没有找到用户消息，或者消息列表为空，则使用所有之前的消息
+        if (!lastUserMessage || messagesUntilIndex.length === 0) {
+            messagesUntilIndex = currentConversation.messages.slice(0, messageIndex);
+        }
+        
+        console.log('最终使用的消息列表:', messagesUntilIndex);
         
         // 设置messages数组用于API请求
-        // 保留工具消息，这样AI可以看到之前的工具调用
         messages = [
             {"role": "system", "content": currentConversation.systemPrompt || default_system_prompt},
             ...messagesUntilIndex
@@ -2217,15 +2222,33 @@ async function regenerateMessage(messageIndex) {
             );
             
             if (is_valid) {
-                // 获取当前消息对象，如果不存在则创建一个新的
-                let message = currentConversation.messages[messageIndex];
-                if (!message) {
-                    message = {
-                        role: 'assistant',
-                        content: '',
-                        versions: []
-                    };
-                    currentConversation.messages[messageIndex] = message;
+                // 获取要更新的消息对象
+                if (message.role === 'tool') {
+                    // 如果是工具消息，需要找到或创建对应的assistant消息
+                    console.log("正在重新生成工具消息，需要找到或创建对应的assistant消息");
+                    
+                    // 检查这个工具消息后面是否已经有assistant消息
+                    if (messageIndex + 1 < currentConversation.messages.length && 
+                        currentConversation.messages[messageIndex + 1].role === 'assistant') {
+                        
+                        // 更新已有的assistant消息
+                        messageIndex = messageIndex + 1;
+                        message = currentConversation.messages[messageIndex];
+                        console.log("找到工具消息后的assistant消息，索引:", messageIndex);
+                    } else {
+                        // 创建新的assistant消息并插入到工具消息后面
+                        console.log("在工具消息后创建新的assistant消息");
+                        const newAssistantMessage = {
+                            role: 'assistant',
+                            content: '',
+                            versions: []
+                        };
+                        
+                        // 插入到工具消息后面
+                        currentConversation.messages.splice(messageIndex + 1, 0, newAssistantMessage);
+                        messageIndex = messageIndex + 1;
+                        message = newAssistantMessage;
+                    }
                 }
                 
                 // 确保消息角色是assistant
@@ -2241,36 +2264,37 @@ async function regenerateMessage(messageIndex) {
                     });
                 }
                 
+                // 确保versions数组存在
+                if (!message.versions) {
+                    message.versions = [];
+                }
+                
                 // 创建新版本
                 const newVersion = {
                     content: assistantMessage,
                     reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
-                    reasoning_summary: reasoningBox ? reasoningBox.getSummary() : null, // 保存摘要到版本历史
-                    thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,  // 保存思考时间到版本历史
-                    tool_boxes: toolBoxesData,     // 保存工具框数据到版本历史
+                    reasoning_summary: reasoningBox ? reasoningBox.getSummary() : null, 
+                    thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,
+                    tool_boxes: toolBoxesData,
                     attachments: [],
-                    subsequentMessages: [], // 新版本不应该有后续消息，因为重新生成时已经清空了后续消息
-                    modelIcon: modelIcon, // 使用当前选择的模型图标
-                    modelId: selectedModel // 使用当前选择的模型ID
+                    subsequentMessages: subsequentMessages,
+                    modelIcon: modelIcon,
+                    modelId: selectedModel
                 };
-                
-                // 初始化versions数组(如果不存在)
-                if (!message.versions) {
-                    message.versions = [];
-                }
                 
                 // 添加到版本历史
                 message.versions.push(newVersion);
                 message.currentVersion = message.versions.length - 1;
                 
-                // 更新主消息
+                // 更新主消息字段
                 message.content = assistantMessage;
                 message.modelIcon = modelIcon;
                 message.modelId = selectedModel;
                 message.reasoning_content = reasoningBox ? reasoningBox.getContent() : null;
                 message.reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null;
                 message.thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : null;
-                message.attachments = newVersion.attachments;
+                message.tool_boxes = toolBoxesData;
+                message.attachments = [];
                 
                 // 清除当前对话中这条消息后的所有消息
                 currentConversation.messages = currentConversation.messages.slice(0, messageIndex + 1);
@@ -2798,6 +2822,71 @@ async function switchVersion(messageIndex, newVersion) {
         }
     }
     
+    // 处理后续消息
+    if (newVersionData.subsequentMessages && Array.isArray(newVersionData.subsequentMessages)) {
+        console.log('从版本数据中恢复后续消息，数量:', newVersionData.subsequentMessages.length);
+        
+        // 从UI中删除后续消息DOM元素
+        for (let i = messageIndex + 1; i < currentConversation.messages.length; i++) {
+            const subsequentElem = document.querySelector(`.message[data-message-index="${i}"]`);
+            if (subsequentElem) {
+                console.log('删除后续消息DOM元素，索引:', i);
+                subsequentElem.remove();
+            }
+        }
+        
+        // 更新对话数据，保留当前消息及之前的消息
+        currentConversation.messages = currentConversation.messages.slice(0, messageIndex + 1);
+        
+        // 恢复保存的后续消息
+        for (let i = 0; i < newVersionData.subsequentMessages.length; i++) {
+            const subMsg = newVersionData.subsequentMessages[i];
+            // 添加到消息数组
+            currentConversation.messages.push(subMsg);
+            
+            // 计算新消息的索引
+            const newIndex = messageIndex + 1 + i;
+            
+            // 确定模型信息
+            let modelInfo = null;
+            if (subMsg.modelIcon) {
+                modelInfo = subMsg.modelIcon;
+            } else if (subMsg.modelId) {
+                modelInfo = subMsg.modelId;
+            }
+            
+            // 在UI中添加消息
+            appendMessage(
+                subMsg.content,
+                subMsg.role === 'user',
+                newIndex,
+                subMsg.attachments || [],
+                modelInfo,
+                false
+            );
+            
+            // 如果是助手消息且有多个版本，为其添加版本控制
+            if ((subMsg.role === 'assistant' || 
+                (subMsg.role === 'tool' && (subMsg.display_text || subMsg.result || subMsg.function))) && 
+                subMsg.versions && subMsg.versions.length > 1) {
+                
+                const subMsgElem = document.querySelector(`.message[data-message-index="${newIndex}"]`);
+                if (subMsgElem) {
+                    const subMsgWrapper = subMsgElem.querySelector('.message-wrapper');
+                    if (subMsgWrapper) {
+                        const subMsgActions = subMsgWrapper.querySelector('.message-actions');
+                        if (subMsgActions) {
+                            // 先添加重新生成按钮
+                            createRegenerateButton(newIndex, subMsgActions, false);
+                            // 再添加版本控制
+                            createVersionControl(newIndex, subMsgActions, subMsg);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     // 更新版本控制UI
     const messageActions = messageElem.querySelector('.message-actions');
     if (messageActions) {
@@ -2989,7 +3078,7 @@ async function regenerateErrorMessage(messageIndex) {
     
     try {
         // 获取当前消息元素
-        const messageDiv = chatMessages.children[messageIndex];
+        const messageDiv = document.querySelector(`[data-message-index="${messageIndex}"]`);
         if (!messageDiv) {
             console.error('找不到消息元素');
             return;
@@ -3033,12 +3122,25 @@ async function regenerateErrorMessage(messageIndex) {
             return;
         }
         
+        // 保存后续消息
+        const subsequentMessages = currentConversation.messages.slice(messageIndex + 1);
+        console.log("保存的后续消息数量:", subsequentMessages.length);
+        
+        // 从DOM中删除后续消息
+        for (let i = messageIndex + 1; i < currentConversation.messages.length; i++) {
+            const subsequentElem = document.querySelector(`.message[data-message-index="${i}"]`);
+            if (subsequentElem) {
+                console.log("删除后续消息DOM元素，索引:", i);
+                subsequentElem.remove();
+            }
+        }
+        
         // 确保我们只使用到用户的最后一条消息
         // 如果 messageIndex 大于实际消息数量，说明这是自动添加的错误消息
         // 这种情况下，我们应该使用到最后一条用户消息为止的所有消息
         const actualMessages = currentConversation.messages;
-        const messagesUntilIndex = actualMessages;
-        console.log('Messages until index:', messagesUntilIndex); // 调试日志
+        const messagesUntilIndex = actualMessages.slice(0, messageIndex);
+        console.log('Messages until index:', messagesUntilIndex.length); // 调试日志
         
         // 设置messages数组用于API请求
         messages = [
@@ -3139,13 +3241,13 @@ async function regenerateErrorMessage(messageIndex) {
                 const newVersion = {
                     content: assistantMessage,
                     reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
-                    reasoning_summary: reasoningBox ? reasoningBox.getSummary() : null, // 保存摘要到版本历史
-                    thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,  // 保存思考时间到版本历史
-                    tool_boxes: toolBoxesData,     // 保存工具框数据到版本历史
+                    reasoning_summary: reasoningBox ? reasoningBox.getSummary() : null, 
+                    thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,
+                    tool_boxes: toolBoxesData,
                     attachments: [],
-                    subsequentMessages: [], // 新版本不应该有后续消息，因为重新生成时已经清空了后续消息
-                    modelIcon: modelIcon, // 使用当前选择的模型图标
-                    modelId: selectedModel // 使用当前选择的模型ID
+                    subsequentMessages: subsequentMessages, // 保存后续消息到版本中
+                    modelIcon: modelIcon,
+                    modelId: selectedModel
                 };
                 
                 // 初始化versions数组(如果不存在)
@@ -3190,15 +3292,6 @@ async function regenerateErrorMessage(messageIndex) {
             if (currentReader) {
                 currentReader = null;
             }
-            // userInput.disabled = false;
-            // console.log("发送按钮触发2");
-            // sendButton.textContent = '发送';
-            // sendButton.classList.remove('stop');
-            // if(!canSendMessage()){
-            //     sendButton.disabled = true;
-            // }else{
-            //     sendButton.disabled = false;
-            // }
             
             // 移除regenerating标记
             messageDiv.classList.remove('regenerating');
@@ -3209,15 +3302,6 @@ async function regenerateErrorMessage(messageIndex) {
                 await currentReader.cancel();
                 currentReader = null;
             }
-            //userInput.disabled = false;
-            // console.log("发送按钮触发3");
-            // sendButton.textContent = '发送';
-            // sendButton.classList.remove('stop');
-            // if(!canSendMessage()){
-            //     sendButton.disabled = true;
-            // }else{
-            //     sendButton.disabled = false;
-            // }
             
             messageDiv.classList.add('error-message');
             // 移除regenerating标记
