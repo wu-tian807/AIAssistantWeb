@@ -632,8 +632,12 @@ function appendMessage(content, isUser = false, messageIndex = null, attachments
         const currentConversation = conversations.find(c => c.id === currentConversationId);
         if (currentConversation && currentConversation.messages) {
             if (isUser && messageIndex < currentConversation.messages.length) {
+                // 确保messageActions是空的，防止重复创建按钮
+                messageActions.innerHTML = '';
                 createEditButton(messageIndex, messageActions);
             } else if (!isUser && messageIndex < currentConversation.messages.length) {
+                // 确保messageActions是空的，防止重复创建按钮
+                messageActions.innerHTML = '';
                 createRegenerateButton(messageIndex, messageActions);
                 
                 // 获取当前消息
@@ -2139,6 +2143,14 @@ async function regenerateMessage(messageIndex) {
             return;
         }
         
+        // 重要修复: 首先保存当前版本的后续消息，以确保在版本切换时能正确恢复
+        // 获取当前的版本
+        if (message.versions && message.versions[message.currentVersion]) {
+            // 保存当前版本的后续消息
+            message.versions[message.currentVersion].subsequentMessages = currentConversation.messages.slice(messageIndex + 1);
+            console.log("已保存当前版本后续消息数量:", message.versions[message.currentVersion].subsequentMessages.length);
+        }
+        
         // 保存后续消息
         const subsequentMessages = currentConversation.messages.slice(messageIndex + 1);
         console.log("保存的后续消息数量:", subsequentMessages.length);
@@ -2299,7 +2311,7 @@ async function regenerateMessage(messageIndex) {
                     thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,
                     tool_boxes: toolBoxesData,
                     attachments: [],
-                    subsequentMessages: subsequentMessages,
+                    subsequentMessages: JSON.parse(JSON.stringify(subsequentMessages)), // 深拷贝后续消息
                     modelIcon: modelIcon,
                     modelId: selectedModel
                 };
@@ -2783,6 +2795,12 @@ async function switchVersion(messageIndex, newVersion) {
     const chatMessages = document.getElementById('chat-messages');
     const currentScrollPosition = chatMessages.scrollTop;
     
+    // 重要修复: 首先保存当前版本的后续消息，以便将来切换回来
+    if (message.versions && message.versions[message.currentVersion]) {
+        message.versions[message.currentVersion].subsequentMessages = currentConversation.messages.slice(messageIndex + 1);
+        console.log("切换前保存当前版本后续消息数量:", message.versions[message.currentVersion].subsequentMessages.length);
+    }
+    
     // 更新当前版本
     message.currentVersion = newVersion;
     
@@ -2864,7 +2882,7 @@ async function switchVersion(messageIndex, newVersion) {
         for (let i = 0; i < newVersionData.subsequentMessages.length; i++) {
             const subMsg = newVersionData.subsequentMessages[i];
             // 添加到消息数组
-            currentConversation.messages.push(subMsg);
+            currentConversation.messages.push(JSON.parse(JSON.stringify(subMsg))); // 深拷贝以避免引用问题
             
             // 计算新消息的索引
             const newIndex = messageIndex + 1 + i;
@@ -2898,6 +2916,8 @@ async function switchVersion(messageIndex, newVersion) {
                     if (subMsgWrapper) {
                         const subMsgActions = subMsgWrapper.querySelector('.message-actions');
                         if (subMsgActions) {
+                            // 清空现有按钮，防止重复创建
+                            subMsgActions.innerHTML = '';
                             // 先添加重新生成按钮
                             createRegenerateButton(newIndex, subMsgActions, false);
                             // 再添加版本控制
@@ -2912,14 +2932,13 @@ async function switchVersion(messageIndex, newVersion) {
     // 更新版本控制UI
     const messageActions = messageElem.querySelector('.message-actions');
     if (messageActions) {
-        // 获取版本控制元素
-        const versionControl = messageActions.querySelector('.version-control');
-        if (versionControl) {
-            // 删除现有的版本控制
-            versionControl.remove();
-        }
+        // 清空所有现有控件
+        messageActions.innerHTML = '';
         
-        // 重新创建版本控制
+        // 先添加重新生成按钮
+        createRegenerateButton(messageIndex, messageActions, false);
+        
+        // 再重新创建版本控制
         createVersionControl(messageIndex, messageActions, message);
     }
     
@@ -3144,6 +3163,15 @@ async function regenerateErrorMessage(messageIndex) {
             return;
         }
         
+        // 重要修复: 获取当前消息，如果存在且有版本，保存当前版本的后续消息
+        if (messageIndex < currentConversation.messages.length) {
+            const message = currentConversation.messages[messageIndex];
+            if (message && message.versions && message.versions[message.currentVersion]) {
+                message.versions[message.currentVersion].subsequentMessages = currentConversation.messages.slice(messageIndex + 1);
+                console.log("已保存当前版本后续消息数量:", message.versions[message.currentVersion].subsequentMessages.length);
+            }
+        }
+        
         // 保存后续消息
         const subsequentMessages = currentConversation.messages.slice(messageIndex + 1);
         console.log("保存的后续消息数量:", subsequentMessages.length);
@@ -3267,7 +3295,7 @@ async function regenerateErrorMessage(messageIndex) {
                     thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,
                     tool_boxes: toolBoxesData,
                     attachments: [],
-                    subsequentMessages: subsequentMessages, // 保存后续消息到版本中
+                    subsequentMessages: JSON.parse(JSON.stringify(subsequentMessages)), // 深拷贝后续消息
                     modelIcon: modelIcon,
                     modelId: selectedModel
                 };

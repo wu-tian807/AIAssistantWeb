@@ -47,7 +47,7 @@ def get_current_time(format: str = "%Y-%m-%d %H:%M:%S", timezone: str = "UTC") -
     elif timezone == "Asia/Shanghai":
         # 这里简化处理，实际应使用pytz库进行准确的时区转换
         # 假设当前时间是UTC+0，上海是UTC+8
-        current_time = datetime.datetime.now() + datetime.timedelta(hours=8)
+        current_time = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
         timezone_display = "Asia/Shanghai"
     else:
         # 默认使用本地时间
