@@ -599,12 +599,14 @@ function setupSystemPromptToggle() {
                 // 计算位置，确保不超出屏幕
                 const containerRect = this.getBoundingClientRect();
                 
-                // 设置合理的左侧位置
-                const leftPosition = Math.max(10, Math.min(
-                    containerRect.left,
+                // 更靠右的位置计算
+                const targetLeft = containerRect.left + containerRect.width - 130; // 让它右对齐但留出一点空间
+                const safeLeft = Math.max(10, Math.min(
+                    targetLeft,
                     window.innerWidth - 270 // 260px宽度 + 10px边距
                 ));
-                systemPrompt.style.left = `${leftPosition}px`;
+                
+                systemPrompt.style.left = `${safeLeft}px`;
                 
                 // 聚焦输入框
                 systemPrompt.focus();

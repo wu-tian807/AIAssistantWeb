@@ -198,6 +198,7 @@
         display: flex;
         flex-direction: column;
         overflow: visible; /* 确保内容不会超出容器 */
+        padding: 0; /* 移除内边距 */
     }
 
     /* 聊天头部调整 - 全新布局 */
@@ -205,15 +206,18 @@
         padding: 4px 10px; /* 减小内边距 */
         flex-direction: column;
         flex-wrap: nowrap; /* 不允许换行，保持垂直排列 */
-        align-items: flex-start;
-        justify-content: flex-start;
+        align-items: center; /* 改为居中对齐 */
+        justify-content: center; /* 改为居中对齐 */
         gap: 0px; /* 减小元素间距 */
         position: relative;
         width: calc(100% - 20px); /* 确保头部自身不超出容器 */
         overflow: visible; /* 防止内容溢出 */
         min-height: unset; /* 移除最小高度限制 */
+        margin-left: 30px; /* 为左侧菜单按钮留出空间 */
+        margin-right: 30px; /* 为右侧用户按钮留出空间，保持平衡 */
     }
 
+    /* 调整标题样式以配合居中布局 */
     .chat-header h1 {
         font-size: 0.75rem; /* 减小字体 */
         margin: 0;
@@ -222,10 +226,11 @@
         white-space: nowrap;
         overflow: visible;
         text-overflow: ellipsis;
-        margin-left: 10px; /* 减小左侧间距 */
-        max-width: calc(100% - 50px);
+        margin-left: 0; /* 移除左侧间距 */
+        max-width: calc(100% - 20px);
         margin-top: 2px; /* 减小顶部间距 */
         position: relative; /* 使用相对定位 */
+        text-align: center; /* 文本居中 */
     }
 
     /* 控制区域样式 - 改为水平排列 */
@@ -233,10 +238,10 @@
         width: calc(100% - 20px); /* 减去左侧菜单按钮空间和右侧边距 */
         flex-direction: row; /* 改为水平排列 */
         align-items: center; /* 垂直居中 */
-        justify-content: space-between; /* 两端对齐 */
+        justify-content: center; /* 居中对齐 */
         gap: 6px; /* 元素间距 */
         order: 3;
-        padding-left: 10px; /* 为菜单按钮留出空间 */
+        padding-left: 0; /* 移除左侧内边距 */
         margin-bottom: 2px; /* 减小底部间距 */
         overflow: visible; /* 防止内容溢出 */
         margin-top: -2px; /* 向上移动 */
@@ -252,9 +257,10 @@
         display: flex;
         align-items: center;
         margin-left: 0; /* 覆盖前面的margin-left设置 */
+        margin-right: 5px; /* 添加右侧间距 */
         overflow: visible; /* 防止内容溢出 */
         position: relative;
-        left: -5px; /* 减小左偏移，使其位置更合理 */
+        left: 0; /* 移除左偏移 */
         height: 30px; /* 设置更小的高度 */
         margin-bottom: 0; /* 移除底部边距 */
     }
@@ -263,7 +269,7 @@
     .custom-select {
         width: 100%;
         position: relative;
-        left: -5px; /* 与model-selector保持一致的左移 */
+        left: 0; /* 移除左偏移 */
         height: 30px; /* 设置高度 */
     }
     
@@ -324,6 +330,7 @@
         order: 2;
         flex: 1 1 auto; /* 允许拉伸和收缩 */
         margin-bottom: 0; /* 移除底部边距 */
+        margin-left: 5px; /* 添加左侧间距 */
         position: relative;
     }
 
@@ -359,7 +366,7 @@
         position: absolute;
         top: 100%;
         left: 50%;
-        transform: translateX(-30%);
+        transform: translateX(-40%); /* 修改为更靠右的位置 */
         width: 260px; /* 固定一个合理的宽度 */
         max-width: 90vw; /* 最大不超过视口宽度的90% */
         margin-top: 5px;
@@ -376,9 +383,11 @@
         -webkit-overscroll-behavior: contain;
     }
 
-    /* 点击后显示系统提示词 */
+    /* 添加特殊类，用于覆盖内联样式 */
     #system-prompt.show {
         display: block;
+        left: 50% !important; /* 确保应用我们的样式，覆盖可能的内联样式 */
+        transform: translateX(-40%) !important; /* 确保靠右显示 */
     }
 
     /* 用户信息区域 */
@@ -424,15 +433,19 @@
         padding: 5px;
     }
 
-    /* 消息区域调整，确保不被输入框遮挡 */
+    /* 消息区域调整，确保不被输入框遮挡，并铺满整个横向屏幕 */
     .chat-messages {
         height: auto;
         flex: 1;
         overflow-y: auto;
         overflow-x: hidden;
-        padding: 10px;
+        padding: 5px 0; /* 减少左右内边距为0，保留少量上下内边距 */
         padding-bottom: 0; /* 移除底部内边距，由margin-bottom代替 */
         margin-bottom: 70px; /* 为固定定位的输入框留出空间 */
+        margin-left: 0; /* 移除左侧外边距 */
+        margin-right: 0; /* 移除右侧外边距 */
+        width: 100%; /* 确保宽度100% */
+        max-width: 100%; /* 确保最大宽度100% */
         overflow-anchor: none; /* 防止滚动锚定问题 */
         overscroll-behavior: contain; /* 防止滚动穿透 */
         -webkit-overflow-scrolling: touch; /* 平滑滚动 */
@@ -440,19 +453,23 @@
         z-index: 10; /* 确保层级恰当 */
     }
 
-    /* 消息样式调整 */
+    /* 消息样式调整，让消息更宽 */
     .message {
         padding: 10px;
         border-radius: 8px;
-        max-width: 100%;
+        max-width: 100%; /* 更改为100%，允许消息更宽 */
+        width: auto;
         word-wrap: break-word;
         overflow-wrap: break-word;
         margin-bottom: 10px;
+        margin-left: 5px; /* 添加少量左外边距 */
+        margin-right: 5px; /* 添加少量右外边距 */
     }
 
     .user-message {
         margin-left: auto;
         margin-right: 5px;
+        max-width: 95%; /* 保持用户消息宽度 */
     }
 
     /* 消息包装器样式调整 */
@@ -473,15 +490,16 @@
         white-space: normal;
         word-break: break-word;
     }
-
+    
+    /* 助手消息样式调整 */
     .assistant-message {
-        margin-left: 5px; /* 向左移动，添加更小的左边距 */
+        margin-left: 5px;
         margin-right: auto;
         display: flex;
         align-items: flex-start;
         gap: 4px;
-        width: 95%; /* 增加宽度 */
-        max-width: 95%; /* 增加最大宽度 */
+        width: 95%; /* 保持助手消息宽度 */
+        max-width: 95%;
         padding: 0; /* 保持无内边距 */
     }
 
