@@ -48,6 +48,7 @@ def convert_tools_for_google(tools=None, messages=None) -> Dict:
     重要：此函数假设输入的tools和messages已经是统一格式。
     统一格式的工具消息应该符合以下结构：
     {
+        'role': 'tool',  // GoogleAPI需要特定的转换，比如assistant->model,tool需要附加到user之中的配置信息
         'type': 'function',
         'function': {
             'name': '工具名称',
@@ -142,77 +143,226 @@ def convert_tools_for_google(tools=None, messages=None) -> Dict:
         
         converted_messages = []
         
+        # 第一步：收集所有的函数调用和函数响应，并按顺序映射它们
+        function_calls = []
+        function_responses = []
+        
+        # 按消息顺序处理，先收集所有函数调用和响应
+        for msg in messages:
+            if isinstance(msg, dict):
+                if msg.get('role') == 'model' or msg.get('role') == 'assistant':
+                    # 这是可能包含函数调用的消息
+                    if 'tool_calls' in msg or 'function_call' in msg:
+                        # 添加到函数调用列表
+                        function_calls.append(msg)
+                elif msg.get('role') == 'tool' or (msg.get('type') == 'function' and 'function' in msg):
+                    # 这是函数响应
+                    function_responses.append(msg)
+        
+        print(f"发现 {len(function_calls)} 个函数调用和 {len(function_responses)} 个函数响应")
+        
+        # 第二步：将常规消息转换为Google格式，确保每个消息角色正确
         for msg in messages:
             # 首先检查是否已经是Content对象
             if isinstance(msg, Content):
                 # 直接保留Google格式的消息
                 converted_messages.append(msg)
-            # 然后处理字典类型的消息
-            elif isinstance(msg, dict):
-                # 检查是否为统一格式的工具消息
-                if msg.get('type') == 'function' and 'function' in msg:
-                    # 获取函数名称和响应内容
-                    function_name = msg['function'].get('name', '')
-                    response_data = msg['result'] if 'result' in msg else msg['function'].get('response', {})
+                continue
+                
+            # 处理字典类型的消息
+            if isinstance(msg, dict):
+                # 得到合法的角色
+                role = msg.get('role', '')
+                if role == 'assistant':
+                    google_role = 'model'
+                elif role in ['user', 'model']:
+                    google_role = role
+                else:
+                    # 对于不支持的角色（包括'tool'和'function'），暂时跳过
+                    print(f"跳过暂不处理的角色 '{role}' 消息")
+                    continue
+                
+                # 处理普通文本消息 - 如果不是工具相关的消息
+                if role != 'tool' and msg.get('type') != 'function':
+                    content_parts = []
                     
-                    # 创建符合Google格式的function响应
-                    function_response_part = Part.from_function_response(
-                        name=function_name,
-                        response={"result": response_data}
-                    )
-                    
-                    # 添加函数响应消息
-                    function_msg = Content(
-                        role='user',  # Google使用user角色传递工具结果
-                        parts=[function_response_part]
-                    )
-                    converted_messages.append(function_msg)
-                # 处理前端保存的工具消息格式 (role: 'tool')
-                elif msg.get('role') == 'tool' and (msg.get('function') or msg.get('result')):
-                    # 获取函数名称和响应内容
-                    function_name = msg.get('function', {}).get('name', '') or msg.get('name', '')
-                    response_data = msg.get('result', {}) or msg.get('function', {}).get('response', {})
-                    
-                    # 创建符合Google格式的function响应
-                    function_response_part = Part.from_function_response(
-                        name=function_name,
-                        response={"result": response_data}
-                    )
-                    
-                    # 添加函数响应消息
-                    function_msg = Content(
-                        role='user',  # Google使用user角色传递工具结果
-                        parts=[function_response_part]
-                    )
-                    converted_messages.append(function_msg)
-                # 处理普通消息
-                elif 'role' in msg and ('content' in msg or 'parts' in msg):
-                    # 处理带有parts的消息
+                    # 处理parts字段(Google格式)
                     if 'parts' in msg and isinstance(msg['parts'], list):
-                        content_parts = []
                         for part in msg['parts']:
                             if isinstance(part, dict) and 'text' in part:
                                 content_parts.append(Part(text=part['text']))
                             elif isinstance(part, Part):
                                 content_parts.append(part)
-                        
+                    # 处理content字段(OpenAI格式)
+                    elif 'content' in msg:
+                        if isinstance(msg['content'], str) and msg['content']:
+                            content_parts.append(Part(text=msg['content']))
+                        elif isinstance(msg['content'], list):
+                            for item in msg['content']:
+                                if isinstance(item, dict) and item.get('type') == 'text':
+                                    content_parts.append(Part(text=item.get('text', '')))
+                    
+                    # 只有有内容的消息才添加
+                    if content_parts:
                         content_msg = Content(
-                            role=msg['role'],
+                            role=google_role,
                             parts=content_parts
                         )
                         converted_messages.append(content_msg)
-                    # 处理带有content的消息
-                    elif 'content' in msg:
-                        content_msg = Content(
-                            role=msg['role'],
-                            parts=[Part(text=msg['content'])]
-                        )
-                        converted_messages.append(content_msg)
-            # 如果是其他类型，记录日志但不添加
-            else:
-                print(f"跳过不支持的消息类型: {type(msg)}")
         
-        result["converted_messages"] = converted_messages
+        # 第三步：特殊处理函数调用和响应，确保它们是成对的
+        # 先处理显式匹配的函数调用和响应对
+        processed_responses = set()  # 记录已处理的响应索引
+        
+        if function_calls and function_responses:
+            # 尝试匹配函数调用和函数响应
+            for call_idx, call in enumerate(function_calls):
+                # 从调用中提取函数名
+                call_func_name = None
+                if 'tool_calls' in call:
+                    for tc in call['tool_calls']:
+                        if 'function' in tc:
+                            call_func_name = tc['function'].get('name', '')
+                            break
+                elif 'function_call' in call:
+                    call_func_name = call['function_call'].get('name', '')
+                
+                if not call_func_name:
+                    continue
+                
+                # 在响应中查找匹配的函数名
+                for resp_idx, response in enumerate(function_responses):
+                    if resp_idx in processed_responses:
+                        continue  # 跳过已处理的响应
+                    
+                    # 提取响应中的函数名
+                    response_func_name = None
+                    if 'function' in response:
+                        response_func_name = response['function'].get('name', '')
+                    elif 'name' in response:
+                        response_func_name = response.get('name', '')
+                    
+                    # 找到匹配的响应
+                    if response_func_name and response_func_name == call_func_name:
+                        # 处理响应数据
+                        response_data = None
+                        if 'result' in response:
+                            response_data = response['result']
+                        elif 'function' in response and 'response' in response['function']:
+                            response_data = response['function']['response']
+                        elif 'content' in response:
+                            try:
+                                response_data = json.loads(response['content'])
+                            except:
+                                response_data = {"text": response['content']}
+                        
+                        # 如果找不到具体数据，使用display_text
+                        if not response_data and 'display_text' in response:
+                            response_data = {"text": response['display_text']}
+                        
+                        # 如果没有任何数据，使用默认值
+                        if not response_data:
+                            response_data = {"result": "Function executed successfully"}
+                        
+                        # 创建函数响应消息
+                        try:
+                            print(f"创建匹配的函数调用/响应对: {response_func_name}")
+                            function_response_part = Part.from_function_response(
+                                name=response_func_name,
+                                response={"result": response_data}
+                            )
+                            
+                            user_msg = Content(
+                                role='user',
+                                parts=[function_response_part]
+                            )
+                            converted_messages.append(user_msg)
+                            
+                            # 标记此响应已处理
+                            processed_responses.add(resp_idx)
+                            break
+                        except Exception as e:
+                            print(f"创建函数响应消息失败: {str(e)}")
+        
+        # 处理未匹配的函数响应
+        for resp_idx, response in enumerate(function_responses):
+            if resp_idx in processed_responses:
+                continue  # 跳过已处理的响应
+            
+            # 提取函数名
+            response_func_name = None
+            if 'function' in response:
+                response_func_name = response['function'].get('name', '')
+            elif 'name' in response:
+                response_func_name = response.get('name', '')
+            
+            # 如果没有函数名，继续下一个
+            if not response_func_name:
+                continue
+                
+            # 提取响应数据
+            response_data = None
+            if 'result' in response:
+                response_data = response['result']
+            elif 'function' in response and 'response' in response['function']:
+                response_data = response['function']['response']
+            elif 'content' in response:
+                try:
+                    response_data = json.loads(response['content'])
+                except:
+                    response_data = {"text": response['content']}
+            
+            # 如果找不到具体数据，使用display_text
+            if not response_data and 'display_text' in response:
+                response_data = {"text": response['display_text']}
+            
+            # 如果没有任何数据，使用默认值
+            if not response_data:
+                response_data = {"result": "Function executed successfully"}
+            
+            # 尝试创建独立的函数响应消息
+            try:
+                print(f"创建独立的函数响应消息: {response_func_name}")
+                # 将函数响应作为普通文本添加到消息中
+                response_text = f"{response_func_name} 结果: "
+                if isinstance(response_data, dict):
+                    response_text += json.dumps(response_data, ensure_ascii=False)
+                else:
+                    response_text += str(response_data)
+                
+                text_msg = Content(
+                    role='user',
+                    parts=[Part(text=response_text)]
+                )
+                converted_messages.append(text_msg)
+            except Exception as e:
+                print(f"创建独立的函数响应消息失败: {str(e)}")
+        
+        # 最后：确保没有空消息
+        print(f"转换前消息数量: {len(converted_messages)}")
+        valid_messages = []
+        for msg in converted_messages:
+            # 检查消息是否有内容
+            has_content = False
+            if hasattr(msg, 'parts') and msg.parts:
+                for part in msg.parts:
+                    # 检查文本内容是否为空
+                    if hasattr(part, 'text') and part.text and part.text.strip():
+                        has_content = True
+                        break
+                    # 检查是否是函数响应或其他非文本内容
+                    elif not hasattr(part, 'text'):
+                        has_content = True
+                        break
+            
+            # 只添加有内容的消息
+            if has_content:
+                valid_messages.append(msg)
+            else:
+                print(f"跳过空消息: {msg}")
+        
+        print(f"最终有效消息数量: {len(valid_messages)}")
+        result["converted_messages"] = valid_messages
     
     return result
 
@@ -223,6 +373,7 @@ def convert_tools_for_openai(tools=None, messages=None) -> Dict:
     重要：此函数假设输入的tools和messages已经是统一格式。
     统一格式的工具消息应该符合以下结构：
     {
+        'role': 'tool',
         'type': 'function',
         'function': {
             'name': '工具名称',
