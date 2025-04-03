@@ -132,49 +132,87 @@ export class ToolBox {
             return;
         }
         
+        // 获取文本内容元素
+        const textContent = this.messageContent.querySelector('.text-content');
+        
         // 获取所有现有的工具框
         const existingToolBoxes = Array.from(this.messageContent.querySelectorAll('.tool-box'));
         
-        // 如果没有现有的工具框，则直接添加到末尾
-        if (existingToolBoxes.length === 0) {
+        // 如果没有现有的工具框且没有文本内容，则直接添加到末尾
+        if (existingToolBoxes.length === 0 && (!textContent || textContent.textContent.trim().length === 0)) {
             this.messageContent.appendChild(this.container);
             console.log("工具框添加到消息内容末尾");
+            this.container._toolBoxInstance = this;
             return;
         }
         
-        // 按创建时间对工具框进行排序
+        // 按插入位置或创建时间对工具框进行排序
         const sortedToolBoxes = existingToolBoxes.sort((a, b) => {
-            const timeA = a._toolBoxInstance ? a._toolBoxInstance.creationTime : 0;
-            const timeB = b._toolBoxInstance ? b._toolBoxInstance.creationTime : 0;
-            return timeA - timeB;
+            const posA = a._toolBoxInstance ? a._toolBoxInstance.getInsertPositionMark() : 0;
+            const posB = b._toolBoxInstance ? b._toolBoxInstance.getInsertPositionMark() : 0;
+            return posA - posB;
         });
         
         // 找到合适的插入位置
         let insertBeforeElement = null;
-        for (const box of sortedToolBoxes) {
-            if (box._toolBoxInstance && box._toolBoxInstance.creationTime > this.creationTime) {
-                insertBeforeElement = box;
-                break;
-            }
-        }
         
-        // 插入工具框
-        if (insertBeforeElement) {
-            this.messageContent.insertBefore(this.container, insertBeforeElement);
-            console.log("工具框插入到其他工具框之前");
+        if (this.insertPosition) {
+            // 如果有明确的插入位置，根据插入位置查找合适的工具框
+            for (const box of sortedToolBoxes) {
+                if (box._toolBoxInstance && box._toolBoxInstance.getInsertPositionMark() > this.insertPosition) {
+                    insertBeforeElement = box;
+                    break;
+                }
+            }
+            
+            // 如果找到了插入位置的工具框，插入到该工具框之前
+            if (insertBeforeElement) {
+                this.messageContent.insertBefore(this.container, insertBeforeElement);
+                console.log(`工具框插入到位置标记 ${this.insertPosition} 处的工具框之前`);
+            } 
+            // 如果有文本内容，尝试插入到文本内容的适当位置
+            else if (textContent) {
+                // 按插入位置在文本内容中查找适当的位置
+                // 这里可以根据实际需求完善，例如在特定标记处插入
+                if (this.insertPosition === 0) {
+                    // 插入位置为0，插入到文本内容前面
+                    this.messageContent.insertBefore(this.container, textContent);
+                    console.log("工具框插入到文本内容前面");
+                } else {
+                    // 其他插入位置，插入到文本内容后面
+                    if (textContent.nextSibling) {
+                        this.messageContent.insertBefore(this.container, textContent.nextSibling);
+                    } else {
+                        this.messageContent.appendChild(this.container);
+                    }
+                    console.log(`工具框插入到文本内容后面，位置标记：${this.insertPosition}`);
+                }
+            } else {
+                // 没有找到合适的工具框也没有文本内容，添加到末尾
+                this.messageContent.appendChild(this.container);
+                console.log(`工具框添加到消息内容末尾，位置标记：${this.insertPosition}`);
+            }
         } else {
-            // 如果没有找到合适的工具框，则添加到所有工具框之后
-            // 查找文本内容
-            const textContent = this.messageContent.querySelector('.text-content');
-            if (textContent) {
-                // 如果存在文本内容，则在文本内容的后面添加
+            // 没有明确的插入位置，使用创建时间排序
+            for (const box of sortedToolBoxes) {
+                if (box._toolBoxInstance && box._toolBoxInstance.getInsertPositionMark() > this.creationTime) {
+                    insertBeforeElement = box;
+                    break;
+                }
+            }
+            
+            // 插入工具框
+            if (insertBeforeElement) {
+                this.messageContent.insertBefore(this.container, insertBeforeElement);
+                console.log("工具框插入到其他工具框之前");
+            } else if (textContent) {
+                // 如果有文本内容，插入到文本内容后面
                 if (textContent.nextSibling) {
                     this.messageContent.insertBefore(this.container, textContent.nextSibling);
-                    console.log("工具框插入到文本内容的后面");
                 } else {
                     this.messageContent.appendChild(this.container);
-                    console.log("工具框添加到文本内容后的消息末尾");
                 }
+                console.log("工具框插入到文本内容的后面");
             } else {
                 // 如果不存在文本内容，则直接添加到消息内容末尾
                 this.messageContent.appendChild(this.container);
@@ -195,6 +233,15 @@ export class ToolBox {
     // 设置工具调用ID
     setToolCallId(id) {
         this.toolCallId = id;
+    }
+    
+    // 设置工具序号
+    setToolIndex(index) {
+        this.toolIndex = index;
+        // 更新标题显示
+        if (this.toolIndex !== undefined) {
+            this.titleSpan.textContent = `工具调用 #${this.toolIndex + 1}`;
+        }
     }
     
     // 添加工具执行步骤
@@ -666,6 +713,7 @@ export class ToolBox {
         return {
             tool_name: this.toolName,
             tool_call_id: this.toolCallId,
+            tool_index: this.toolIndex,
             status: this.status,
             steps: this.steps,
             result: this.result,
@@ -685,6 +733,11 @@ export class ToolBox {
         
         if (data.tool_call_id) {
             this.setToolCallId(data.tool_call_id);
+        }
+        
+        // 设置工具序号
+        if (data.tool_index !== undefined) {
+            this.setToolIndex(data.tool_index);
         }
         
         // 设置状态

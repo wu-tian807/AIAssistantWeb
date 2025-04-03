@@ -788,6 +788,7 @@ def chat():
                     print(f"发送 waiting_reasoning 数据，模型: {model_id}")
                     yield f"data: {json.dumps({'waiting_reasoning':True})}\n\n"
                     print("waiting_reasoning 数据已发送")
+                
                 # 创建基本参数
                 params = {
                     "model": model_id,
@@ -796,105 +797,24 @@ def chat():
                 }
                 
                 # API调用前转换格式
-                # 处理基本消息
-                processed_history = []
-                for msg in processed_messages[:-1]:  # 除了最后一条消息
-                    # 处理系统提示词
-                    if msg['role'] == 'system':
-                        counter = 0
-                        for part in msg['parts']:
-                            system_instruction += "system_instruction {}:".format(counter)
-                            counter += 1
-                            if isinstance(part, dict) and 'text' in part:
-                                system_instruction += part['text']
-                    else:
-                        # 基本消息处理 - 转换角色
-                        google_role = msg['role']
-                        if google_role == 'assistant':
-                            google_role = 'model'
-                        elif google_role not in ['user', 'model']:
-                            google_role = 'user'
-                        
-                        # 创建统一格式的消息对象
-                        processed_msg = {
-                            'role': google_role,
-                            'parts': []
-                        }
-                        
-                        # 添加消息内容
-                        if 'parts' in msg:
-                            for part in msg['parts']:
-                                if isinstance(part, dict):
-                                    processed_msg['parts'].append(part)
-                                else:
-                                    processed_msg['parts'].append(part)
-                        
-                        processed_history.append(processed_msg)
-                
-                # 设置安全配置和基本配置
-                print("\n=== 开始发送消息到Gemini ===")
-                safety_settings_list = [
-                    {'category': HarmCategory.HARM_CATEGORY_HATE_SPEECH, 'threshold': HarmBlockThreshold.BLOCK_NONE},
-                    {'category': HarmCategory.HARM_CATEGORY_HARASSMENT, 'threshold': HarmBlockThreshold.BLOCK_NONE},
-                    {'category': HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, 'threshold': HarmBlockThreshold.BLOCK_NONE},
-                    {'category': HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, 'threshold': HarmBlockThreshold.BLOCK_NONE},
-                ]
-                
-                print("\n=== 安全设置 ===")
-                for setting in safety_settings_list:
-                    print(f"类别: {setting['category'].name}, 阈值: {setting['threshold'].name}")
-                
-                # 创建配置对象
-                config = GenerateContentConfigDict(
-                    system_instruction=system_instruction,
-                    max_output_tokens=max_tokens,
-                    temperature=temperature,
-                    safety_settings=safety_settings_list
-                )
-                
-                # 准备格式化消息历史和工具配置
-                formatted_history = []
-                
-                # 如果支持工具且已启用工具，添加工具参数
                 if enable_tools and supports_tools and available_tools:
                     # 导入转换函数
                     from tools.tool_processor import convert_tools_for_openai
-                    
                     # 一次性转换工具定义和消息
                     openai_config = convert_tools_for_openai(
                         tools=available_tools,
-                        messages=processed_history
+                        messages=params["messages"]
                     )
                     
                     # 更新工具配置
                     if "tool_config" in openai_config:
                         print(f"为OpenAI添加工具配置: {openai_config['tool_config']}")
-                        config.update(openai_config["tool_config"])
+                        params.update(openai_config["tool_config"])
                     
                     # 更新转换后的消息
                     if "converted_messages" in openai_config:
-                        processed_history = openai_config["converted_messages"]
-                        print(f"使用工具转换后的历史消息，共 {len(processed_history)} 条")
-                    else:
-                        # 手动转换消息格式为Gemini API需要的格式
-                        for msg in processed_history:
-                            msg_role = msg['role']
-                            for part in msg['parts']:
-                                if isinstance(part, dict) and 'text' in part:
-                                    processed_history.append(Content(
-                                        role=msg_role,
-                                        parts=[Part(text=part['text'])]
-                                    ))
-                                elif isinstance(part, dict) and 'inline_data' in part:
-                                    # 这是附件，需要特殊处理
-                                    inline_part = Part.from_bytes(
-                                        data=part['inline_data']['data'], 
-                                        mime_type=part['inline_data']['mime_type']
-                                    )
-                                    processed_history.append(Content(
-                                        role=msg_role,
-                                        parts=[inline_part]
-                                    ))
+                        params["messages"] = openai_config["converted_messages"]
+                
                 # 根据模型类型添加不同的参数
                 if model_id in THINKING_MODELS_WITHOUT_CONTENT:
                     # 推理模型使用max_completion_tokens

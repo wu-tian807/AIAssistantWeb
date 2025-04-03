@@ -3358,6 +3358,9 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
     console.log("当前generationStopped状态:", window.generationStopped);
     console.log("当前window.isGenerating状态:", window.isGenerating);
     
+    // 初始化文本位置计数器
+    let textPosition = 0;
+    
     const reader = response.body.getReader();
     console.log("获取reader,reader：", reader);
     console.log("当前currentReader值(赋值前):", currentReader);
@@ -3501,26 +3504,38 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
                             const toolCallId = stepResponse.tool_call_id;
                             const toolName = stepResponse.tool_name;
                             const displayText = stepResponse.display_text || '';
+                            // 获取工具序号(如果有)
+                            const toolIndex = stepResponse.tool_index !== undefined ? stepResponse.tool_index : toolBoxMap.size;
                             
                             // 检查是否已存在该工具的工具框
                             let toolBox = toolBoxMap.get(toolCallId);
                             if (!toolBox) {
-                                console.log(`创建新的工具框，工具ID: ${toolCallId}, 工具名称: ${toolName}`);
+                                console.log(`创建新的工具框，工具ID: ${toolCallId}, 工具名称: ${toolName}, 序号: ${toolIndex}`);
                                 // 首次出现该工具，创建新的工具框
                                 toolBox = new ToolBox(messageContent, md);
                                 toolBox.setToolName(toolName);
                                 toolBox.setToolCallId(toolCallId);
-                                toolBoxMap.set(toolCallId, toolBox);
+                                toolBox.setToolIndex(toolIndex);
                                 
-                                // 设置工具框位置 - 在正常内容之间
-                                toolBox.placeInMessageContent();
+                                // 使用工具的显示顺序设置插入位置标记
+                                if (textPosition > 0) {
+                                    // 如果已经有文本内容，则在文本内容之后插入
+                                    toolBox.setInsertPositionMark(textPosition + toolIndex + 1);
+                                } else {
+                                    // 没有文本内容时，使用工具序号作为排序依据
+                                    toolBox.setInsertPositionMark(toolIndex);
+                                }
+                                
+                                // 保存到工具框映射
+                                toolBoxMap.set(toolCallId, toolBox);
                             }
                             
                             // 添加步骤数据
                             console.log(`向工具框添加步骤: ${displayText}`);
                             toolBox.addStep({
                                 content: displayText,
-                                status: 'running'
+                                status: 'running',
+                                tool_index: toolIndex
                             });
                             
                             // 更新进度条
@@ -3536,19 +3551,30 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
                             const status = finalResponse.status || 'success';
                             const displayText = finalResponse.display_text || '';
                             const result = finalResponse.result || {};
+                            // 获取工具序号(如果有)
+                            const toolIndex = finalResponse.tool_index !== undefined ? finalResponse.tool_index : toolBoxMap.size;
                             
                             // 检查是否已存在该工具的工具框
                             let toolBox = toolBoxMap.get(toolCallId);
                             if (!toolBox) {
-                                console.log(`创建新的工具框用于最终响应，工具ID: ${toolCallId}, 工具名称: ${toolName}`);
+                                console.log(`创建新的工具框用于最终响应，工具ID: ${toolCallId}, 工具名称: ${toolName}, 序号: ${toolIndex}`);
                                 // 直接创建新的工具框
                                 toolBox = new ToolBox(messageContent, md);
                                 toolBox.setToolName(toolName);
                                 toolBox.setToolCallId(toolCallId);
-                                toolBoxMap.set(toolCallId, toolBox);
+                                toolBox.setToolIndex(toolIndex);
                                 
-                                // 设置工具框位置 - 在正常内容之间
-                                toolBox.placeInMessageContent();
+                                // 使用工具的显示顺序设置插入位置标记
+                                if (textPosition > 0) {
+                                    // 如果已经有文本内容，则在文本内容之后插入
+                                    toolBox.setInsertPositionMark(textPosition + toolIndex + 1);
+                                } else {
+                                    // 没有文本内容时，使用工具序号作为排序依据
+                                    toolBox.setInsertPositionMark(toolIndex);
+                                }
+                                
+                                // 保存到工具框映射
+                                toolBoxMap.set(toolCallId, toolBox);
                             }
                             
                             // 设置最终结果
@@ -3556,11 +3582,9 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
                             toolBox.setResult({
                                 content: displayText,
                                 status: status,
-                                data: result
+                                data: result,
+                                tool_index: toolIndex
                             });
-                            
-                            // 完成后更新进度条
-                            toolBox.updateProgress();
                         }
                         
                         // 处理思考内容
@@ -3746,6 +3770,9 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
         // 渲染内容
         textContentDiv.innerHTML = mdRenderer.render(text);
         initializeCodeBlocks(textContentDiv);
+        
+        // 更新textPosition值
+        textPosition = text.length;
         
         // 检查并处理图片加载完成后的滚动
         const images = textContentDiv.querySelectorAll('img');
