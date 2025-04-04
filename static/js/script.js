@@ -1462,33 +1462,33 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
         
         // 添加思考内容到消息中
         // 遍历当前对话中的所有消息
-        const messagesWithThinking = messages.map(msg => {
-            // 只处理助手消息
-            if (msg.role === 'assistant') {
-                // 获取对应的对话对象
-                const messageIndex = currentConversation.messages.findIndex(m => m.content === msg.content && m.role === 'assistant');
-                if (messageIndex !== -1) {
-                    const message = currentConversation.messages[messageIndex];
-                    // 检查是否有思考内容
-                    const reasoningData = message.versions && message.versions[message.currentVersion] ? 
-                        message.versions[message.currentVersion] : 
-                        message;
+        // const messagesWithThinking = messages.map(msg => {
+        //     // 只处理助手消息
+        //     if (msg.role === 'assistant') {
+        //         // 获取对应的对话对象
+        //         const messageIndex = currentConversation.messages.findIndex(m => m.content === msg.content && m.role === 'assistant');
+        //         if (messageIndex !== -1) {
+        //             const message = currentConversation.messages[messageIndex];
+        //             // 检查是否有思考内容
+        //             const reasoningData = message.versions && message.versions[message.currentVersion] ? 
+        //                 message.versions[message.currentVersion] : 
+        //                 message;
                     
-                    if (reasoningData.reasoning_content) {
-                        // 获取思考摘要
-                        const summary = extractSummaryFromThinking(reasoningData);
-                        if (summary) {
-                            // 添加思考摘要，使用 <think></think> 标记包裹
-                            return {
-                                ...msg,
-                                content: msg.content + '\n<think>' + summary + '</think>'
-                            };
-                        }
-                    }
-                }
-            }
-            return msg;
-        });
+        //             if (reasoningData.reasoning_content) {
+        //                 // 获取思考摘要
+        //                 const summary = extractSummaryFromThinking(reasoningData);
+        //                 if (summary) {
+        //                     // 添加思考摘要，使用 <think></think> 标记包裹
+        //                     return {
+        //                         ...msg,
+        //                         content: '<think>' + summary + '</think>\n' + msg.content
+        //                     };
+        //                 }
+        //             }
+        //         }
+        //     }
+        //     return msg;
+        // });
         
         // 立即保存用户消息到数据库
         await saveConversation(currentConversation.id, 'update');
@@ -1546,7 +1546,7 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
             try {
                 // 准备请求数据
                 const requestData = { 
-                    messages: messagesWithThinking, // 使用包含思考内容的消息
+                    messages: messages, // 使用包含思考内容的消息
                     conversation_id: currentConversationId,
                     model_id: selectedModel,
                     temperature: temperature,
@@ -1555,52 +1555,68 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
                 };
 
                 // 处理请求的回调函数
-                const afterProcessCallback = async (result) => {
-                    const { assistantMessage, reasoningBox, toolBoxMap, is_valid } = result;
+                //messageStatus 0: 第一条消息，1: 非第一条消息，-1：消息结束
+                const afterProcessCallback = async (result,messageStatus = 0) => {
+                    const { assistantMessage, reasoningBox, toolBoxMap, toolResult, is_valid } = result;
                     
                     // 成功接收到内容，保存到消息历史
                     if (is_valid) {
-                        const thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : 0;
-                        const reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null;
-                        
-                        // 收集工具框数据
-                        const toolBoxesData = [];
-                        if (toolBoxMap && toolBoxMap.size > 0) {
-                            toolBoxMap.forEach((toolBox, toolCallId) => {
-                                if (toolBox) {
-                                    toolBoxesData.push(toolBox.serializeForStorage());
-                                }
-                            });
-                        }
-                        
-                        currentConversation.messages.push({ 
-                            role: "assistant", 
-                            content: assistantMessage,
-                            reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
-                            reasoning_summary: reasoning_summary, // 保存摘要
-                            thinking_time: thinking_time,  // 保存思考时间
-                            tool_boxes: toolBoxesData,     // 保存工具框数据
-                            modelIcon: modelIcon,
-                            modelId: selectedModel,
-                            versions: [{
+                        if(messageStatus == 0){
+                            const thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : 0;
+                            const reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null;
+                            
+                            // 收集工具框数据
+                            const toolBoxesData = [];
+                            if (toolBoxMap && toolBoxMap.size > 0) {
+                                toolBoxMap.forEach((toolBox, toolCallId) => {
+                                    if (toolBox) {
+                                        toolBoxesData.push(toolBox.serializeForStorage());
+                                    }
+                                });
+                            }
+
+                            // toolResult.forEach(tool =>{
+                            //     currentConversation.messages.push(
+                            //         tool
+                            //     );
+                            // });
+                            
+                            currentConversation.messages.push({ 
+                                role: "assistant", 
                                 content: assistantMessage,
                                 reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
-                                reasoning_summary: reasoning_summary, // 保存摘要到版本历史
-                                thinking_time: thinking_time,  // 保存思考时间到版本历史
-                                tool_boxes: toolBoxesData,     // 保存工具框数据到版本历史
-                                attachments: [],
-                                subsequentMessages: [],
+                                reasoning_summary: reasoning_summary, // 保存摘要
+                                thinking_time: thinking_time,  // 保存思考时间
+                                tool_boxes: toolBoxesData,     // 保存工具框数据
                                 modelIcon: modelIcon,
-                                modelId: selectedModel
-                            }],
-                            currentVersion: 0,
-                            isInterrupted: window.generationStopped  // 标记为被中断的消息
-                        });
-                        
-                        // 添加重新生成按钮和版本控制
-                        const messageWrapper = messageDiv.querySelector('.message-wrapper');
-                        const messageActions = messageWrapper.querySelector('.message-actions');
-                        createRegenerateButton(messageIndex, messageActions, false);
+                                modelId: selectedModel,
+                                versions: [{
+                                    content: assistantMessage,
+                                    reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
+                                    reasoning_summary: reasoning_summary, // 保存摘要到版本历史
+                                    thinking_time: thinking_time,  // 保存思考时间到版本历史
+                                    tool_boxes: toolBoxesData,     // 保存工具框数据到版本历史
+                                    attachments: [],
+                                    subsequentMessages: [],
+                                    modelIcon: modelIcon,
+                                    modelId: selectedModel
+                                }],
+                                currentVersion: 0,
+                                isInterrupted: window.generationStopped,  // 标记为被中断的消息
+                                tool_results: toolResult
+                            });
+                        }
+                        else if(messageStatus == -1){
+                            // 添加重新生成按钮和版本控制
+                            const messageWrapper = messageDiv.querySelector('.message-wrapper');
+                            const messageActions = messageWrapper.querySelector('.message-actions');
+                            createRegenerateButton(messageIndex, messageActions, false);
+                        }
+                        else if(messageStatus == 1){
+                            //TODO：处理中间消息
+                        }
+                        //每次处理完消息后，保存一次对话
+                        await saveConversation(currentConversation.id, 'update');
                     }
                 };
 
@@ -2058,7 +2074,7 @@ async function regenerateMessage(messageIndex) {
         // 清空所有内容
         console.log("清空所有内容");
         messageContent.innerHTML = '';
-        
+
         // 创建思考框
         console.log("创建思考框");
         const reasoningBox = new ReasoningBox(messageContent, md);
@@ -2191,99 +2207,110 @@ async function regenerateMessage(messageIndex) {
             };
 
             // 处理请求结果的回调函数
-            const afterProcessCallback = async (result) => {
-                const { assistantMessage, reasoningBox, toolBoxMap, is_valid } = result;
+            const afterProcessCallback = async (result,messageStatus = 0) => {
+                const { assistantMessage, reasoningBox, toolBoxMap, toolResult, is_valid } = result;
                 
                 if (is_valid) {
-                    // 获取要更新的消息对象
-                    if (message.role === 'tool') {
-                        // 如果是工具消息，需要找到或创建对应的assistant消息
-                        console.log("正在重新生成工具消息，需要找到或创建对应的assistant消息");
+                    if(messageStatus == 0){
+                        // // 获取要更新的消息对象
+                        // if (message.role === 'tool') {
+                        //     // 如果是工具消息，需要找到或创建对应的assistant消息
+                        //     console.log("正在重新生成工具消息，需要找到或创建对应的assistant消息");
+                            
+                        //     // 检查这个工具消息后面是否已经有assistant消息
+                        //     if (messageIndex + 1 < currentConversation.messages.length && 
+                        //         currentConversation.messages[messageIndex + 1].role === 'assistant') {
+                                
+                        //         // 更新已有的assistant消息
+                        //         messageIndex = messageIndex + 1;
+                        //         message = currentConversation.messages[messageIndex];
+                        //         console.log("找到工具消息后的assistant消息，索引:", messageIndex);
+                        //     } else {
+                        //         // 创建新的assistant消息并插入到工具消息后面
+                        //         console.log("在工具消息后创建新的assistant消息");
+                        //         const newAssistantMessage = {
+                        //             role: 'assistant',
+                        //             content: '',
+                        //             versions: []
+                        //         };
+                                
+                        //         // 插入到工具消息后面
+                        //         currentConversation.messages.splice(messageIndex + 1, 0, newAssistantMessage);
+                        //         messageIndex = messageIndex + 1;
+                        //         message = newAssistantMessage;
+                        //     }
+                        // }
                         
-                        // 检查这个工具消息后面是否已经有assistant消息
-                        if (messageIndex + 1 < currentConversation.messages.length && 
-                            currentConversation.messages[messageIndex + 1].role === 'assistant') {
-                            
-                            // 更新已有的assistant消息
-                            messageIndex = messageIndex + 1;
-                            message = currentConversation.messages[messageIndex];
-                            console.log("找到工具消息后的assistant消息，索引:", messageIndex);
-                        } else {
-                            // 创建新的assistant消息并插入到工具消息后面
-                            console.log("在工具消息后创建新的assistant消息");
-                            const newAssistantMessage = {
-                                role: 'assistant',
-                                content: '',
-                                versions: []
-                            };
-                            
-                            // 插入到工具消息后面
-                            currentConversation.messages.splice(messageIndex + 1, 0, newAssistantMessage);
-                            messageIndex = messageIndex + 1;
-                            message = newAssistantMessage;
+                        // // 确保消息角色是assistant
+                        // message.role = 'assistant';
+                        
+                        // 从 toolBoxMap 创建 toolBoxesData 数组
+                        const toolBoxesData = [];
+                        if (toolBoxMap && toolBoxMap.size > 0) {
+                            toolBoxMap.forEach(toolBox => {
+                                if (toolBox) {
+                                    toolBoxesData.push(toolBox.serializeForStorage());
+                                }
+                            });
+                        }
+                        
+                        // 确保versions数组存在
+                        if (!message.versions) {
+                            message.versions = [];
+                        }
+                        
+                        // 创建新版本
+                        const newVersion = {
+                            content: assistantMessage,
+                            reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
+                            reasoning_summary: reasoningBox ? reasoningBox.getSummary() : null, 
+                            thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,
+                            tool_boxes: toolBoxesData,
+                            attachments: [],
+                            subsequentMessages: JSON.parse(JSON.stringify(subsequentMessages)), // 深拷贝后续消息
+                            modelIcon: modelIcon,
+                            modelId: selectedModel,
+                            tool_results: toolResult
+                        };
+                        // 添加到版本历史
+                        // toolResult.forEach(tool =>{
+                        //     messages.push(tool);
+                        // });
+                        message.versions.push(newVersion);
+                        message.currentVersion = message.versions.length - 1;
+                        
+                        // 更新主消息字段
+                        message.content = assistantMessage;
+                        message.modelIcon = modelIcon;
+                        message.modelId = selectedModel;
+                        message.reasoning_content = reasoningBox ? reasoningBox.getContent() : null;
+                        message.reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null;
+                        message.thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : null;
+                        message.tool_boxes = toolBoxesData;
+                        message.attachments = [];
+                        
+                        // 清除当前对话中这条消息后的所有消息
+                        currentConversation.messages = currentConversation.messages.slice(0, messageIndex + 1);
+                    }
+                    else if(messageStatus == -1){
+                        // 更新UI，添加版本控制
+                        const messageWrapper = messageDiv.querySelector('.message-wrapper');
+                        const messageActions = messageWrapper.querySelector('.message-actions');
+                        messageActions.innerHTML = '';
+                        
+                        // 先添加重新生成按钮
+                        createRegenerateButton(messageIndex, messageActions, false);
+                        
+                        // 再添加版本控制
+                        if (message.versions.length > 1) {
+                            createVersionControl(messageIndex, messageActions, message);
                         }
                     }
-                    
-                    // 确保消息角色是assistant
-                    message.role = 'assistant';
-                    
-                    // 从 toolBoxMap 创建 toolBoxesData 数组
-                    const toolBoxesData = [];
-                    if (toolBoxMap && toolBoxMap.size > 0) {
-                        toolBoxMap.forEach(toolBox => {
-                            if (toolBox) {
-                                toolBoxesData.push(toolBox.serializeForStorage());
-                            }
-                        });
+                    else if(messageStatus == 1){
+                        //TODO：处理中间消息
                     }
-                    
-                    // 确保versions数组存在
-                    if (!message.versions) {
-                        message.versions = [];
-                    }
-                    
-                    // 创建新版本
-                    const newVersion = {
-                        content: assistantMessage,
-                        reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
-                        reasoning_summary: reasoningBox ? reasoningBox.getSummary() : null, 
-                        thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,
-                        tool_boxes: toolBoxesData,
-                        attachments: [],
-                        subsequentMessages: JSON.parse(JSON.stringify(subsequentMessages)), // 深拷贝后续消息
-                        modelIcon: modelIcon,
-                        modelId: selectedModel
-                    };
-                    
-                    // 添加到版本历史
-                    message.versions.push(newVersion);
-                    message.currentVersion = message.versions.length - 1;
-                    
-                    // 更新主消息字段
-                    message.content = assistantMessage;
-                    message.modelIcon = modelIcon;
-                    message.modelId = selectedModel;
-                    message.reasoning_content = reasoningBox ? reasoningBox.getContent() : null;
-                    message.reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null;
-                    message.thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : null;
-                    message.tool_boxes = toolBoxesData;
-                    message.attachments = [];
-                    
-                    // 清除当前对话中这条消息后的所有消息
-                    currentConversation.messages = currentConversation.messages.slice(0, messageIndex + 1);
-                    
-                    // 更新UI，添加版本控制
-                    const messageWrapper = messageDiv.querySelector('.message-wrapper');
-                    const messageActions = messageWrapper.querySelector('.message-actions');
-                    messageActions.innerHTML = '';
-                    
-                    // 先添加重新生成按钮
-                    createRegenerateButton(messageIndex, messageActions, false);
-                    
-                    // 再添加版本控制
-                    if (message.versions.length > 1) {
-                        createVersionControl(messageIndex, messageActions, message);
-                    }
+                    //每次处理完消息后，保存一次对话
+                    await saveConversation(currentConversation.id, 'update');
                 }
             };
 
@@ -3158,80 +3185,92 @@ async function regenerateErrorMessage(messageIndex) {
             };
 
             // 处理请求结果的回调函数
-            const afterProcessCallback = async (result) => {
-                const { assistantMessage, reasoningBox, toolBoxMap, is_valid } = result;
+            const afterProcessCallback = async (result,messageStatus = 0) => {
+                const { assistantMessage, reasoningBox, toolBoxMap, toolResult, is_valid } = result;
                 
                 if (is_valid) {
-                    // 获取当前消息对象，如果不存在则创建一个新的
                     let message = currentConversation.messages[messageIndex];
-                    if (!message) {
-                        message = {
-                            role: 'assistant',
-                            content: '',
-                            versions: []
+                    if(messageStatus == 0){
+                        // 获取当前消息对象，如果不存在则创建一个新的
+                        if (!message) {
+                            message = {
+                                role: 'assistant',
+                                content: '',
+                                versions: []
+                            };
+                            currentConversation.messages[messageIndex] = message;
+                        }
+                        
+                        // 确保消息角色是assistant
+                        message.role = 'assistant';
+                        
+                        // 从 toolBoxMap 创建 toolBoxesData 数组
+                        const toolBoxesData = [];
+                        if (toolBoxMap && toolBoxMap.size > 0) {
+                            toolBoxMap.forEach(toolBox => {
+                                if (toolBox) {
+                                    toolBoxesData.push(toolBox.serializeForStorage());
+                                }
+                            });
+                        }
+                        
+                        // 创建新版本
+                        const newVersion = {
+                            content: assistantMessage,
+                            reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
+                            reasoning_summary: reasoningBox ? reasoningBox.getSummary() : null, 
+                            thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,
+                            tool_boxes: toolBoxesData,
+                            attachments: [],
+                            subsequentMessages: JSON.parse(JSON.stringify(subsequentMessages)), // 深拷贝后续消息
+                            modelIcon: modelIcon,
+                            modelId: selectedModel,
+                            tool_results: toolResult
                         };
-                        currentConversation.messages[messageIndex] = message;
+                        
+                        // 初始化versions数组(如果不存在)
+                        if (!message.versions) {
+                            message.versions = [];
+                        }
+                        
+                        // // 添加到版本历史
+                        // toolResult.forEach(tool =>{
+                        //     messages.push(tool);
+                        // });
+                        message.versions.push(newVersion);
+                        message.currentVersion = message.versions.length - 1;
+                        
+                        // 更新主消息
+                        message.content = assistantMessage;
+                        message.modelIcon = modelIcon;
+                        message.modelId = selectedModel;
+                        message.reasoning_content = reasoningBox ? reasoningBox.getContent() : null;
+                        message.reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null;
+                        message.thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : null;
+                        message.attachments = newVersion.attachments;
+                        
+                        // 清除当前对话中这条消息后的所有消息
+                        currentConversation.messages = currentConversation.messages.slice(0, messageIndex + 1);
                     }
-                    
-                    // 确保消息角色是assistant
-                    message.role = 'assistant';
-                    
-                    // 从 toolBoxMap 创建 toolBoxesData 数组
-                    const toolBoxesData = [];
-                    if (toolBoxMap && toolBoxMap.size > 0) {
-                        toolBoxMap.forEach(toolBox => {
-                            if (toolBox) {
-                                toolBoxesData.push(toolBox.serializeForStorage());
-                            }
-                        });
+                    else if(messageStatus == -1){
+                        // 更新UI，添加版本控制
+                        const messageWrapper = messageDiv.querySelector('.message-wrapper');
+                        const messageActions = messageWrapper.querySelector('.message-actions');
+                        messageActions.innerHTML = '';
+                        
+                        // 先添加重新生成按钮
+                        createRegenerateButton(messageIndex, messageActions, false);
+                        
+                        // 再添加版本控制
+                        if (message.versions.length > 1) {
+                            createVersionControl(messageIndex, messageActions, message);
+                        }
                     }
-                    
-                    // 创建新版本
-                    const newVersion = {
-                        content: assistantMessage,
-                        reasoning_content: reasoningBox ? reasoningBox.getContent() : null,
-                        reasoning_summary: reasoningBox ? reasoningBox.getSummary() : null, 
-                        thinking_time: reasoningBox ? reasoningBox.getThinkingTime() : null,
-                        tool_boxes: toolBoxesData,
-                        attachments: [],
-                        subsequentMessages: JSON.parse(JSON.stringify(subsequentMessages)), // 深拷贝后续消息
-                        modelIcon: modelIcon,
-                        modelId: selectedModel
-                    };
-                    
-                    // 初始化versions数组(如果不存在)
-                    if (!message.versions) {
-                        message.versions = [];
+                    else if(messageStatus == 1){
+                        //TODO：处理中间消息
                     }
-                    
-                    // 添加到版本历史
-                    message.versions.push(newVersion);
-                    message.currentVersion = message.versions.length - 1;
-                    
-                    // 更新主消息
-                    message.content = assistantMessage;
-                    message.modelIcon = modelIcon;
-                    message.modelId = selectedModel;
-                    message.reasoning_content = reasoningBox ? reasoningBox.getContent() : null;
-                    message.reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null;
-                    message.thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : null;
-                    message.attachments = newVersion.attachments;
-                    
-                    // 清除当前对话中这条消息后的所有消息
-                    currentConversation.messages = currentConversation.messages.slice(0, messageIndex + 1);
-                    
-                    // 更新UI，添加版本控制
-                    const messageWrapper = messageDiv.querySelector('.message-wrapper');
-                    const messageActions = messageWrapper.querySelector('.message-actions');
-                    messageActions.innerHTML = '';
-                    
-                    // 先添加重新生成按钮
-                    createRegenerateButton(messageIndex, messageActions, false);
-                    
-                    // 再添加版本控制
-                    if (message.versions.length > 1) {
-                        createVersionControl(messageIndex, messageActions, message);
-                    }
+                    //每次处理完消息后，保存一次对话
+                    await saveConversation(currentConversation.id, 'update');
                 }
             };
 
@@ -3350,7 +3389,7 @@ window.ensureScrollToBottom = ensureScrollToBottom;
  * @param {boolean} options.shouldScrollToBottom - 是否应该滚动到底部，默认为true
  * @returns {Promise<{assistantMessage: string, reasoningBox: Object}>} 返回助手消息内容和reasoningBox对象
  */
-async function processStreamResponse(response, messageDiv, messageContent, options = {}) {
+async function processStreamResponse(response, messageDiv, messageContent,options = {},keepReasoningBox) {
     const { messageIndex, md, chatMessages, shouldScrollToBottom = true } = options;
     console.log("===== processStreamResponse开始 =====");
     console.log("接收到response对象:", response.status, response.statusText);
@@ -3371,7 +3410,8 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
     sendButton.disabled = false; // 在获取流之后接触禁用，允许用户关闭流。
     
     let assistantMessage = '';
-    let reasoningBox = null;
+    let reasoningBox = keepReasoningBox ? window.ReasoningBoxInstance : null;
+    let toolResult = [];
     
     // 工具框映射，用于跟踪每个工具调用的工具框实例
     const toolBoxMap = new Map();
@@ -3458,6 +3498,23 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
                 if (reasoningBox) {
                     console.log("标记reasoningBox完成");
                     reasoningBox.markGenerationComplete();
+                    
+                    // 检查是否需要生成摘要
+                    if (!reasoningBox.getSummary() && reasoningBox.getContent()) {
+                        console.log("流结束后生成摘要");
+                        const reasoningData = {
+                            reasoning_content: reasoningBox.getContent(),
+                            reasoning_summary: null
+                        };
+                        const summary = extractSummaryFromThinking(reasoningData);
+                        if (summary) {
+                            console.log("设置摘要:", summary.substring(0, 30) + "...");
+                            reasoningBox.setSummary(summary);
+                        }
+                    }
+                    
+                    // 流处理完成后，清除全局ReasoningBoxInstance
+                    window.ReasoningBoxInstance = null;
                 }
                 
                 // 标记所有工具框为完成状态
@@ -3642,6 +3699,20 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
                                 }
                                 
                                 reasoningBox.markGenerationComplete();
+                                
+                                // 检查是否有摘要，如果没有则尝试生成，后续这部分需要转移到handleMessageRequest中，等待自循环结束后再生成。
+                                if (!reasoningBox.getSummary() && reasoningBox.getContent()) {
+                                    console.log("生成摘要");
+                                    const reasoningData = {
+                                        reasoning_content: reasoningBox.getContent(),
+                                        reasoning_summary: null
+                                    };
+                                    const summary = extractSummaryFromThinking(reasoningData);
+                                    if (summary) {
+                                        console.log("设置摘要:", summary.substring(0, 30) + "...");
+                                        reasoningBox.setSummary(summary);
+                                    }
+                                }
                             }
                             
                             // 累积消息内容
@@ -3675,34 +3746,34 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
                             console.log("处理工具消息:", data.tool_messages.length);
                             
                             // 获取当前对话
-                            const currentConversation = conversations.find(c => c.id === currentConversationId);
-                            if (currentConversation) {
+                            // const currentConversation = conversations.find(c => c.id === currentConversationId);
+                            // if (currentConversation) {
                                 // 将工具消息添加到对话历史记录中（只在内存中添加，不立即保存）
-                                data.tool_messages.forEach(toolMessage => {
-                                    console.log("添加工具消息到内存中:", toolMessage);
-                                    
-                                    // 确保工具消息结构完整
-                                    if (toolMessage.type === 'function' && toolMessage.function) {
-                                        // 添加工具消息到当前对话
-                                        currentConversation.messages.push({
-                                            role: 'tool',
-                                            type: toolMessage.type, 
-                                            function: toolMessage.function,
-                                            tool_call_id: toolMessage.tool_call_id,
-                                            status: toolMessage.status,
-                                            display_text: toolMessage.display_text,
-                                            result: toolMessage.result,
-                                            content: typeof toolMessage.display_text === 'string' ? toolMessage.display_text : 
-                                                     (typeof toolMessage.result === 'object' ? JSON.stringify(toolMessage.result) : String(toolMessage.result))
-                                        });
-                                    }
-                                });
+                            data.tool_messages.forEach(toolMessage => {
+                                console.log("添加工具消息到内存中:", toolMessage);
+                                
+                                // 确保工具消息结构完整
+                                if (toolMessage.type === 'function' && toolMessage.function) {
+                                    // 添加工具消息到当前对话
+                                    toolResult.push({
+                                        role: 'tool',
+                                        type: toolMessage.type, 
+                                        function: toolMessage.function,
+                                        tool_call_id: toolMessage.tool_call_id,
+                                        status: toolMessage.status,
+                                        display_text: toolMessage.display_text,
+                                        result: toolMessage.result,
+                                        content: typeof toolMessage.display_text === 'string' ? toolMessage.display_text : 
+                                                    (typeof toolMessage.result === 'object' ? JSON.stringify(toolMessage.result) : String(toolMessage.result))
+                                    });
+                                }
+                            });
                                 
                                 // 不再在这里保存对话，而是等流程结束后与assistant消息一起保存
                                 console.log("工具消息已添加到内存中，待流程结束后与assistant消息一起保存");
-                            } else {
-                                console.error("处理工具消息失败: 未找到当前对话");
-                            }
+                            // } else {
+                            //     console.error("处理工具消息失败: 未找到当前对话");
+                            // }
                         }
                     } catch (error) {
                         console.error('解析SSE数据出错:', error, '原始数据:', line);
@@ -3753,8 +3824,15 @@ async function processStreamResponse(response, messageDiv, messageContent, optio
     console.log("最终返回内容长度:", assistantMessage.length);
     console.log("reasoningBox:", reasoningBox ? "已创建" : "未创建");
     console.log("工具框数量:", toolBoxMap.size);
+    console.log("toolResult:", toolResult);
+    
+    // 确保在流处理完成后清除全局ReasoningBoxInstance
+    if (!keepReasoningBox) {
+        window.ReasoningBoxInstance = null;
+    }
+    
     let is_valid = assistantMessage.trim() || (toolBoxMap && toolBoxMap.size > 0)
-    return { assistantMessage, reasoningBox, toolBoxMap, is_valid };
+    return { assistantMessage, reasoningBox, toolBoxMap, toolResult, is_valid };
     
     // 辅助函数：更新文本内容
     function updateTextContent(messageContent, text, mdRenderer, chatMessagesContainer, shouldScroll) {
@@ -3838,13 +3916,14 @@ async function handleMessageRequest(requestData, messageDiv, messageContent, opt
         shouldScrollToBottom = true,
         afterProcessCallback = null
     } = options;
-    
+    let messageStatus = 0;
     try {
         console.log(`[${new Date().toISOString()}] 发送请求:`, {
             conversation_id: requestData.conversation_id,
             model_id: requestData.model_id,
             temperature: requestData.temperature,
-            max_tokens: requestData.max_tokens
+            max_tokens: requestData.max_tokens,
+            tool_results: requestData.tool_results
         });
 
         // 发送请求
@@ -3872,17 +3951,18 @@ async function handleMessageRequest(requestData, messageDiv, messageContent, opt
             response, 
             messageDiv, 
             messageContent, 
-            processOptions
+            processOptions,
+            messageStatus == 0
         );
-        
-        // 如果存在回调函数，执行回调
-        if (afterProcessCallback && typeof afterProcessCallback === 'function') {
-            await afterProcessCallback(processResult);
-        }
-        
+
         // 保存会话
         if (currentConversationId) {
             await saveConversation(currentConversationId, 'update');
+        }
+
+        // 如果存在回调函数，执行回调
+        if (afterProcessCallback && typeof afterProcessCallback === 'function') {
+            await afterProcessCallback(processResult,messageStatus);
         }
         
         return processResult;

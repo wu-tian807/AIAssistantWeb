@@ -174,10 +174,10 @@ def process_stream_response(
                 # 保存最后一个chunk
                 last_chunk_container["value"] = chunk
                 try:
-                    # 调试信息：打印整个chunk
-                    print("\n--- 调试: Stream Chunk ---")
-                    print(f"Chunk类型: {type(chunk)}")
-                    print(f"Chunk内容: {chunk}")
+                    # # 调试信息：打印整个chunk
+                    # print("\n--- 调试: Stream Chunk ---")
+                    # print(f"Chunk类型: {type(chunk)}")
+                    # print(f"Chunk内容: {chunk}")
                     
                     # 检查是否有工具调用
                     if hasattr(chunk.choices[0].delta, 'tool_calls') and chunk.choices[0].delta.tool_calls:

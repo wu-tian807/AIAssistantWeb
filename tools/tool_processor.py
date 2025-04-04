@@ -195,20 +195,38 @@ def convert_tools_for_google(tools=None, messages=None) -> Dict:
                                 content_parts.append(part)
                     # 处理content字段(OpenAI格式)
                     elif 'content' in msg:
-                        if isinstance(msg['content'], str) and msg['content']:
-                            content_parts.append(Part(text=msg['content']))
+                        if isinstance(msg['content'], str):
+                            # 即使内容为空也添加，避免content is required错误
+                            content_text = msg['content'] if msg['content'] else " "  # 使用空格作为默认内容
+                            content_parts.append(Part(text=content_text))
                         elif isinstance(msg['content'], list):
-                            for item in msg['content']:
-                                if isinstance(item, dict) and item.get('type') == 'text':
-                                    content_parts.append(Part(text=item.get('text', '')))
+                            # 如果content是列表但为空，添加一个默认的空格内容
+                            if not msg['content']:
+                                content_parts.append(Part(text=" "))
+                            else:
+                                for item in msg['content']:
+                                    if isinstance(item, dict) and item.get('type') == 'text':
+                                        text_content = item.get('text', '')
+                                        # 确保text内容不为空
+                                        if not text_content:
+                                            text_content = " "
+                                        content_parts.append(Part(text=text_content))
+                    else:
+                        # 如果没有content或parts字段，添加一个默认的空格内容
+                        print(f"消息没有content或parts字段，添加默认内容: {msg}")
+                        content_parts.append(Part(text=" "))
                     
-                    # 只有有内容的消息才添加
-                    if content_parts:
-                        content_msg = Content(
-                            role=google_role,
-                            parts=content_parts
-                        )
-                        converted_messages.append(content_msg)
+                    # 确保至少有一个内容部分
+                    if not content_parts:
+                        print(f"消息没有有效内容，添加默认内容: {msg}")
+                        content_parts.append(Part(text=" "))
+                    
+                    # 创建内容消息
+                    content_msg = Content(
+                        role=google_role,
+                        parts=content_parts
+                    )
+                    converted_messages.append(content_msg)
         
         # 第三步：特殊处理函数调用和响应，确保它们是成对的
         # 先处理显式匹配的函数调用和响应对
@@ -254,11 +272,11 @@ def convert_tools_for_google(tools=None, messages=None) -> Dict:
                             try:
                                 response_data = json.loads(response['content'])
                             except:
-                                response_data = {"text": response['content']}
+                                response_data = {"text": response['content'] or "Empty response"}
                         
                         # 如果找不到具体数据，使用display_text
                         if not response_data and 'display_text' in response:
-                            response_data = {"text": response['display_text']}
+                            response_data = {"text": response['display_text'] or "Empty response"}
                         
                         # 如果没有任何数据，使用默认值
                         if not response_data:
@@ -283,6 +301,13 @@ def convert_tools_for_google(tools=None, messages=None) -> Dict:
                             break
                         except Exception as e:
                             print(f"创建函数响应消息失败: {str(e)}")
+                            # 尝试作为普通文本添加
+                            text_content = f"工具 {response_func_name} 执行结果: 处理失败 - {str(e)}"
+                            text_msg = Content(
+                                role='user',
+                                parts=[Part(text=text_content)]
+                            )
+                            converted_messages.append(text_msg)
         
         # 处理未匹配的函数响应
         for resp_idx, response in enumerate(function_responses):
@@ -310,11 +335,11 @@ def convert_tools_for_google(tools=None, messages=None) -> Dict:
                 try:
                     response_data = json.loads(response['content'])
                 except:
-                    response_data = {"text": response['content']}
+                    response_data = {"text": response['content'] or "Empty response"}
             
             # 如果找不到具体数据，使用display_text
             if not response_data and 'display_text' in response:
-                response_data = {"text": response['display_text']}
+                response_data = {"text": response['display_text'] or "Empty response"}
             
             # 如果没有任何数据，使用默认值
             if not response_data:
@@ -330,6 +355,10 @@ def convert_tools_for_google(tools=None, messages=None) -> Dict:
                 else:
                     response_text += str(response_data)
                 
+                # 确保响应文本不为空
+                if not response_text.strip():
+                    response_text = f"{response_func_name} 结果: 执行完成，无返回内容"
+                
                 text_msg = Content(
                     role='user',
                     parts=[Part(text=response_text)]
@@ -337,8 +366,15 @@ def convert_tools_for_google(tools=None, messages=None) -> Dict:
                 converted_messages.append(text_msg)
             except Exception as e:
                 print(f"创建独立的函数响应消息失败: {str(e)}")
+                # 添加一个错误消息
+                fallback_text = f"工具 {response_func_name} 执行结果处理失败: {str(e)}"
+                fallback_msg = Content(
+                    role='user',
+                    parts=[Part(text=fallback_text)]
+                )
+                converted_messages.append(fallback_msg)
         
-        # 最后：确保没有空消息
+        # 最后：确保没有空消息，同时确保至少有一条消息
         print(f"转换前消息数量: {len(converted_messages)}")
         valid_messages = []
         for msg in converted_messages:
@@ -361,6 +397,15 @@ def convert_tools_for_google(tools=None, messages=None) -> Dict:
             else:
                 print(f"跳过空消息: {msg}")
         
+        # 确保至少有一条消息，如果没有任何有效消息，添加一个默认消息
+        if not valid_messages and messages:
+            print("没有有效消息，添加默认消息")
+            default_msg = Content(
+                role='user',
+                parts=[Part(text="请继续我们的对话")]
+            )
+            valid_messages.append(default_msg)
+        
         print(f"最终有效消息数量: {len(valid_messages)}")
         result["converted_messages"] = valid_messages
     
@@ -372,19 +417,28 @@ def convert_tools_for_openai(tools=None, messages=None) -> Dict:
     
     重要：此函数假设输入的tools和messages已经是统一格式。
     统一格式的工具消息应该符合以下结构：
-    {
-        'role': 'tool',
-        'type': 'function',
-        'function': {
-            'name': '工具名称',
-            'response': {...}  // 工具响应数据
+    [
+        {
+            'role': 'tool',
+            'type': 'function',
+            'function': {
+                'name': '工具名称',
+                'response': {...}  // 工具响应数据
+            },
+            'status': 'success',   // 或 'error'
+            'tool_call_id': '...'  // 原始工具调用ID
+            'display_text': '...'  // 用于前端显示的文本
+            'result': {...}        // 原始结果数据
         },
-        'status': 'success',   // 或 'error'
-        'tool_call_id': '...'  // 原始工具调用ID
-        'display_text': '...'  // 用于前端显示的文本
-        'result': {...}        // 原始结果数据
-    }
-    
+        {
+            'role': 'tool',
+            'type': 'function',
+            ...
+        }
+    ]
+    方法：
+    1.工具结果存放toolResult字段
+    2.toolResult存放在assistant.tool_result中
     Args:
         tools: 统一格式的工具列表，可以为None
         messages: 统一格式的消息列表，可以为None
@@ -435,32 +489,83 @@ def convert_tools_for_openai(tools=None, messages=None) -> Dict:
             # 复制消息，避免修改原始消息
             api_msg = copy.deepcopy(msg)
             
-            # 检查是否为统一格式的工具消息
-            if api_msg.get('type') == 'function' and 'function' in api_msg:
-                # 转换为OpenAI的工具消息格式
-                tool_response = {
-                    'role': 'tool',  # OpenAI官方推荐使用'tool'角色，不再使用'function'
-                    'tool_call_id': api_msg.get('tool_call_id', ''),
-                    'name': api_msg['function'].get('name', ''),
-                }
+            # # 检查是否为统一格式的工具消息
+            # if api_msg.get('type') == 'function' and 'function' in api_msg:
+            #     # 转换为OpenAI的工具消息格式
+            #     tool_response = {
+            #         'role': 'tool',  # OpenAI官方推荐使用'tool'角色，不再使用'function'
+            #         'tool_call_id': api_msg.get('tool_call_id', ''),
+            #         'name': api_msg['function'].get('name', ''),
+            #     }
                 
-                # 使用result作为content
-                if 'result' in api_msg:
-                    # 将结果转换为字符串
-                    if isinstance(api_msg['result'], dict):
-                        tool_response['content'] = json.dumps(api_msg['result'])
-                    else:
-                        tool_response['content'] = str(api_msg['result'])
-                # 如果没有result，则使用display_text
-                elif 'display_text' in api_msg and api_msg['display_text']:
-                    tool_response['content'] = api_msg['display_text']
-                # 最后才考虑使用function.response
+            #     # 使用result作为content
+            #     if 'result' in api_msg:
+            #         # 将结果转换为字符串
+            #         if isinstance(api_msg['result'], dict):
+            #             tool_response['content'] = json.dumps(api_msg['result'])
+            #         else:
+            #             tool_response['content'] = str(api_msg['result'])
+            #     # 如果没有result，则使用display_text
+            #     elif 'display_text' in api_msg and api_msg['display_text']:
+            #         tool_response['content'] = api_msg['display_text']
+            #     # 最后才考虑使用function.response
+            #     else:
+            #         tool_response['content'] = json.dumps(api_msg['function'].get('response', {}))
+                
+            #     converted_messages.append(tool_response)
+            # else:
+            #     # 保留其他类型的消息
+            #     converted_messages.append(api_msg)
+            # 从助手消息中拿到tool_results参数
+            if api_msg.get('role') == 'assistant':
+                print('assistant信息',api_msg)
+                tool_results = api_msg.get('tool_results', [])
+                if tool_results:
+                    for tool_result in tool_results:
+                        #转换tool_result为openai的工具消息格式
+                        tool_response = {
+                            'role': 'tool',
+                            'tool_call_id': tool_result.get('tool_call_id'),
+                            'name': tool_result.get('name')
+                        }
+                        # 使用result作为content
+                        if 'result' in tool_result:
+                            tool_response['content'] = json.dumps(tool_result['result'])
+                        else:
+                            tool_response['content'] = tool_result.get('display_text', '')
+                        converted_messages.append(tool_response)
+                    # 添加助手消息本体
+                    assistant_content = api_msg.get('content', '已调用工具信息')
+                    # 处理content可能是列表的情况
+                    if isinstance(assistant_content, list):
+                        text_parts = []
+                        for item in assistant_content:
+                            if isinstance(item, dict) and item.get('type') == 'text':
+                                text_parts.append(item.get('text', ''))
+                        assistant_content = ''.join(text_parts)
+                    
+                    assistant_msg = {
+                        'role': 'assistant',
+                        'content': assistant_content
+                    }
+                    converted_messages.append(assistant_msg)
                 else:
-                    tool_response['content'] = json.dumps(api_msg['function'].get('response', {}))
-                
-                converted_messages.append(tool_response)
+                    # 即使没有工具结果也添加助手消息
+                    assistant_content = api_msg.get('content', '')
+                    # 处理content可能是列表的情况
+                    if isinstance(assistant_content, list):
+                        text_parts = []
+                        for item in assistant_content:
+                            if isinstance(item, dict) and item.get('type') == 'text':
+                                text_parts.append(item.get('text', ''))
+                        assistant_content = ''.join(text_parts)
+                    
+                    assistant_msg = {
+                        'role': 'assistant',
+                        'content': assistant_content
+                    }
+                    converted_messages.append(assistant_msg)
             else:
-                # 保留其他类型的消息
                 converted_messages.append(api_msg)
         
         result["converted_messages"] = converted_messages

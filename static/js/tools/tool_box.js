@@ -693,7 +693,12 @@ export class ToolBox {
         return this.toolCallId;
     }
     
-    // 获取当前状态
+    // 获取工具索引
+    getToolIndex() {
+        return this.toolIndex || 0;
+    }
+    
+    // 获取状态
     getStatus() {
         return this.status;
     }

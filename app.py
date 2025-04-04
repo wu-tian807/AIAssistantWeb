@@ -482,7 +482,11 @@ def chat():
     
     # 移除消息历史转换逻辑，保持消息格式统一
     # 格式转换只在API调用前进行
-
+    def process_message_with_reasoning_summary(msg):
+        if msg.get('role') == 'assistant':
+            if msg.get('reasoning_summary'):
+                msg['content'] = '<think>' + msg.get('reasoning_summary') + '</think>\n' + msg.get('content')
+            
     def process_message_with_attachments(message, model_type, model_support_list, user_id,enable_ocr,enhanced_visual):
         # 从配置中获取支持的图片类型
         from utils.files.file_config import MIME_TYPE_MAPPING, ATTACHMENT_TYPES, AttachmentType
@@ -492,6 +496,7 @@ def chat():
         # 创建新的消息对象，只复制必要的字段
         processed_message = {
             'role': message.get('role', ''),
+            'tool_results': message.get('tool_results', [])
         }
         
         # 根据模型类型初始化消息格式
@@ -708,6 +713,8 @@ def chat():
             # 处理消息列表
             processed_messages = []
             for msg in messages:
+                process_message_with_reasoning_summary(msg)
+                print(f"处理思考信息后的消息: {msg}")
                 processed_msg,image_ocr_tokens = process_message_with_attachments(
                     msg, 
                     model_type, 
@@ -765,10 +772,11 @@ def chat():
                         
                         formatted_messages_for_deepseek.append({
                             'role': msg['role'],
-                            'content': content.strip()
+                            'content': content.strip(),
+                            'tool_results': msg.get('tool_results', [])
                         })
                     
-                    print("发送给模型的消息:", formatted_messages_for_deepseek)
+                    #print("发送给模型的消息:", formatted_messages_for_deepseek)
                 else:
                     if provider == 'xai':
                         client = xai_client
@@ -795,25 +803,24 @@ def chat():
                     "messages": formatted_messages_for_deepseek if len(formatted_messages_for_deepseek) > 0 else processed_messages,
                     "stream": True
                 }
-                
+                                    # 导入转换函数
+                from tools.tool_processor import convert_tools_for_openai
+                # 一次性转换工具定义和消息
+                openai_config = convert_tools_for_openai(
+                    tools=available_tools,
+                    messages=params["messages"]
+                )
+                # 更新转换后的消息
+                if "converted_messages" in openai_config:
+                    params["messages"] = openai_config["converted_messages"]
+                    print(f"转换后的消息: {params['messages']}")
                 # API调用前转换格式
                 if enable_tools and supports_tools and available_tools:
-                    # 导入转换函数
-                    from tools.tool_processor import convert_tools_for_openai
-                    # 一次性转换工具定义和消息
-                    openai_config = convert_tools_for_openai(
-                        tools=available_tools,
-                        messages=params["messages"]
-                    )
-                    
+
                     # 更新工具配置
                     if "tool_config" in openai_config:
                         print(f"为OpenAI添加工具配置: {openai_config['tool_config']}")
                         params.update(openai_config["tool_config"])
-                    
-                    # 更新转换后的消息
-                    if "converted_messages" in openai_config:
-                        params["messages"] = openai_config["converted_messages"]
                 
                 # 根据模型类型添加不同的参数
                 if model_id in THINKING_MODELS_WITHOUT_CONTENT:
@@ -831,6 +838,7 @@ def chat():
                 
                 # 调用模型API
                 print(f"调用模型API，参数: {params}")
+                print(f"发送给模型的消息: {params['messages']}")
                 stream = client.chat.completions.create(**params)
 
                 # 使用新的流处理函数
