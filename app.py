@@ -949,7 +949,8 @@ def chat():
                         # 创建统一格式的消息对象
                         processed_msg = {
                             'role': google_role,
-                            'parts': []
+                            'parts': [],
+                            'tool_results': msg.get('tool_results', [])  # 确保保留工具结果信息
                         }
                         
                         # 添加消息内容
