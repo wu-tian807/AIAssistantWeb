@@ -1602,8 +1602,8 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
                                     modelId: selectedModel
                                 }],
                                 currentVersion: 0,
-                                isInterrupted: window.generationStopped,  // 标记为被中断的消息
-                                tool_results: toolResult
+                                isInterrupted: window.generationStopped,  // 根据generationStopped状态判断是否被中断
+                                tool_results: toolResult || [] // 初始化tool_results为工具结果或空数组
                             });
                         }
                         else if(messageStatus == -1){
@@ -1613,8 +1613,55 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
                             createRegenerateButton(messageIndex, messageActions, false);
                         }
                         else if(messageStatus == 1){
-                            //TODO：处理中间消息
+                            //处理中间消息
+                            const thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : 0;
+                            const reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null;
+                            
+                            // 收集工具框数据
+                            const toolBoxesData = [];
+                            if (toolBoxMap && toolBoxMap.size > 0) {
+                                toolBoxMap.forEach((toolBox, toolCallId) => {
+                                    if (toolBox) {
+                                        toolBoxesData.push(toolBox.serializeForStorage());
+                                    }
+                                });
+                            }
+
+                            // toolResult.forEach(tool =>{
+                            //     currentConversation.messages.push(
+                            //         tool
+                            //     );
+                            // });
+                            
+                            // 检查tool_results是否存在，不存在则初始化为空数组
+                            if (!currentConversation.messages.at(-1).tool_results) {
+                                currentConversation.messages.at(-1).tool_results = [];
+                            }
+                            
+                            currentConversation.messages.at(-1).tool_results = currentConversation.messages.at(-1).tool_results.concat(toolResult);
+                            currentConversation.messages.at(-1).tool_boxes = toolBoxesData;
+                            currentConversation.messages.at(-1).reasoning_summary = reasoning_summary;
+                            currentConversation.messages.at(-1).thinking_time = thinking_time;
+                            currentConversation.messages.at(-1).reasoning_content = reasoningBox ? reasoningBox.getContent() : null;
+                            currentConversation.messages.at(-1).content = assistantMessage;
+                            currentConversation.messages.at(-1).versions.at(-1).tool_boxes = toolBoxesData;
+                            currentConversation.messages.at(-1).versions.at(-1).reasoning_content = reasoningBox ? reasoningBox.getContent() : null;
+                            currentConversation.messages.at(-1).versions.at(-1).reasoning_summary = reasoning_summary;
+                            currentConversation.messages.at(-1).versions.at(-1).thinking_time = thinking_time;
+                            currentConversation.messages.at(-1).versions.at(-1).content = assistantMessage;
+                            currentConversation.messages.at(-1).isInterrupted = window.generationStopped;
                         }
+                        // // 更新全局messages数组中的最后一条助手消息
+                        // if (messages.length > 0) {
+                        //     // 查找最后一条助手消息
+                        //     for (let i = messages.length - 1; i >= 0; i--) {
+                        //         if (messages[i].role === 'assistant') {
+                        //             // 更新消息内容
+                        //             messages[i].content = assistantMessage;
+                        //             break;
+                        //         }
+                        //     }
+                        // }
                         //每次处理完消息后，保存一次对话
                         await saveConversation(currentConversation.id, 'update');
                     }
@@ -2212,38 +2259,6 @@ async function regenerateMessage(messageIndex) {
                 
                 if (is_valid) {
                     if(messageStatus == 0){
-                        // // 获取要更新的消息对象
-                        // if (message.role === 'tool') {
-                        //     // 如果是工具消息，需要找到或创建对应的assistant消息
-                        //     console.log("正在重新生成工具消息，需要找到或创建对应的assistant消息");
-                            
-                        //     // 检查这个工具消息后面是否已经有assistant消息
-                        //     if (messageIndex + 1 < currentConversation.messages.length && 
-                        //         currentConversation.messages[messageIndex + 1].role === 'assistant') {
-                                
-                        //         // 更新已有的assistant消息
-                        //         messageIndex = messageIndex + 1;
-                        //         message = currentConversation.messages[messageIndex];
-                        //         console.log("找到工具消息后的assistant消息，索引:", messageIndex);
-                        //     } else {
-                        //         // 创建新的assistant消息并插入到工具消息后面
-                        //         console.log("在工具消息后创建新的assistant消息");
-                        //         const newAssistantMessage = {
-                        //             role: 'assistant',
-                        //             content: '',
-                        //             versions: []
-                        //         };
-                                
-                        //         // 插入到工具消息后面
-                        //         currentConversation.messages.splice(messageIndex + 1, 0, newAssistantMessage);
-                        //         messageIndex = messageIndex + 1;
-                        //         message = newAssistantMessage;
-                        //     }
-                        // }
-                        
-                        // // 确保消息角色是assistant
-                        // message.role = 'assistant';
-                        
                         // 从 toolBoxMap 创建 toolBoxesData 数组
                         const toolBoxesData = [];
                         if (toolBoxMap && toolBoxMap.size > 0) {
@@ -2270,12 +2285,9 @@ async function regenerateMessage(messageIndex) {
                             subsequentMessages: JSON.parse(JSON.stringify(subsequentMessages)), // 深拷贝后续消息
                             modelIcon: modelIcon,
                             modelId: selectedModel,
-                            tool_results: toolResult
+                            tool_results: toolResult || [] // 初始化tool_results为工具结果或空数组
                         };
                         // 添加到版本历史
-                        // toolResult.forEach(tool =>{
-                        //     messages.push(tool);
-                        // });
                         message.versions.push(newVersion);
                         message.currentVersion = message.versions.length - 1;
                         
@@ -2307,8 +2319,49 @@ async function regenerateMessage(messageIndex) {
                         }
                     }
                     else if(messageStatus == 1){
-                        //TODO：处理中间消息
+                        //处理中间消息
+                        const thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : 0;
+                        const reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null;
+                        
+                        // 收集工具框数据
+                        const toolBoxesData = [];
+                        if (toolBoxMap && toolBoxMap.size > 0) {
+                            toolBoxMap.forEach((toolBox, toolCallId) => {
+                                if (toolBox) {
+                                    toolBoxesData.push(toolBox.serializeForStorage());
+                                }
+                            });
+                        }
+
+                        // 检查tool_results是否存在，不存在则初始化为空数组
+                        if (!currentConversation.messages.at(-1).tool_results) {
+                            currentConversation.messages.at(-1).tool_results = [];
+                        }
+                        
+                        currentConversation.messages.at(-1).tool_results = currentConversation.messages.at(-1).tool_results.concat(toolResult);
+                        currentConversation.messages.at(-1).tool_boxes = toolBoxesData;
+                        currentConversation.messages.at(-1).reasoning_summary = reasoning_summary;
+                        currentConversation.messages.at(-1).thinking_time = thinking_time;
+                        currentConversation.messages.at(-1).reasoning_content = reasoningBox ? reasoningBox.getContent() : null;
+                        currentConversation.messages.at(-1).content = assistantMessage;
+                        currentConversation.messages.at(-1).versions.at(-1).tool_boxes = toolBoxesData;
+                        currentConversation.messages.at(-1).versions.at(-1).reasoning_content = reasoningBox ? reasoningBox.getContent() : null;
+                        currentConversation.messages.at(-1).versions.at(-1).reasoning_summary = reasoning_summary;
+                        currentConversation.messages.at(-1).versions.at(-1).thinking_time = thinking_time;
+                        currentConversation.messages.at(-1).versions.at(-1).content = assistantMessage;
+                        currentConversation.messages.at(-1).isInterrupted = window.generationStopped;
                     }
+                    // // 更新全局messages数组中的最后一条助手消息
+                    // if (messages.length > 0) {
+                    //     // 查找最后一条助手消息
+                    //     for (let i = messages.length - 1; i >= 0; i--) {
+                    //         if (messages[i].role === 'assistant') {
+                    //             // 更新消息内容
+                    //             messages[i].content = assistantMessage;
+                    //             break;
+                    //         }
+                    //     }
+                    // }
                     //每次处理完消息后，保存一次对话
                     await saveConversation(currentConversation.id, 'update');
                 }
@@ -3201,9 +3254,6 @@ async function regenerateErrorMessage(messageIndex) {
                             currentConversation.messages[messageIndex] = message;
                         }
                         
-                        // 确保消息角色是assistant
-                        message.role = 'assistant';
-                        
                         // 从 toolBoxMap 创建 toolBoxesData 数组
                         const toolBoxesData = [];
                         if (toolBoxMap && toolBoxMap.size > 0) {
@@ -3225,7 +3275,7 @@ async function regenerateErrorMessage(messageIndex) {
                             subsequentMessages: JSON.parse(JSON.stringify(subsequentMessages)), // 深拷贝后续消息
                             modelIcon: modelIcon,
                             modelId: selectedModel,
-                            tool_results: toolResult
+                            tool_results: toolResult || [] // 初始化tool_results为工具结果或空数组
                         };
                         
                         // 初始化versions数组(如果不存在)
@@ -3233,10 +3283,7 @@ async function regenerateErrorMessage(messageIndex) {
                             message.versions = [];
                         }
                         
-                        // // 添加到版本历史
-                        // toolResult.forEach(tool =>{
-                        //     messages.push(tool);
-                        // });
+                        // 添加到版本历史
                         message.versions.push(newVersion);
                         message.currentVersion = message.versions.length - 1;
                         
@@ -3267,8 +3314,49 @@ async function regenerateErrorMessage(messageIndex) {
                         }
                     }
                     else if(messageStatus == 1){
-                        //TODO：处理中间消息
+                        //处理中间消息
+                        const thinking_time = reasoningBox ? reasoningBox.getThinkingTime() : 0;
+                        const reasoning_summary = reasoningBox ? reasoningBox.getSummary() : null;
+                        
+                        // 收集工具框数据
+                        const toolBoxesData = [];
+                        if (toolBoxMap && toolBoxMap.size > 0) {
+                            toolBoxMap.forEach((toolBox, toolCallId) => {
+                                if (toolBox) {
+                                    toolBoxesData.push(toolBox.serializeForStorage());
+                                }
+                            });
+                        }
+
+                        // 检查tool_results是否存在，不存在则初始化为空数组
+                        if (!currentConversation.messages.at(-1).tool_results) {
+                            currentConversation.messages.at(-1).tool_results = [];
+                        }
+                        
+                        currentConversation.messages.at(-1).tool_results = currentConversation.messages.at(-1).tool_results.concat(toolResult);
+                        currentConversation.messages.at(-1).tool_boxes = toolBoxesData;
+                        currentConversation.messages.at(-1).reasoning_summary = reasoning_summary;
+                        currentConversation.messages.at(-1).thinking_time = thinking_time;
+                        currentConversation.messages.at(-1).reasoning_content = reasoningBox ? reasoningBox.getContent() : null;
+                        currentConversation.messages.at(-1).content = assistantMessage;
+                        currentConversation.messages.at(-1).versions.at(-1).tool_boxes = toolBoxesData;
+                        currentConversation.messages.at(-1).versions.at(-1).reasoning_content = reasoningBox ? reasoningBox.getContent() : null;
+                        currentConversation.messages.at(-1).versions.at(-1).reasoning_summary = reasoning_summary;
+                        currentConversation.messages.at(-1).versions.at(-1).thinking_time = thinking_time;
+                        currentConversation.messages.at(-1).versions.at(-1).content = assistantMessage;
+                        currentConversation.messages.at(-1).isInterrupted = window.generationStopped;
                     }
+                    // // 更新全局messages数组中的最后一条助手消息
+                    // if (messages.length > 0) {
+                    //     // 查找最后一条助手消息
+                    //     for (let i = messages.length - 1; i >= 0; i--) {
+                    //         if (messages[i].role === 'assistant') {
+                    //             // 更新消息内容
+                    //             messages[i].content = assistantMessage;
+                    //             break;
+                    //         }
+                    //     }
+                    // }
                     //每次处理完消息后，保存一次对话
                     await saveConversation(currentConversation.id, 'update');
                 }
@@ -3320,30 +3408,6 @@ async function regenerateErrorMessage(messageIndex) {
     }
 }
 
-// // 添加检测是否支持推理功能的工具函数
-// function isReasonerModel(modelId) {
-//     // 首先尝试从DOM中查找，速度更快
-//     const modelOption = document.querySelector(`option[value="${modelId}"]`);
-//     if (modelOption) {
-//         const reasonerAttr = modelOption.getAttribute('data-reasoner');
-//         if (reasonerAttr !== null) {
-//             return reasonerAttr === 'true';
-//         }
-//     }
-    
-//     // 尝试从选择器中查找所有option元素
-//     const allOptions = document.querySelectorAll('#model-select option');
-//     for (const option of allOptions) {
-//         if (option.value === modelId) {
-//             const reasonerAttr = option.getAttribute('data-reasoner');
-//             return reasonerAttr === 'true';
-//         }
-//     }
-    
-//     // 如果无法获取模型信息，默认返回false
-//     return false;
-// }
-
 // 添加一个确保滚动到底部的函数
 function ensureScrollToBottom(container) {
     if (shouldAutoScroll(container)) {
@@ -3389,8 +3453,9 @@ window.ensureScrollToBottom = ensureScrollToBottom;
  * @param {boolean} options.shouldScrollToBottom - 是否应该滚动到底部，默认为true
  * @returns {Promise<{assistantMessage: string, reasoningBox: Object}>} 返回助手消息内容和reasoningBox对象
  */
-async function processStreamResponse(response, messageDiv, messageContent,options = {},keepReasoningBox) {
-    const { messageIndex, md, chatMessages, shouldScrollToBottom = true } = options;
+async function processStreamResponse(response, messageDiv, messageContent,accumulatedMessage,options = {}) {
+    const { messageIndex, md, chatMessages,reasoningBox,toolBoxMap, shouldScrollToBottom = true } = options;
+    console.log("accumulatedMessage:", accumulatedMessage);
     console.log("===== processStreamResponse开始 =====");
     console.log("接收到response对象:", response.status, response.statusText);
     console.log("messageIndex:", messageIndex);
@@ -3398,8 +3463,8 @@ async function processStreamResponse(response, messageDiv, messageContent,option
     console.log("当前window.isGenerating状态:", window.isGenerating);
     
     // 初始化文本位置计数器
-    let textPosition = 0;
-    
+    let textPosition = accumulatedMessage.length ? accumulatedMessage.length : 0;
+    console.log("textPosition:", textPosition);
     const reader = response.body.getReader();
     console.log("获取reader,reader：", reader);
     console.log("当前currentReader值(赋值前):", currentReader);
@@ -3409,12 +3474,12 @@ async function processStreamResponse(response, messageDiv, messageContent,option
     
     sendButton.disabled = false; // 在获取流之后接触禁用，允许用户关闭流。
     
-    let assistantMessage = '';
-    let reasoningBox = keepReasoningBox ? window.ReasoningBoxInstance : null;
+    let assistantMessage = accumulatedMessage ? accumulatedMessage : '';
+    // let reasoningBox = keepReasoningBox ? window.ReasoningBoxInstance : null;
     let toolResult = [];
     
-    // 工具框映射，用于跟踪每个工具调用的工具框实例
-    const toolBoxMap = new Map();
+    // // 工具框映射，用于跟踪每个工具调用的工具框实例
+    // const toolBoxMap = new Map();
     
     // 获取当前选择的模型
     const selectedModel = document.getElementById('model-select').value;
@@ -3490,14 +3555,14 @@ async function processStreamResponse(response, messageDiv, messageContent,option
                 // 如果有待处理的文本内容，最后一次更新UI
                 if (pendingTextContent) {
                     console.log("处理剩余的文本内容");
-                    updateTextContent(messageContent, assistantMessage, md, chatMessages, shouldScrollToBottom);
+                    textPosition = updateTextContent(messageContent, assistantMessage, md, chatMessages, shouldScrollToBottom);
                     pendingTextContent = '';
                 }
                 
                 // 只有在存在 reasoningBox 时才标记完成
                 if (reasoningBox) {
                     console.log("标记reasoningBox完成");
-                    reasoningBox.markGenerationComplete();
+                    //reasoningBox.markGenerationComplete();
                     
                     // 检查是否需要生成摘要
                     if (!reasoningBox.getSummary() && reasoningBox.getContent()) {
@@ -3506,15 +3571,12 @@ async function processStreamResponse(response, messageDiv, messageContent,option
                             reasoning_content: reasoningBox.getContent(),
                             reasoning_summary: null
                         };
-                        const summary = extractSummaryFromThinking(reasoningData);
+                        const summary = reasoningData.reasoning_content;
                         if (summary) {
                             console.log("设置摘要:", summary.substring(0, 30) + "...");
                             reasoningBox.setSummary(summary);
                         }
                     }
-                    
-                    // 流处理完成后，清除全局ReasoningBoxInstance
-                    window.ReasoningBoxInstance = null;
                 }
                 
                 // 标记所有工具框为完成状态
@@ -3688,7 +3750,7 @@ async function processStreamResponse(response, messageDiv, messageContent,option
                         else if (data.content) {
                             console.log("处理内容:", data.content);
                             // 如果有 reasoningBox 且是第一次收到内容，标记思考完成
-                            if (assistantMessage === '' && reasoningBox) {
+                            if (reasoningBox) {
                                 console.log("标记思考完成，进入生成内容阶段");
                                 
                                 // 如果有待处理的思考内容，确保在标记完成前处理完
@@ -3698,7 +3760,7 @@ async function processStreamResponse(response, messageDiv, messageContent,option
                                     pendingReasoningContent = '';
                                 }
                                 
-                                reasoningBox.markGenerationComplete();
+                                // reasoningBox.markGenerationComplete();
                                 
                                 // 检查是否有摘要，如果没有则尝试生成，后续这部分需要转移到handleMessageRequest中，等待自循环结束后再生成。
                                 if (!reasoningBox.getSummary() && reasoningBox.getContent()) {
@@ -3724,7 +3786,7 @@ async function processStreamResponse(response, messageDiv, messageContent,option
                             if (now - lastUIUpdateTime >= TEXT_UPDATE_INTERVAL || 
                                 pendingTextContent.length > MAX_CONTENT_BUFFER) {
                                 console.log("更新消息内容UI, 累积内容长度:", assistantMessage.length);
-                                updateTextContent(messageContent, assistantMessage, md, chatMessages, shouldScrollToBottom);
+                                textPosition = updateTextContent(messageContent, assistantMessage, md, chatMessages, shouldScrollToBottom);
                                 pendingTextContent = '';
                                 lastUIUpdateTime = now;
                                 
@@ -3826,55 +3888,53 @@ async function processStreamResponse(response, messageDiv, messageContent,option
     console.log("工具框数量:", toolBoxMap.size);
     console.log("toolResult:", toolResult);
     
-    // 确保在流处理完成后清除全局ReasoningBoxInstance
-    if (!keepReasoningBox) {
-        window.ReasoningBoxInstance = null;
-    }
-    
     let is_valid = assistantMessage.trim() || (toolBoxMap && toolBoxMap.size > 0)
     return { assistantMessage, reasoningBox, toolBoxMap, toolResult, is_valid };
-    
-    // 辅助函数：更新文本内容
-    function updateTextContent(messageContent, text, mdRenderer, chatMessagesContainer, shouldScroll) {
-        // 创建或更新普通内容的容器
-        let textContentDiv = messageContent.querySelector('.text-content');
-        if (!textContentDiv) {
-            console.log("创建文本内容容器");
-            textContentDiv = document.createElement('div');
-            textContentDiv.className = 'text-content';
-            messageContent.appendChild(textContentDiv);
-        }
-        
-        // 渲染内容
-        textContentDiv.innerHTML = mdRenderer.render(text);
-        initializeCodeBlocks(textContentDiv);
-        
-        // 更新textPosition值
-        textPosition = text.length;
-        
-        // 检查并处理图片加载完成后的滚动
-        const images = textContentDiv.querySelectorAll('img');
-        if (images.length > 0) {
-            console.log("发现图片:", images.length);
-            images.forEach(img => {
-                if (!img.complete) {
-                    img.onload = function() {
-                        console.log("图片加载完成，滚动到底部");
-                        ensureScrollToBottom(chatMessagesContainer);
-                    };
-                }
-            });
-        }   
-        
-        // 根据选项决定如何滚动
-        if (shouldScroll) {
-            console.log("强制滚动到底部");
-            ensureScrollToBottom(chatMessagesContainer);
-        } else if (shouldAutoScroll(chatMessagesContainer)) {
-            console.log("自动滚动到内容可见");
-            textContentDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        }
+}
+
+// 辅助函数：更新文本内容
+function updateTextContent(messageContent, text, mdRenderer, chatMessagesContainer, shouldScroll) {
+    // 创建或更新普通内容的容器
+    let textContentDiv = messageContent.querySelector('.text-content');
+    if (!textContentDiv) {
+        console.log("创建文本内容容器");
+        textContentDiv = document.createElement('div');
+        textContentDiv.className = 'text-content';
+        messageContent.appendChild(textContentDiv);
     }
+    
+    // 渲染内容
+    textContentDiv.innerHTML = mdRenderer.render(text);
+    initializeCodeBlocks(textContentDiv);
+    
+    // 更新textPosition值
+    let textPosition = text.length;
+    
+    // 检查并处理图片加载完成后的滚动
+    const images = textContentDiv.querySelectorAll('img');
+    if (images.length > 0) {
+        console.log("发现图片:", images.length);
+        images.forEach(img => {
+            if (!img.complete) {
+                img.onload = function() {
+                    console.log("图片加载完成，滚动到底部");
+                    ensureScrollToBottom(chatMessagesContainer);
+                };
+            }
+        });
+    }   
+    
+    // 根据选项决定如何滚动
+    if (shouldScroll) {
+        console.log("强制滚动到底部");
+        ensureScrollToBottom(chatMessagesContainer);
+    } else if (shouldAutoScroll(chatMessagesContainer)) {
+        console.log("自动滚动到内容可见");
+        textContentDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+    
+    // 返回文本位置
+    return textPosition;
 }
 
 // 创建编辑按钮
@@ -3916,54 +3976,127 @@ async function handleMessageRequest(requestData, messageDiv, messageContent, opt
         shouldScrollToBottom = true,
         afterProcessCallback = null
     } = options;
+    let reasoningBox = new ReasoningBox(messageContent,md)
+    let toolBoxMap = new Map()
+    let accumulatedMessage = '';
     let messageStatus = 0;
+    let processResult = null;
     try {
-        console.log(`[${new Date().toISOString()}] 发送请求:`, {
-            conversation_id: requestData.conversation_id,
-            model_id: requestData.model_id,
-            temperature: requestData.temperature,
-            max_tokens: requestData.max_tokens,
-            tool_results: requestData.tool_results
-        });
+        do{
+            console.log(`[${new Date().toISOString()}] 发送请求:`, {
+                messages: requestData.messages,
+                conversation_id: requestData.conversation_id,
+                model_id: requestData.model_id,
+                temperature: requestData.temperature,
+                max_tokens: requestData.max_tokens,
+            });
+    
+            // 发送请求
+            const response = await fetch('/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestData)
+            });
+    
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+    
+            // 处理流响应
+            const processOptions = {
+                messageIndex,
+                md,
+                chatMessages,
+                reasoningBox,
+                toolBoxMap,
+                shouldScrollToBottom
+            };
+            
+            processResult = await processStreamResponse(
+                response, 
+                messageDiv, 
+                messageContent, 
+                accumulatedMessage,
+                processOptions
+            );
+    
+            // 更新累积的消息内容，保存到下一次循环
+            accumulatedMessage = processResult.assistantMessage;
+    
+            // // 保存会话
+            // if (currentConversationId) {
+            //     await saveConversation(currentConversationId, 'update');
+            // }
+    
+            // 如果存在回调函数，执行回调
+            if (afterProcessCallback && typeof afterProcessCallback === 'function') {
+                await afterProcessCallback(processResult,messageStatus);
+            }
+            messageStatus = 1
+            
+            // 更新messages字段，确保包含最新的消息内容
+            if (processResult.toolResult.length > 0) {
+                // 查找最后一条助手消息的索引
+                let lastAssistantIndex = -1;
+                for (let i = messages.length - 1; i >= 0; i--) {
+                    if (messages[i].role === 'assistant') {
+                        lastAssistantIndex = i;
+                        break;
+                    }
+                }
+                
+                // 更新助手消息内容并添加工具结果
+                if (lastAssistantIndex !== -1) {
+                    // 更新助手消息的内容
+                    messages[lastAssistantIndex].content = processResult.assistantMessage;
+                    
+                    // 确保tool_results字段存在
+                    if (!messages[lastAssistantIndex].tool_results) {
+                        messages[lastAssistantIndex].tool_results = [];
+                    }
+                    
+                    // 添加新的工具结果
+                    messages[lastAssistantIndex].tool_results = 
+                        messages[lastAssistantIndex].tool_results.concat(processResult.toolResult);
+                } else {
+                    // 如果找不到助手消息，创建一个新的带有工具结果的助手消息
+                    const assistantMessage = {
+                        role: 'assistant',
+                        content: processResult.assistantMessage,
+                        tool_results: processResult.toolResult
+                    };
+                    
+                    // 添加到messages数组
+                    messages.push(assistantMessage);
+                }
+                
+                // 重要：将messages引用赋值给requestData.messages，确保它们始终是同一个对象
+                requestData.messages = messages;
+                
+                console.log("更新后的messages:", messages.length, "第一条消息:", messages[0].role);
+            }
+            
+        } while (processResult.toolResult.length > 0);
 
-        // 发送请求
-        const response = await fetch('/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestData)
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        messageStatus = -1;
+        await afterProcessCallback(processResult,messageStatus);
+        // 流处理完成后，清除全局ReasoningBoxInstance
+        window.ReasoningBoxInstance = null;
+        // 标志reasoningBox结束，生成摘要
+        if (reasoningBox) {
+            reasoningBox.markGenerationComplete();
+            const reasoningData = {
+                reasoning_content: reasoningBox.getContent(),
+                reasoning_summary: null
+            };
+            const summary = extractSummaryFromThinking(reasoningData);
+            if (summary) {
+                reasoningBox.setSummary(summary);
+            }
         }
-
-        // 处理流响应
-        const processOptions = {
-            messageIndex,
-            md,
-            chatMessages,
-            shouldScrollToBottom
-        };
         
-        const processResult = await processStreamResponse(
-            response, 
-            messageDiv, 
-            messageContent, 
-            processOptions,
-            messageStatus == 0
-        );
-
-        // 保存会话
-        if (currentConversationId) {
-            await saveConversation(currentConversationId, 'update');
-        }
-
-        // 如果存在回调函数，执行回调
-        if (afterProcessCallback && typeof afterProcessCallback === 'function') {
-            await afterProcessCallback(processResult,messageStatus);
-        }
         
         return processResult;
     } catch (error) {
