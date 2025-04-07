@@ -1455,6 +1455,7 @@ async function sendMessage(retryCount = 1, retryDelay = 1000) {
         appendMessage(content, true, userMessageIndex, attachments, error);
         
         // 更新 messages 数组
+        console.log('currentConversation.messages:', currentConversation.messages);
         messages = [
             {"role": "system", "content": currentConversation.systemPrompt || default_system_prompt},
             ...currentConversation.messages
@@ -4040,11 +4041,8 @@ async function handleMessageRequest(requestData, messageDiv, messageContent, opt
             if (processResult.toolResult.length > 0) {
                 // 查找最后一条助手消息的索引
                 let lastAssistantIndex = -1;
-                for (let i = messages.length - 1; i >= 0; i--) {
-                    if (messages[i].role === 'assistant') {
-                        lastAssistantIndex = i;
-                        break;
-                    }
+                if (messages[messages.length - 1].role === 'assistant') {
+                    lastAssistantIndex = messages.length - 1;
                 }
                 
                 // 更新助手消息内容并添加工具结果
