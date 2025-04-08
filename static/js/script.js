@@ -3463,6 +3463,8 @@ async function processStreamResponse(response, messageDiv, messageContent,accumu
     console.log("当前generationStopped状态:", window.generationStopped);
     console.log("当前window.isGenerating状态:", window.isGenerating);
     
+    // 不在此处导入工具框处理函数，而是在使用时动态导入
+    
     // 初始化文本位置计数器
     let textPosition = accumulatedMessage.length ? accumulatedMessage.length : 0;
     console.log("textPosition:", textPosition);
@@ -3476,11 +3478,10 @@ async function processStreamResponse(response, messageDiv, messageContent,accumu
     sendButton.disabled = false; // 在获取流之后接触禁用，允许用户关闭流。
     
     let assistantMessage = accumulatedMessage ? accumulatedMessage : '';
-    // let reasoningBox = keepReasoningBox ? window.ReasoningBoxInstance : null;
     let toolResult = [];
     
-    // // 工具框映射，用于跟踪每个工具调用的工具框实例
-    // const toolBoxMap = new Map();
+    // 保存已插入工具框标记的位置，避免重复插入
+    const insertedToolBoxMarkers = new Set();
     
     // 获取当前选择的模型
     const selectedModel = document.getElementById('model-select').value;
@@ -3532,7 +3533,7 @@ async function processStreamResponse(response, messageDiv, messageContent,accumu
                 
                 // 处理剩余的内容
                 if (pendingTextContent) {
-                    updateTextContent(messageContent, assistantMessage, md, chatMessages, shouldScrollToBottom);
+                    updateTextContent(messageContent, assistantMessage, md, chatMessages, shouldScrollToBottom, toolBoxMap);
                     pendingTextContent = '';
                 }
                 break;
@@ -3556,7 +3557,7 @@ async function processStreamResponse(response, messageDiv, messageContent,accumu
                 // 如果有待处理的文本内容，最后一次更新UI
                 if (pendingTextContent) {
                     console.log("处理剩余的文本内容");
-                    textPosition = updateTextContent(messageContent, assistantMessage, md, chatMessages, shouldScrollToBottom);
+                    textPosition = updateTextContent(messageContent, assistantMessage, md, chatMessages, shouldScrollToBottom, toolBoxMap);
                     pendingTextContent = '';
                 }
                 
@@ -3637,17 +3638,21 @@ async function processStreamResponse(response, messageDiv, messageContent,accumu
                                 toolBox.setToolCallId(toolCallId);
                                 toolBox.setToolIndex(toolIndex);
                                 
-                                // 使用工具的显示顺序设置插入位置标记
-                                if (textPosition > 0) {
-                                    // 如果已经有文本内容，则在文本内容之后插入
-                                    toolBox.setInsertPositionMark(textPosition + toolIndex + 1);
-                                } else {
-                                    // 没有文本内容时，使用工具序号作为排序依据
-                                    toolBox.setInsertPositionMark(toolIndex);
-                                }
+                                // 使用工具的显示顺序设置order标记
+                                toolBox.setOrder(toolIndex);
                                 
                                 // 保存到工具框映射
                                 toolBoxMap.set(toolCallId, toolBox);
+                                
+                                // 在助手消息中插入工具框标记
+                                if (!insertedToolBoxMarkers.has(toolCallId)) {
+                                    // 生成标记并追加到助手消息
+                                    const toolBoxMark = toolBox.getPlaceholderMark();
+                                    assistantMessage += `\n${toolBoxMark}\n`;
+                                    pendingTextContent += `\n${toolBoxMark}\n`;
+                                    insertedToolBoxMarkers.add(toolCallId);
+                                    console.log(`在消息中插入工具框标记: ${toolBoxMark}`);
+                                }
                             }
                             
                             // 添加步骤数据
@@ -3684,17 +3689,21 @@ async function processStreamResponse(response, messageDiv, messageContent,accumu
                                 toolBox.setToolCallId(toolCallId);
                                 toolBox.setToolIndex(toolIndex);
                                 
-                                // 使用工具的显示顺序设置插入位置标记
-                                if (textPosition > 0) {
-                                    // 如果已经有文本内容，则在文本内容之后插入
-                                    toolBox.setInsertPositionMark(textPosition + toolIndex + 1);
-                                } else {
-                                    // 没有文本内容时，使用工具序号作为排序依据
-                                    toolBox.setInsertPositionMark(toolIndex);
-                                }
+                                // 使用工具序号设置order
+                                toolBox.setOrder(toolIndex);
                                 
                                 // 保存到工具框映射
                                 toolBoxMap.set(toolCallId, toolBox);
+                                
+                                // 在助手消息中插入工具框标记，如果尚未插入
+                                if (!insertedToolBoxMarkers.has(toolCallId)) {
+                                    // 生成标记并追加到助手消息
+                                    const toolBoxMark = toolBox.getPlaceholderMark();
+                                    assistantMessage += `\n${toolBoxMark}\n`;
+                                    pendingTextContent += `\n${toolBoxMark}\n`;
+                                    insertedToolBoxMarkers.add(toolCallId);
+                                    console.log(`在消息中插入工具框标记: ${toolBoxMark}`);
+                                }
                             }
                             
                             // 设置最终结果
@@ -3787,17 +3796,9 @@ async function processStreamResponse(response, messageDiv, messageContent,accumu
                             if (now - lastUIUpdateTime >= TEXT_UPDATE_INTERVAL || 
                                 pendingTextContent.length > MAX_CONTENT_BUFFER) {
                                 console.log("更新消息内容UI, 累积内容长度:", assistantMessage.length);
-                                textPosition = updateTextContent(messageContent, assistantMessage, md, chatMessages, shouldScrollToBottom);
+                                textPosition = updateTextContent(messageContent, assistantMessage, md, chatMessages, shouldScrollToBottom, toolBoxMap);
                                 pendingTextContent = '';
                                 lastUIUpdateTime = now;
-                                
-                                // 在内容更新后，确保工具框位置正确
-                                toolBoxMap.forEach(toolBox => {
-                                    if (toolBox) {
-                                        console.log(`更新工具框 ${toolBox.getToolName()} 位置`);
-                                        toolBox.updateToolBoxPosition();
-                                    }
-                                });
                                 
                                 // 给UI线程一点时间更新
                                 await new Promise(resolve => setTimeout(resolve, 0));
@@ -3894,7 +3895,7 @@ async function processStreamResponse(response, messageDiv, messageContent,accumu
 }
 
 // 辅助函数：更新文本内容
-function updateTextContent(messageContent, text, mdRenderer, chatMessagesContainer, shouldScroll) {
+function updateTextContent(messageContent, text, mdRenderer, chatMessagesContainer, shouldScroll, toolBoxMap) {
     // 创建或更新普通内容的容器
     let textContentDiv = messageContent.querySelector('.text-content');
     if (!textContentDiv) {
@@ -3906,10 +3907,40 @@ function updateTextContent(messageContent, text, mdRenderer, chatMessagesContain
     
     // 渲染内容
     textContentDiv.innerHTML = mdRenderer.render(text);
+    
+    // 如果有toolBoxMap，则处理工具框标记
+    if (toolBoxMap && toolBoxMap.size > 0) {
+        console.log("处理工具框标记，工具框数量:", toolBoxMap.size);
+        try {
+            // 导入并调用processToolBoxMarkers函数
+            import('./utils/markdownit.js')
+                .then(module => {
+                    if (module.processToolBoxMarkers) {
+                        console.log("调用processToolBoxMarkers处理工具框标记");
+                        module.processToolBoxMarkers(messageContent, toolBoxMap);
+                    } else {
+                        console.error("processToolBoxMarkers函数不可用");
+                    }
+                })
+                .catch(err => {
+                    console.error("导入工具框处理模块出错:", err);
+                    
+                    // 如果导入失败，直接添加工具框到内容末尾
+                    fallbackAppendToolBoxes(messageContent, toolBoxMap);
+                });
+        } catch (error) {
+            console.error("处理工具框标记出错:", error);
+            
+            // 如果处理出错，直接添加工具框到内容末尾
+            fallbackAppendToolBoxes(messageContent, toolBoxMap);
+        }
+    }
+    
+    // 初始化代码块
     initializeCodeBlocks(textContentDiv);
     
-    // 更新textPosition值
-    let textPosition = text.length;
+    // 更新textPosition值为文本长度
+    const textPosition = text.length;
     
     // 检查并处理图片加载完成后的滚动
     const images = textContentDiv.querySelectorAll('img');
@@ -3936,6 +3967,32 @@ function updateTextContent(messageContent, text, mdRenderer, chatMessagesContain
     
     // 返回文本位置
     return textPosition;
+}
+
+// 备选方法：直接追加工具框到内容末尾
+function fallbackAppendToolBoxes(container, toolBoxMap) {
+    console.log("使用备选方法添加工具框");
+    if (!toolBoxMap || toolBoxMap.size === 0) return;
+    
+    // 按顺序排序工具框
+    const sortedToolBoxes = Array.from(toolBoxMap.values()).sort((a, b) => a.getOrder() - b.getOrder());
+    
+    // 直接添加到容器
+    sortedToolBoxes.forEach(toolBox => {
+        const toolBoxElement = toolBox.getElement();
+        
+        // 移除工具框原有的父元素以防止重复添加
+        if (toolBoxElement.parentNode) {
+            toolBoxElement.parentNode.removeChild(toolBoxElement);
+        }
+        
+        // 确保工具框可见
+        toolBoxElement.style.display = 'block';
+        
+        // 添加到容器
+        container.appendChild(toolBoxElement);
+        console.log(`直接添加工具框: ${toolBox.getToolName()}`);
+    });
 }
 
 // 创建编辑按钮

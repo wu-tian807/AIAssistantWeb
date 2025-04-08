@@ -80,6 +80,50 @@ export function initMarkdownit() {
         katexOptions: { macros: { "\\RR": "\\mathbb{R}" } }
     });
 
+    // 添加对 ToolBox 标记的处理
+    const originalRenderer = md.renderer.rules.html_inline || function(tokens, idx, options, env, self) {
+        return tokens[idx].content;
+    };
+    
+    md.renderer.rules.html_inline = function(tokens, idx, options, env, self) {
+        const token = tokens[idx];
+        const content = token.content;
+        
+        // 检查是否为 ToolBox 标记
+        if (content.startsWith('<ToolBox') && content.endsWith('</ToolBox>')) {
+            return content; // 保留原标记，后续会在 DOM 中替换
+        }
+        
+        // 简化版匹配自闭合的 ToolBox 标记
+        if (content.startsWith('<ToolBox') && content.includes('/>')) {
+            return content; // 保留原标记，后续会在 DOM 中替换
+        }
+        
+        // 匹配有属性的 ToolBox 标记
+        if (content.startsWith('<ToolBox') && content.endsWith('>')) {
+            return content; // 保留原标记，后续会在 DOM 中替换
+        }
+        
+        return originalRenderer(tokens, idx, options, env, self);
+    };
+    
+    // 也处理 html_block 以捕获可能跨多行的标记
+    const originalBlockRenderer = md.renderer.rules.html_block || function(tokens, idx, options, env, self) {
+        return tokens[idx].content;
+    };
+    
+    md.renderer.rules.html_block = function(tokens, idx, options, env, self) {
+        const token = tokens[idx];
+        const content = token.content;
+        
+        // 检查是否包含 ToolBox 标记
+        if (content.includes('<ToolBox') && (content.includes('</ToolBox>') || content.includes('/>'))) {
+            return content; // 保留原标记，后续会在 DOM 中替换
+        }
+        
+        return originalBlockRenderer(tokens, idx, options, env, self);
+    };
+
     return md;
 }
 
@@ -756,4 +800,232 @@ function hashString(str) {
     }
     
     return hash.toString();
+}
+
+/**
+ * 处理 ToolBox 标记，替换为实际的工具框
+ * @param {HTMLElement} container - 包含渲染后内容的容器
+ * @param {Map} toolBoxMap - 工具框映射
+ */
+export function processToolBoxMarkers(container, toolBoxMap) {
+    if (!container || !toolBoxMap) return;
+    console.log("开始处理工具框标记，工具框数量:", toolBoxMap.size);
+    
+    // 查找文本内容元素
+    const textContent = container.querySelector('.text-content');
+    if (!textContent) {
+        console.error("未找到文本内容元素");
+        return;
+    }
+    
+    // 直接查找文本中的特殊标记
+    const html = textContent.innerHTML;
+    console.log("文本内容:", html.substring(0, 100) + "...");
+    
+    // 创建临时元素，以便能识别标记
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    
+    // 查找HTML注释形式的工具框标记
+    const commentPattern = /<!--toolbox:(.*?):(.*?)-->/g;
+    let replacements = [];
+    let match;
+    
+    console.log("查找注释形式的工具框标记");
+    while ((match = commentPattern.exec(html)) !== null) {
+        const id = match[1];
+        const order = match[2];
+        const originalText = match[0];
+        
+        console.log(`找到工具框标记: id=${id}, order=${order}`);
+        
+        // 查找对应工具框
+        let foundToolBox = null;
+        toolBoxMap.forEach(toolBox => {
+            if (toolBox.getMarkerId() === id) {
+                foundToolBox = toolBox;
+                console.log("找到匹配的工具框:", toolBox.getToolName());
+            }
+        });
+        
+        if (foundToolBox) {
+            replacements.push({
+                original: originalText,
+                id: id,
+                order: parseInt(order, 10),
+                toolBox: foundToolBox,
+                startIndex: match.index,
+                endIndex: match.index + originalText.length
+            });
+        } else {
+            console.warn(`未找到ID为${id}的工具框`);
+        }
+    }
+    
+    // 如果找不到注释标记，尝试查找其他类型的标记
+    if (replacements.length === 0) {
+        // 查找特殊的ToolBox标记
+        const tagPattern = /&lt;ToolBox\s+id=['"](.*?)['"][^>]*?order=['"](.*?)['"].*?&gt;\s*&lt;\/ToolBox&gt;|&lt;ToolBox\s+id=['"](.*?)['"][^>]*?order=['"](.*?)['"].*?\/&gt;|<ToolBox\s+id=['"](.*?)['"][^>]*?order=['"](.*?)['"].*?><\/ToolBox>|<ToolBox\s+id=['"](.*?)['"][^>]*?order=['"](.*?)['"].*?\/>/gi;
+        
+        console.log("查找标签形式的工具框标记");
+        while ((match = tagPattern.exec(html)) !== null) {
+            const id = match[1] || match[3] || match[5] || match[7];
+            const order = match[2] || match[4] || match[6] || match[8];
+            const originalText = match[0];
+            
+            console.log(`找到工具框标记: id=${id}, order=${order}`);
+            
+            // 查找对应工具框
+            let foundToolBox = null;
+            toolBoxMap.forEach(toolBox => {
+                if (toolBox.getMarkerId() === id) {
+                    foundToolBox = toolBox;
+                    console.log("找到匹配的工具框:", toolBox.getToolName());
+                }
+            });
+            
+            if (foundToolBox) {
+                replacements.push({
+                    original: originalText,
+                    id: id,
+                    order: parseInt(order, 10),
+                    toolBox: foundToolBox,
+                    startIndex: match.index,
+                    endIndex: match.index + originalText.length
+                });
+            } else {
+                console.warn(`未找到ID为${id}的工具框`);
+            }
+        }
+    }
+    
+    // 如果找不到任何标记，尝试更加直接的方法识别
+    if (replacements.length === 0) {
+        console.log("未找到标准标记格式，尝试直接查找工具框ID");
+        
+        // 遍历所有工具框
+        toolBoxMap.forEach(toolBox => {
+            const id = toolBox.getMarkerId();
+            // 在HTML中查找ID字符串，这是一种备选方法
+            if (html.includes(id)) {
+                console.log(`找到工具框ID: ${id}`);
+                
+                // 尝试查找包含此ID的段落或div
+                const elements = textContent.querySelectorAll('p, div');
+                for (const element of elements) {
+                    if (element.innerHTML.includes(id)) {
+                        console.log(`在元素中找到工具框ID: ${element.innerHTML.substring(0, 50)}...`);
+                        replacements.push({
+                            element: element,
+                            id: id,
+                            order: toolBox.getOrder(),
+                            toolBox: toolBox
+                        });
+                        break;
+                    }
+                }
+            }
+        });
+    }
+    
+    // 按照order排序
+    replacements.sort((a, b) => a.order - b.order);
+    
+    console.log(`准备替换${replacements.length}个工具框标记`);
+    
+    // 先替换基于元素的标记
+    replacements.filter(r => r.element).forEach(replacement => {
+        const element = replacement.element;
+        const toolBox = replacement.toolBox;
+        
+        // 移除工具框原有的父元素以防止重复添加
+        const toolBoxElement = toolBox.getElement();
+        if (toolBoxElement.parentNode) {
+            toolBoxElement.parentNode.removeChild(toolBoxElement);
+        }
+        
+        // 确保工具框可见
+        toolBoxElement.style.display = 'block';
+        
+        // 替换元素
+        if (element.parentNode) {
+            element.parentNode.replaceChild(toolBoxElement, element);
+            console.log(`已替换工具框元素: ${replacement.id}`);
+        }
+    });
+    
+    // 如果有基于文本的替换，使用更简单的方法
+    const textBasedReplacements = replacements.filter(r => !r.element);
+    if (textBasedReplacements.length > 0) {
+        console.log(`执行${textBasedReplacements.length}个基于文本的工具框替换`);
+        
+        // 将所有基于文本的替换按顺序处理（从后向前，避免位置变化）
+        textBasedReplacements.reverse().forEach(replacement => {
+            // 在字符串中替换标记为占位符
+            const placeholder = `<div class="tool-box-placeholder" data-toolbox-id="${replacement.id}"></div>`;
+            const before = html.substring(0, replacement.startIndex);
+            const after = html.substring(replacement.endIndex);
+            const newHtml = before + placeholder + after;
+            
+            // 更新HTML
+            textContent.innerHTML = newHtml;
+        });
+        
+        // 查找并替换所有占位符
+        const placeholders = textContent.querySelectorAll('.tool-box-placeholder');
+        placeholders.forEach(placeholder => {
+            const id = placeholder.dataset.toolboxId;
+            
+            // 查找对应的工具框
+            let foundToolBox = null;
+            toolBoxMap.forEach(toolBox => {
+                if (toolBox.getMarkerId() === id) {
+                    foundToolBox = toolBox;
+                }
+            });
+            
+            if (foundToolBox) {
+                const toolBoxElement = foundToolBox.getElement();
+                
+                // 确保工具框可见
+                toolBoxElement.style.display = 'block';
+                
+                // 替换占位符
+                if (placeholder.parentNode) {
+                    placeholder.parentNode.replaceChild(toolBoxElement, placeholder);
+                    console.log(`已替换工具框标记: ${id}`);
+                }
+            }
+        });
+    }
+    
+    // 如果上述方法都失败，使用最后的备选方法 - 直接追加
+    if (replacements.length === 0) {
+        console.log("所有替换方法均失败，直接追加工具框");
+        
+        // 按顺序排序工具框
+        const sortedToolBoxes = Array.from(toolBoxMap.values()).sort((a, b) => a.getOrder() - b.getOrder());
+        
+        // 直接添加到容器
+        sortedToolBoxes.forEach(toolBox => {
+            const toolBoxElement = toolBox.getElement();
+            
+            // 移除工具框原有的父元素以防止重复添加
+            if (toolBoxElement.parentNode) {
+                toolBoxElement.parentNode.removeChild(toolBoxElement);
+            }
+            
+            // 确保工具框可见
+            toolBoxElement.style.display = 'block';
+            
+            // 添加到容器
+            container.appendChild(toolBoxElement);
+            console.log(`直接添加工具框: ${toolBox.getToolName()}`);
+        });
+    }
+    
+    // 应用代码高亮
+    applyCodeHighlight(textContent);
+    
+    console.log("工具框标记处理完成");
 }
